@@ -25,16 +25,33 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Users, Stethoscope, Microscope, Pill, Syringe, Loader2, Search } from "lucide-react";
+import { FileText, Users, Stethoscope, Microscope, Pill, Syringe, Loader2, Search, Download } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import StatCard from "@/components/shared/StatCard";
 import { describeCie10, type Cie10Description } from "@/ai/flows/describe-cie10-flow";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ScrollArea } from "../ui/scroll-area";
+import Papa from 'papaparse';
 
 
 interface DataVisualizerProps {
   data: any;
 }
+
+const handleDownloadXls = (data: any[], filename: string) => {
+    const csv = Papa.unparse(data);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
 
 const Cie10Modal = ({ cie10Info, open, onOpenChange, isLoading }: { cie10Info: Cie10Description | null, open: boolean, onOpenChange: (open: boolean) => void, isLoading: boolean }) => {
   return (
@@ -61,6 +78,49 @@ const Cie10Modal = ({ cie10Info, open, onOpenChange, isLoading }: { cie10Info: C
     </AlertDialog>
   );
 };
+
+const ProceduresDetailModal = ({ open, onOpenChange, procedures }: { open: boolean, onOpenChange: (open: boolean) => void, procedures: any[] }) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Detalle de Procedimientos</DialogTitle>
+        </DialogHeader>
+        <div className="flex-grow overflow-hidden">
+          <ScrollArea className="h-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Cod. Procedimiento</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {procedures.map((p, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{p.userId}</TableCell>
+                    <TableCell>{p.codProcedimiento}</TableCell>
+                    <TableCell>{new Date(p.fechaInicioAtencion).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">{`$${p.vrServicio.toLocaleString()}`}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => handleDownloadXls(procedures, 'detalle_procedimientos.xls')}>
+            <Download className="mr-2 h-4 w-4"/>
+            Descargar
+          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export const calculateSummary = (data: any) => {
     if (!data) {
@@ -205,6 +265,8 @@ export default function DataVisualizer({ data }: DataVisualizerProps) {
   const [cie10Info, setCie10Info] = useState<Cie10Description | null>(null);
   const [isCie10ModalOpen, setIsCie10ModalOpen] = useState(false);
   const [isCie10Loading, setIsCie10Loading] = useState(false);
+  const [proceduresDetail, setProceduresDetail] = useState<any[]>([]);
+  const [isProceduresModalOpen, setIsProceduresModalOpen] = useState(false);
 
 
   useEffect(() => {
@@ -230,6 +292,21 @@ export default function DataVisualizer({ data }: DataVisualizerProps) {
     }
   }
 
+  const handleProceduresDoubleClick = () => {
+    if (!data || !data.usuarios) return;
+    const allProcedures: any[] = [];
+    data.usuarios.forEach((user: any) => {
+      const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
+      if (user.servicios?.procedimientos) {
+        user.servicios.procedimientos.forEach((proc: any) => {
+          allProcedures.push({ ...proc, userId });
+        });
+      }
+    });
+    setProceduresDetail(allProcedures);
+    setIsProceduresModalOpen(true);
+  };
+
   if (!isClient) {
     return (
         <div className="flex items-center justify-center py-6">
@@ -245,7 +322,9 @@ export default function DataVisualizer({ data }: DataVisualizerProps) {
             <StatCard title="Factura" value={summary.numFactura} icon={FileText} />
             <StatCard title="Total Usuarios" value={summary.numUsuarios} icon={Users} />
             <StatCard title="Total Consultas" value={summary.numConsultas} icon={Stethoscope} />
-            <StatCard title="Total Procedimientos" value={summary.numProcedimientos} icon={Microscope} />
+            <div onDoubleClick={handleProceduresDoubleClick} className="cursor-pointer">
+              <StatCard title="Total Procedimientos" value={summary.numProcedimientos} icon={Microscope} />
+            </div>
             <StatCard title="Total Medicamentos" value={summary.totalMedicamentos.toLocaleString()} icon={Pill} />
             <StatCard title="Total Otros Servicios" value={summary.totalOtrosServicios.toLocaleString()} icon={Syringe} />
         </div>
@@ -312,6 +391,13 @@ export default function DataVisualizer({ data }: DataVisualizerProps) {
             onOpenChange={setIsCie10ModalOpen}
             isLoading={isCie10Loading}
         />
+        <ProceduresDetailModal 
+            open={isProceduresModalOpen}
+            onOpenChange={setIsProceduresModalOpen}
+            procedures={proceduresDetail}
+        />
     </div>
   );
 }
+
+    
