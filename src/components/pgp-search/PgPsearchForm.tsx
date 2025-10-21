@@ -300,9 +300,27 @@ const handleDownloadXls = (data: any[], filename: string) => {
 };
 
 
-const ValorizadoDetailModal = ({ open, onOpenChange, data }: { open: boolean, onOpenChange: (open: boolean) => void, data: MatrizEjecucionRow[] }) => {
+const ValorizadoDetailModal = ({ open, onOpenChange, data, executionDataByMonth }: { open: boolean, onOpenChange: (open: boolean) => void, data: MatrizEjecucionRow[], executionDataByMonth: ExecutionDataByMonth }) => {
     const tableData = useMemo(() => data.filter(row => row.Cantidad_Ejecutada > 0), [data]);
     
+    const generateDownloadData = () => {
+        const dataToDownload = tableData.map(row => {
+            const users = new Set<string>();
+            executionDataByMonth.forEach(monthData => {
+                monthData.cupCounts.get(row.CUPS)?.uniqueUsers.forEach(user => {
+                    users.add(user);
+                });
+            });
+
+            return {
+                ...row,
+                Usuarios_Atendidos: Array.from(users).join(', ')
+            };
+        });
+        return dataToDownload;
+    };
+
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
@@ -341,7 +359,7 @@ const ValorizadoDetailModal = ({ open, onOpenChange, data }: { open: boolean, on
                 <DialogFooter>
                     <Button 
                         variant="secondary"
-                        onClick={() => handleDownloadXls(tableData, 'desglose_ejecucion_valorizada.xls')}
+                        onClick={() => handleDownloadXls(generateDownloadData(), 'desglose_ejecucion_valorizada_con_usuarios.xls')}
                     >
                         <Download className="mr-2 h-4 w-4" />
                         Descargar
@@ -1159,6 +1177,7 @@ const PgPsearchForm: React.FC<PgPsearchFormProps> = ({ executionDataByMonth, jso
                 open={isValorizadoModalOpen}
                 onOpenChange={setIsValorizadoModalOpen}
                 data={comparisonSummary.Matriz_Ejecucion_vs_Esperado}
+                executionDataByMonth={executionDataByMonth}
             />
         )}
       </CardContent>
@@ -1172,5 +1191,6 @@ export default PgPsearchForm;
     
 
     
+
 
 
