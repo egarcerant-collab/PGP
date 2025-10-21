@@ -304,43 +304,46 @@ const ValorizadoDetailModal = ({ open, onOpenChange, data, executionDataByMonth 
     const tableData = useMemo(() => data.filter(row => row.Cantidad_Ejecutada > 0), [data]);
     
     const generateDownloadData = () => {
-        // Find the maximum number of users for any single CUPS to determine columns
-        let maxUsers = 0;
-        const usersPerCup: { [cup: string]: string[] } = {};
+        const dataToDownload: any[] = [];
 
-        tableData.forEach(row => {
-            const users = new Set<string>();
-            executionDataByMonth.forEach(monthData => {
-                monthData.cupCounts.get(row.CUPS)?.uniqueUsers.forEach(user => {
-                    users.add(user);
-                });
+        executionDataByMonth.forEach((monthData, monthKey) => {
+            const monthName = getMonthName(monthKey);
+            const allUsers = monthData.rawJsonData?.usuarios || [];
+
+            allUsers.forEach((user: any) => {
+                const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
+
+                const processServicesForDownload = (services: any[], type: string, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
+                    if (!services) return;
+                    services.forEach((service: any) => {
+                        let serviceValue = 0;
+                        if (unitValueField && qtyField) {
+                            serviceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
+                        } else {
+                            serviceValue = getNumericValue(service[valueField]);
+                        }
+
+                        dataToDownload.push({
+                            Mes: monthName,
+                            ID_Usuario: userId,
+                            Tipo_Servicio: type,
+                            CUPS: service[codeField],
+                            Fecha_Atencion: service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
+                            Diagnostico_Principal: service.codDiagnosticoPrincipal,
+                            Valor_Servicio: serviceValue
+                        });
+                    });
+                };
+
+                if (user.servicios) {
+                    processServicesForDownload(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
+                    processServicesForDownload(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
+                    processServicesForDownload(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
+                    processServicesForDownload(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', undefined, 'cantidadOS');
+                }
             });
-            const userArray = Array.from(users);
-            usersPerCup[row.CUPS] = userArray;
-            if (userArray.length > maxUsers) {
-                maxUsers = userArray.length;
-            }
         });
-
-        // Generate the data for download
-        const dataToDownload = tableData.map(row => {
-            const baseData = {
-                CUPS: row.CUPS,
-                Descripcion: row.Descripcion,
-                Cantidad_Ejecutada: row.Cantidad_Ejecutada,
-                Valor_Unitario_NT: row.Valor_Unitario,
-                Valor_Ejecutado: row.Valor_Ejecutado,
-            };
-
-            const userColumns: { [key: string]: string } = {};
-            const users = usersPerCup[row.CUPS] || [];
-            for (let i = 0; i < maxUsers; i++) {
-                userColumns[`Usuario_${i + 1}`] = users[i] || '';
-            }
-
-            return { ...baseData, ...userColumns };
-        });
-
+        
         return dataToDownload;
     };
 
@@ -383,7 +386,7 @@ const ValorizadoDetailModal = ({ open, onOpenChange, data, executionDataByMonth 
                 <DialogFooter>
                     <Button 
                         variant="secondary"
-                        onClick={() => handleDownloadXls(generateDownloadData(), 'desglose_ejecucion_valorizada_con_usuarios.xls')}
+                        onClick={() => handleDownloadXls(generateDownloadData(), 'desglose_ejecucion_detallado.xls')}
                     >
                         <Download className="mr-2 h-4 w-4" />
                         Descargar
@@ -1215,6 +1218,7 @@ export default PgPsearchForm;
     
 
     
+
 
 
 
