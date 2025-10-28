@@ -21,7 +21,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { descargarInformePDF, type InformeDatos, generarURLInformePDF } from "@/lib/pdf-definitions";
-import type { DeviatedCupInfo, ComparisonSummary, UnexpectedCupInfo, AdjustedData } from "@/components/pgp-search/PgPsearchForm";
+import type { DeviatedCupInfo, UnexpectedCupInfo, AdjustedData } from "@/components/pgp-search/PgPsearchForm";
 import { generateReportAnalysis, type ReportAnalysisInput } from "@/ai/flows/generate-report-analysis-flow";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "../ui/textarea";
@@ -69,7 +69,6 @@ export interface ReportData {
   unexpectedCups?: UnexpectedCupInfo[];
   adjustedData?: AdjustedData;
 }
-
 
 interface ReportAnalysisOutput {
   financialAnalysis: string;
@@ -483,6 +482,3 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
     </div>
   );
 }
-
-    
-
