@@ -310,7 +310,7 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
         
         const overExecutedCupsWithComments = (data.overExecutedCups ?? []).map(cup => ({
             ...cup,
-            comment: data.adjustedData?.comments[cup.cup] || undefined,
+            comment: data.adjustedData?.comments[cup.cup],
         }));
 
         const analysisInput: ReportAnalysisInput = {
