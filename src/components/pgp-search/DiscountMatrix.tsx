@@ -54,6 +54,7 @@ export interface AdjustedData {
   adjustedQuantities: Record<string, number>;
   adjustedValues: Record<string, number>;
   comments: Record<string, string>;
+  selectedRows: Record<string, boolean>;
 }
 
 interface DiscountMatrixProps {
@@ -180,9 +181,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         });
 
         if (initialAuditData) {
-            setAdjustedQuantities(initialAuditData.adjustedQuantities);
-            setComments(initialAuditData.comments);
-            setSelectedRows(initialAuditData.selectedRows);
+            setAdjustedQuantities(initialAuditData.adjustedQuantities || {});
+            setComments(initialAuditData.comments || {});
+            setSelectedRows(initialAuditData.selectedRows || {});
              toast({
                 title: "Auditoría Guardada Cargada",
                 description: "Se restauró el progreso de la auditoría seleccionada.",
@@ -217,7 +218,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
     useEffect(() => {
         initializeStateFromData();
-    }, [initializeStateFromData]);
+    }, [initializeStateFromData, initialAuditData]); // Depend on initialAuditData to re-run
     
     // This effect now passes data up, but doesn't save to localStorage
     useEffect(() => {
@@ -228,8 +229,8 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
             adjustedValues[row.CUPS] = discountValue > 0 ? discountValue : 0;
         });
-      onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments });
-    }, [adjustedQuantities, comments, data, onAdjustmentsChange]);
+      onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments, selectedRows });
+    }, [adjustedQuantities, comments, selectedRows, data, onAdjustmentsChange]);
     
     const handleSaveStateToServer = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
@@ -245,7 +246,8 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         const getMonthName = (monthNumber: string) => {
             const date = new Date();
             date.setMonth(parseInt(monthNumber) - 1);
-            return date.toLocaleString('es-CO', { month: 'long' });
+            const monthName = date.toLocaleString('es-CO', { month: 'long' });
+            return monthName.charAt(0).toUpperCase() + monthName.slice(1);
         };
         
         // Asumimos un solo mes por simplicidad, se puede mejorar para multimes
@@ -582,7 +584,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                     Guardar Progreso
                                 </Button>
                                 <Button onClick={handleSaveStateToServer} variant="default" size="sm" className="h-8" disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                     Guardar Auditoría
                                 </Button>
                                 <AlertDialog>
