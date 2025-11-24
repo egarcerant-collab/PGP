@@ -88,16 +88,23 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             if (!response.ok) {
                 throw new Error(`No se pudo cargar el archivo de auditoría desde ${selectedAuditPath}`);
             }
-            const data = await response.json();
-            
-            if (data.auditData && data.prestadorName && data.month) {
-                onAuditLoad(data.auditData, data.prestadorName, data.month);
+            // The response body is the SavedAuditData itself.
+            const auditData: SavedAuditData = await response.json();
+
+            // We need to extract the prestador and month from the path for the onAuditLoad function
+            const pathParts = selectedAuditPath.split('/');
+            const month = pathParts[pathParts.length - 2];
+            const prestadorName = pathParts[pathParts.length - 1].replace('.json', '');
+
+
+            if (auditData && prestadorName && month) {
+                onAuditLoad(auditData, prestadorName, month);
                 toast({
                     title: "Auditoría Cargada",
-                    description: `Se ha cargado la auditoría para ${data.prestadorName} del mes de ${data.month}.`
+                    description: `Se ha cargado la auditoría para ${prestadorName} del mes de ${month}.`
                 });
             } else {
-                 throw new Error("El archivo de auditoría no tiene el formato esperado.");
+                 throw new Error("El archivo de auditoría no tiene el formato esperado o faltan datos.");
             }
 
         } catch (error) {
