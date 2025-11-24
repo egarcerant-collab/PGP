@@ -69,13 +69,8 @@ export default function Home() {
           </p>
         </header>
 
-        {/* Cargar Auditoría Guardada */}
-        <SavedAuditsPage onAuditLoad={handleAuditLoad} />
-        
-        <Separator className="my-8" />
-        
-        <h2 className="text-3xl font-semibold text-center text-foreground">
-          O Iniciar una Nueva Auditoría
+        <h2 className="text-3xl font-semibold text-center text-foreground pt-8">
+          Iniciar una Nueva Auditoría
         </h2>
 
         <div className="grid grid-cols-1 gap-8 items-start">
@@ -101,6 +96,12 @@ export default function Home() {
               />
           </div>
         </div>
+
+        <Separator className="my-12" />
+
+        {/* Cargar Auditoría Guardada */}
+        <SavedAuditsPage onAuditLoad={handleAuditLoad} />
+
       </div>
     </main>
   );
