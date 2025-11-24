@@ -43,7 +43,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         try {
             const response = await fetch('/api/list-audits');
             if (!response.ok) {
-                throw new Error('No se pudo obtener la lista de auditorías.');
+                // It's ok if it fails, maybe the dir doesn't exist yet
+                setAudits({});
+                return;
             }
             const data: AuditFile[] = await response.json();
             
@@ -61,9 +63,10 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             const errorMessage = error instanceof Error ? error.message : "Error desconocido";
             toast({
                 title: "Error al cargar auditorías",
-                description: errorMessage,
+                description: `No se pudo obtener la lista de auditorías: ${errorMessage}`,
                 variant: "destructive",
             });
+            setAudits({});
         } finally {
             setIsLoading(false);
         }
@@ -84,18 +87,17 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         }
         setIsContinuing(true);
         try {
+            // The path is already correct from the SelectItem value.
             const response = await fetch(selectedAuditPath);
             if (!response.ok) {
                 throw new Error(`No se pudo cargar el archivo de auditoría desde ${selectedAuditPath}`);
             }
-            // The response body is the SavedAuditData itself.
             const auditData: SavedAuditData = await response.json();
 
             // We need to extract the prestador and month from the path for the onAuditLoad function
             const pathParts = selectedAuditPath.split('/');
             const month = pathParts[pathParts.length - 2];
             const prestadorName = pathParts[pathParts.length - 1].replace('.json', '').replace(/_/g, ' ');
-
 
             if (auditData && prestadorName && month) {
                 onAuditLoad(auditData, prestadorName, month);
