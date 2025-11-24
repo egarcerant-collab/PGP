@@ -37,7 +37,7 @@ interface AnalyzePgpDataOutput {
   strategicRecommendations: string[];
 }
 
-type Prestador = PrestadorInfo;
+export type Prestador = PrestadorInfo;
 
 export interface SummaryData {
   totalCostoMes: number;
@@ -312,12 +312,13 @@ const ValorizadoDetailModal = ({ open, onOpenChange, executionDataByMonth, pgpDa
 
     const generateDownloadData = () => {
         const dataToDownload: any[] = [];
+        const allUsers = new Map<string, Set<string>>(); // Map<cup, Set<userId>>
 
         executionDataByMonth.forEach((monthData, monthKey) => {
             const monthName = getMonthName(monthKey);
-            const allUsers = monthData.rawJsonData?.usuarios || [];
+            const usersInMonth = monthData.rawJsonData?.usuarios || [];
 
-            allUsers.forEach((user: any) => {
+            usersInMonth.forEach((user: any) => {
                 const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
 
                 const processServicesForDownload = (services: any[], type: string, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
@@ -325,6 +326,11 @@ const ValorizadoDetailModal = ({ open, onOpenChange, executionDataByMonth, pgpDa
                     services.forEach((service: any) => {
                         const cupCode = service[codeField];
                         if (!cupCode) return;
+
+                        if (!allUsers.has(cupCode)) {
+                            allUsers.set(cupCode, new Set());
+                        }
+                        allUsers.get(cupCode)!.add(userId);
 
                         const pgpRow = pgpCupsMap.get(cupCode);
                         const valorUnitarioNT = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['valor unitario'])) : 0;
@@ -1194,6 +1200,7 @@ const PgPsearchForm: React.FC<PgPsearchFormProps> = ({ executionDataByMonth, jso
                   storageKey={localStorageKey}
                   onGenerateReport={handleGenerateAndSaveReport}
                   isGeneratingReport={isGeneratingFinalReport}
+                  selectedPrestador={selectedPrestador}
                 />
 
                 {reportData && <InformePGP data={reportData} />}
@@ -1233,15 +1240,3 @@ const PgPsearchForm: React.FC<PgPsearchFormProps> = ({ executionDataByMonth, jso
 };
 
 export default PgPsearchForm;
-
-
-    
-
-    
-
-
-
-
-
-
-

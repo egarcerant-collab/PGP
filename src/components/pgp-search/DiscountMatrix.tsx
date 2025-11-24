@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ExecutionDataByMonth } from '@/app/page';
 import { CupDetailsModal } from '../report/InformeDesviaciones';
-import type { DeviatedCupInfo } from './PgPsearchForm';
+import type { DeviatedCupInfo, Prestador } from './PgPsearchForm';
 import { Textarea } from '../ui/textarea';
 import { getNumericValue } from '../app/JsonAnalyzerPage';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +64,7 @@ interface DiscountMatrixProps {
   storageKey: string; // Unique key for localStorage
   onGenerateReport: () => void;
   isGeneratingReport: boolean;
+  selectedPrestador: Prestador | null;
 }
 
 const handleDownloadXls = (data: any[], filename: string) => {
@@ -140,7 +141,16 @@ const CommentModal = ({ open, onOpenChange, onSave, initialComment }: {
 };
 
 
-const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ data, executionDataByMonth, pgpData, onAdjustmentsChange, storageKey, onGenerateReport, isGeneratingReport }) => {
+const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ 
+    data, 
+    executionDataByMonth, 
+    pgpData, 
+    onAdjustmentsChange, 
+    storageKey, 
+    onGenerateReport, 
+    isGeneratingReport,
+    selectedPrestador
+}) => {
     const [selectedCupForDetail, setSelectedCupForDetail] = useState<DeviatedCupInfo | null>(null);
     const [isCupModalOpen, setIsCupModalOpen] = useState(false);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
@@ -157,6 +167,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ data, executionDataByMo
     // Filters
     const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceType | 'all'>('all');
     const { toast } = useToast();
+    const [isSaving, setIsSaving] = useState(false);
 
 
      // Load initial state from localStorage
@@ -202,26 +213,66 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ data, executionDataByMo
       onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments });
     }, [adjustedQuantities, comments, data, onAdjustmentsChange]);
     
-    const handleSaveState = () => {
-        if (!storageKey) return;
-        try {
-            const stateToSave = {
-                adjustedQuantities,
-                comments,
-                selectedRows
-            };
-            localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    const handleSaveState = async () => {
+        if (!selectedPrestador || executionDataByMonth.size === 0) {
             toast({
-                title: "Progreso Guardado",
-                description: "El progreso de la auditoría ha sido guardado en este navegador.",
-            });
-        } catch (error) {
-            console.error("Error saving state to localStorage", error);
-            toast({
-                title: "Error al Guardar",
-                description: "No se pudo guardar el progreso de la auditoría.",
+                title: "No se puede guardar",
+                description: "Se necesita un prestador y datos de ejecución cargados.",
                 variant: "destructive",
             });
+            return;
+        }
+        setIsSaving(true);
+        
+        const getMonthName = (monthNumber: string) => {
+            const date = new Date();
+            date.setMonth(parseInt(monthNumber) - 1);
+            return date.toLocaleString('es-CO', { month: 'long' });
+        };
+        
+        // Asumimos un solo mes por simplicidad, se puede mejorar para multimes
+        const monthKey = executionDataByMonth.keys().next().value;
+        const monthName = getMonthName(monthKey);
+
+        const auditData = {
+            adjustedQuantities,
+            comments,
+            selectedRows
+        };
+        
+        try {
+            const response = await fetch('/api/save-audit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    auditData,
+                    prestadorName: selectedPrestador.PRESTADOR,
+                    month: monthName,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Error en el servidor');
+            }
+            
+            toast({
+                title: "Auditoría Guardada Exitosamente",
+                description: `El archivo se ha guardado en el servidor.`,
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+            console.error("Error saving audit state to server:", error);
+            toast({
+                title: "Error al Guardar",
+                description: `No se pudo guardar la auditoría en el servidor: ${errorMessage}`,
+                variant: "destructive",
+            });
+        } finally {
+            setIsSaving(false);
         }
     };
     
@@ -478,8 +529,8 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ data, executionDataByMo
                         </div>
                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                              <div className="flex items-center gap-2">
-                                <Button onClick={handleSaveState} variant="outline" size="sm" className="h-8">
-                                    <Save className="mr-2 h-4 w-4" />
+                                <Button onClick={handleSaveState} variant="outline" size="sm" className="h-8" disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                     Guardar Auditoría
                                 </Button>
                                 <AlertDialog>
@@ -575,20 +626,3 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ data, executionDataByMo
 };
 
 export default DiscountMatrix;
-
-    
-
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
