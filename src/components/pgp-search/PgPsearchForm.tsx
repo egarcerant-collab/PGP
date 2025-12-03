@@ -906,6 +906,7 @@ const PgPsearchForm = forwardRef<
     adjustedQuantities: {},
     adjustedValues: {},
     comments: {},
+    selectedRows: {}
   });
 
 
@@ -1160,7 +1161,8 @@ const PgPsearchForm = forwardRef<
       setAdjustedData({
         adjustedQuantities: initialAuditData.adjustedQuantities,
         adjustedValues: {}, // Will be recalculated
-        comments: initialAuditData.comments
+        comments: initialAuditData.comments,
+        selectedRows: initialAuditData.selectedRows
       });
     }
   }, [initialAuditData]);

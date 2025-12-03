@@ -181,7 +181,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         });
 
         if (initialAuditData) {
-            setAdjustedQuantities(initialAuditData.adjustedQuantities || {});
+            setAdjustedQuantities(initialAuditData.adjustedQuantities || initialQuantities);
             setComments(initialAuditData.comments || {});
             setSelectedRows(initialAuditData.selectedRows || {});
              toast({

@@ -383,7 +383,7 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
                 <Edit className="h-4 w-4 mr-2" />
                 Editar Conclusiones y Recomendaciones
             </Button>
-            <Button variant="default" onClick={() => handleGeneratePdf('preview')} disabled={isGeneratingPdf}>
+            <Button id="generate-pdf-report-button" variant="default" onClick={() => handleGeneratePdf('preview')} disabled={isGeneratingPdf}>
                 {isGeneratingPdf ? <Loader2 className="h-4 w-4 mr-1 animate-spin"/> : <DownloadCloud className="h-4 w-4 mr-1"/>}
                 Generar Informe PDF
             </Button>
