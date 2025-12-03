@@ -448,55 +448,53 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     
     const generateDownloadData = () => {
         const discountedServices: any[] = [];
-
-        // 1. Determine which CUPS have discounts applied
+    
+        // 1. Get all CUPS that are selected for discount
         const discountedCups = new Set<string>();
         Object.entries(selectedRows).forEach(([cup, isSelected]) => {
             if (isSelected) {
-                 const rowData = data.find(r => r.CUPS === cup);
-                 if (rowData) {
+                const rowData = data.find(r => r.CUPS === cup);
+                if (rowData) {
                     const executedQty = rowData.Cantidad_Ejecutada;
                     const validatedQty = adjustedQuantities[cup] ?? executedQty;
                     if (validatedQty < executedQty) {
                         discountedCups.add(cup);
                     }
-                 }
+                }
             }
         });
-        
+    
         if (discountedCups.size === 0) {
             toast({
                 title: "Sin descuentos para descargar",
-                description: "Ajusta la 'Cantidad Validada' y selecciona las filas para generar el desglose.",
+                description: "Ajusta la 'Cantidad Validada' a un valor menor que la 'Cantidad Ejecutada' y selecciona las filas para generar el desglose.",
             });
             return [];
         }
-
-        // 2. Iterate through all raw services to find the ones to be discounted
+    
+        // 2. Iterate through all raw services to find the ones matching the discounted CUPS
         executionDataByMonth.forEach((monthData) => {
             monthData.rawJsonData.usuarios?.forEach((user: any) => {
                 const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
-
+    
                 const processServicesForDiscount = (services: any[], codeField: string) => {
                     if (!services) return;
+    
                     services.forEach((service: any) => {
                         const cupCode = service[codeField];
                         if (discountedCups.has(cupCode)) {
-                             const matrixRow = data.find(r => r.CUPS === cupCode);
-                             if (!matrixRow) return;
-
-                             // This logic assumes discount is applied proportionally, which is a simplification.
-                             // A more complex logic might "not recognize" the last N services.
-                             // For now, we calculate a per-service discount.
-                             const executedQty = matrixRow.Cantidad_Ejecutada;
-                             const validatedQty = adjustedQuantities[cupCode] ?? executedQty;
-                             const discountRatio = (executedQty - validatedQty) / executedQty;
-                             
-                             const originalServiceValue = getNumericValue(service.vrServicio);
-                             const discountAmount = originalServiceValue * discountRatio;
-                             const recognizedValue = originalServiceValue - discountAmount;
-                             
-                             if (discountAmount > 0) {
+                            const matrixRow = data.find(r => r.CUPS === cupCode);
+                            if (!matrixRow) return;
+    
+                            const executedQty = matrixRow.Cantidad_Ejecutada;
+                            const validatedQty = adjustedQuantities[cupCode] ?? executedQty;
+                            const discountRatio = (executedQty - validatedQty) / executedQty;
+    
+                            const originalServiceValue = getNumericValue(service.vrServicio);
+                            const discountAmount = originalServiceValue * discountRatio;
+                            const recognizedValue = originalServiceValue - discountAmount;
+    
+                            if (discountAmount > 0) {
                                 discountedServices.push({
                                     'ID Usuario': userId,
                                     'CUPS': cupCode,
@@ -512,15 +510,21 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         }
                     });
                 };
-                
-                processServicesForDiscount(user.servicios?.consultas, 'codConsulta');
-                processServicesForDiscount(user.servicios?.procedimientos, 'codProcedimiento');
-                // Note: Discount logic for 'medicamentos' and 'otros' might need different value calculations
+    
+                if (user.servicios) {
+                    processServicesForDiscount(user.servicios.consultas, 'codConsulta');
+                    processServicesForDiscount(user.servicios.procedimientos, 'codProcedimiento');
+                    // Note: Discount logic for 'medicamentos' and 'otros' might need different value calculations,
+                    // as they use unit values. This is a simplification for now.
+                    processServicesForDiscount(user.servicios.medicamentos, 'codTecnologiaSalud');
+                    processServicesForDiscount(user.servicios.otrosServicios, 'codTecnologiaSalud');
+                }
             });
         });
-        
+    
         return discountedServices;
     };
+    
     
     const renderTable = (tableData: DiscountMatrixRow[]) => (
         <Table>
