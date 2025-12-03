@@ -218,7 +218,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
     useEffect(() => {
         initializeStateFromData();
-    }, [initializeStateFromData, initialAuditData]); // Depend on initialAuditData to re-run
+    }, [initializeStateFromData]); // Depend on initialAuditData to re-run
     
     // This effect now passes data up, but doesn't save to localStorage
     useEffect(() => {
@@ -451,13 +451,16 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
         // 1. Determine which CUPS have discounts applied
         const discountedCups = new Set<string>();
-        filteredData.forEach(row => {
-            if (selectedRows[row.CUPS]) {
-                const executedQty = row.Cantidad_Ejecutada;
-                const validatedQty = adjustedQuantities[row.CUPS] ?? executedQty;
-                if (validatedQty < executedQty) {
-                    discountedCups.add(row.CUPS);
-                }
+        Object.entries(selectedRows).forEach(([cup, isSelected]) => {
+            if (isSelected) {
+                 const rowData = data.find(r => r.CUPS === cup);
+                 if (rowData) {
+                    const executedQty = rowData.Cantidad_Ejecutada;
+                    const validatedQty = adjustedQuantities[cup] ?? executedQty;
+                    if (validatedQty < executedQty) {
+                        discountedCups.add(cup);
+                    }
+                 }
             }
         });
         
@@ -734,3 +737,5 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 };
 
 export default DiscountMatrix;
+
+    
