@@ -207,6 +207,8 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
   // Series para gráficas
   const pieData = useMemo(() => data?.months.map((m) => ({ name: m.month, value: m.valueCOP, fill: `hsl(var(--chart-${data.months.indexOf(m) + 1}))` })) ?? [], [data?.months]);
   const cupsData = useMemo(() => data?.months.map((m) => ({ Mes: m.month, CUPS: m.cups })) ?? [], [data?.months]);
+  const financialData = useMemo(() => data?.months.map((m) => ({ Mes: m.month, 'Valor Ejecutado': m.valueCOP })) ?? [], [data?.months]);
+
 
   const getInformeData = (reportData: ReportData, charts: { [key: string]: string }, analysisTexts: ReportAnalysisOutput, auditorConclusions: string, auditorRecommendations: string): InformeDatos => {
     
@@ -371,20 +373,14 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
   if (!data || !pieData.length) {
     return null;
   }
-
-  const chartConfig = {
-    value: {
-      label: "Valor (COP)",
-    },
-    ...pieData.reduce((acc, item) => {
-        acc[item.name] = {
-            label: item.name,
-            color: item.fill
-        }
-        return acc;
-    }, {} as any)
-  } satisfies React.ComponentProps<typeof ChartContainer>["config"];
   
+  const financialChartConfig = {
+      'Valor Ejecutado': {
+          label: "Valor Ejecutado",
+          color: "hsl(var(--primary))",
+      },
+  } satisfies React.ComponentProps<typeof ChartContainer>["config"];
+
   const cupsChartConfig = {
       CUPS: {
           label: "CUPS",
@@ -420,25 +416,20 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
             <CardContent className="grid md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                     <h3 className="text-center font-semibold text-sm">Ejecución Financiera Mensual</h3>
-                     <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+                     <ChartContainer config={financialChartConfig} className="min-h-[250px] w-full">
                         <ResponsiveContainer width="100%" height={250}>
-                             <PieChart>
+                           <BarChart data={financialData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="Mes" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatCOP(value as number)} />
                                 <Tooltip
+                                    cursor={{ fill: 'hsl(var(--muted))' }}
                                     formatter={(value) => formatCOP(value as number)}
-                                    content={<ChartTooltipContent nameKey="name" />}
+                                    content={<ChartTooltipContent />}
                                 />
-                                <Pie
-                                    data={pieData}
-                                    dataKey="value"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                    nameKey="name"
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={80}
-                                />
-                                <Legend />
-                            </PieChart>
+                                <Bar dataKey="Valor Ejecutado" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                {valorNotaTecnica > 0 && <ReferenceLine y={valorNotaTecnica / (data.months.length || 1)} label="Nota Técnica" stroke="hsl(var(--destructive))" strokeDasharray="3 3" />}
+                            </BarChart>
                         </ResponsiveContainer>
                     </ChartContainer>
                 </div>
@@ -499,7 +490,7 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
           <section ref={financialChartRef}>
              <h3 className="text-center font-semibold text-sm mb-2">Ejecución Financiera Mensual</h3>
             <div className="h-60">
-              <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
+              <ChartContainer config={financialChartConfig} className="min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Tooltip
@@ -541,5 +532,3 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
     </div>
   );
 }
-
-    
