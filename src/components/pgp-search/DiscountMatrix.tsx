@@ -403,14 +403,14 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
       }
     };
     
-    // KPIs Calculations based on filtered data
+    // KPIs Calculations
     const totalEjecutadoBruto = useMemo(() => {
         return filteredData.reduce((sum, row) => sum + row.Valor_Ejecutado, 0);
     }, [filteredData]);
     
     const descuentoAplicado = useMemo(() => {
       return data.reduce((sum, row) => {
-          if (selectedRows[row.CUPS]) { // Use all data, but check against selectedRows
+          if (selectedRows[row.CUPS]) {
                const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
                const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
                const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
@@ -445,7 +445,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const generateDownloadData = () => {
         const discountedServices: any[] = [];
     
-        // 1. Get all CUPS that are selected for discount
         const discountedCups = new Set<string>();
         Object.entries(selectedRows).forEach(([cup, isSelected]) => {
             if (isSelected) {
@@ -468,7 +467,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             return [];
         }
     
-        // 2. Iterate through all raw services to find the ones matching the discounted CUPS
         executionDataByMonth.forEach((monthData) => {
             monthData.rawJsonData.usuarios?.forEach((user: any) => {
                 const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
@@ -485,7 +483,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                             const executedQty = matrixRow.Cantidad_Ejecutada;
                             const validatedQty = adjustedQuantities[cupCode] ?? executedQty;
                             
-                            // Skip if executedQty is 0 to avoid division by zero
                             if (executedQty === 0) return;
 
                             const discountRatio = (executedQty - validatedQty) / executedQty;
@@ -514,8 +511,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 if (user.servicios) {
                     processServicesForDiscount(user.servicios.consultas, 'codConsulta');
                     processServicesForDiscount(user.servicios.procedimientos, 'codProcedimiento');
-                    // Note: Discount logic for 'medicamentos' and 'otros' might need different value calculations,
-                    // as they use unit values. This is a simplification for now.
                     processServicesForDiscount(user.servicios.medicamentos, 'codTecnologiaSalud');
                     processServicesForDiscount(user.servicios.otrosServicios, 'codTecnologiaSalud');
                 }
@@ -741,5 +736,3 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 };
 
 export default DiscountMatrix;
-
-    
