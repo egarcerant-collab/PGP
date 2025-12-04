@@ -408,27 +408,23 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         return filteredData.reduce((sum, row) => sum + row.Valor_Ejecutado, 0);
     }, [filteredData]);
     
-    const totalEjecutadoAjustado = useMemo(() => {
-      return filteredData.reduce((sum, row) => {
-        const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-        return sum + validatedQuantity * row.Valor_Unitario;
-      }, 0);
-    }, [filteredData, adjustedQuantities]);
-
     const descuentoAplicado = useMemo(() => {
-        const totalDiscount = filteredData.reduce((sum, row) => {
-            if (selectedRows[row.CUPS]) {
-                 const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                 const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
-                 const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
-                 return sum + (discountValue > 0 ? discountValue : 0);
-            }
-            return sum;
-        }, 0);
-        return totalDiscount;
-    }, [filteredData, selectedRows, adjustedQuantities]);
+      return data.reduce((sum, row) => {
+          if (selectedRows[row.CUPS]) { // Use all data, but check against selectedRows
+               const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
+               const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
+               const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
+               return sum + (discountValue > 0 ? discountValue : 0);
+          }
+          return sum;
+      }, 0);
+    }, [data, selectedRows, adjustedQuantities]);
     
-    const valorNetoFinal = useMemo(() => totalEjecutadoBruto - descuentoAplicado, [totalEjecutadoBruto, descuentoAplicado]);
+    const valorNetoFinal = useMemo(() => {
+        // Calculate total bruto from ALL data, not just filtered
+        const totalBrutoAll = data.reduce((sum, row) => sum + row.Valor_Ejecutado, 0);
+        return totalBrutoAll - descuentoAplicado;
+    }, [data, descuentoAplicado]);
 
 
     const allSelected = useMemo(() => filteredData.length > 0 && filteredData.every(row => selectedRows[row.CUPS]), [filteredData, selectedRows]);
@@ -488,6 +484,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     
                             const executedQty = matrixRow.Cantidad_Ejecutada;
                             const validatedQty = adjustedQuantities[cupCode] ?? executedQty;
+                            
+                            // Skip if executedQty is 0 to avoid division by zero
+                            if (executedQty === 0) return;
+
                             const discountRatio = (executedQty - validatedQty) / executedQty;
     
                             const originalServiceValue = getNumericValue(service.vrServicio);
@@ -682,15 +682,15 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                     </div>
                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-right w-full mt-4">
                         <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><WalletCards className="h-4 w-4"/> Valor Ejecutado Total</p>
+                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><WalletCards className="h-4 w-4"/> Valor Ejecutado Total (Filtrado)</p>
                             <p className="text-lg font-bold text-blue-600">{formatCurrency(totalEjecutadoBruto)}</p>
                         </div>
                         <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><TrendingDown className="h-4 w-4"/> Descuento Aplicado</p>
+                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><TrendingDown className="h-4 w-4"/> Descuento Aplicado (Total)</p>
                             <p className="text-lg font-bold text-red-500">{formatCurrency(descuentoAplicado)}</p>
                         </div>
                         <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><CheckCircle className="h-4 w-4"/> Valor Neto Final</p>
+                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><CheckCircle className="h-4 w-4"/> Valor Neto Final (Total)</p>
                             <p className="text-lg font-bold text-green-600">{formatCurrency(valorNetoFinal)}</p>
                         </div>
                     </div>
