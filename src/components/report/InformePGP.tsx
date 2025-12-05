@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, useRef, useEffect } from "react";
@@ -440,10 +439,15 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
                            <BarChart data={financialData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="Mes" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatCOP(value as number)} />
+                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => {
+                                      const num = value as number;
+                                      if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+                                      if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
+                                      return num.toString();
+                                }} />
                                 <ChartTooltip
                                     cursor={false}
-                                    content={<ChartTooltipContent indicator="dot" />}
+                                    content={<ChartTooltipContent indicator="dot" formatter={(value) => formatCOP(value as number)} />}
                                 />
                                 <Bar dataKey="Valor Presupuestado" fill="var(--color-Valor Presupuestado)" radius={4} />
                                 <Bar dataKey="Valor Ejecutado" fill="var(--color-Valor Ejecutado)" radius={4} />
