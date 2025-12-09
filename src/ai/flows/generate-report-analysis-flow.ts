@@ -18,14 +18,14 @@ const ReportAnalysisInputSchema = z.object({
     unitAvg: z.number().describe("El costo unitario promedio (valor total ejecutado (JSON) / cantidad de CUPS)."),
     overExecutedCount: z.number().describe("La cantidad de CUPS que fueron sobre-ejecutados."),
     unexpectedCount: z.number().describe("La cantidad de CUPS ejecutados que no estaban en la nota técnica."),
-    overExecutedCups: z.array(z.any()).describe("Lista de CUPS sobre-ejecutados, que puede incluir comentarios de glosa. Cada objeto tiene claves como 'cup', 'description', 'realFrequency', 'deviationValue', y opcionalmente 'comment'."),
-    underExecutedCups: z.array(z.any()).describe("Lista de CUPS sub-ejecutados."),
-    missingCups: z.array(z.any()).describe("Lista de CUPS planificados que no se ejecutaron."),
-    unexpectedCups: z.array(z.any()).describe("Lista de CUPS ejecutados no planificados."),
     valorNetoFinal: z.number().describe("El valor final a pagar al prestador después de aplicar todos los descuentos y ajustes de la auditoría. Este es el número más importante."),
     descuentoAplicado: z.number().describe("El monto total descontado durante el proceso de auditoría."),
     additionalConclusions: z.string().optional().describe("Conclusiones adicionales escritas por el auditor para ser incluidas o consideradas en el informe."),
     additionalRecommendations: z.string().optional().describe("Recomendaciones adicionales escritas por el auditor para ser incluidas o consideradas en el informe."),
+    totalValueOverExecuted: z.number().describe("El valor total de la desviación (exceso) de los CUPS sobre-ejecutados."),
+    totalValueUnexpected: z.number().describe("El valor total ejecutado de los CUPS inesperados."),
+    totalValueUnderExecuted: z.number().describe("El valor total de la desviación (defecto) de los CUPS sub-ejecutados."),
+    totalValueMissing: z.number().describe("El valor total no ejecutado de los CUPS faltantes."),
 });
 
 const ReportAnalysisOutputSchema = z.object({
@@ -60,11 +60,11 @@ const prompt = ai.definePrompt({
   - Cantidad de CUPS Sobre-ejecutados (>111%): {{overExecutedCount}}
   - Cantidad de CUPS Inesperados (No en NT): {{unexpectedCount}}
 
-  Datos Clínicos para Análisis Detallado:
-  - CUPS Sobre-ejecutados (incluye comentarios de glosa si existen): {{{json overExecutedCups}}}
-  - CUPS Sub-ejecutados: {{{json underExecutedCups}}}
-  - CUPS Faltantes (No ejecutados): {{{json missingCups}}}
-  - CUPS Inesperados: {{{json unexpectedCups}}}
+  Resumen Financiero de Desviaciones:
+  - Valor Desviación por Sobre-ejecución: {{totalValueOverExecuted}}
+  - Valor Ejecutado por CUPS Inesperados: {{totalValueUnexpected}}
+  - Valor no ejecutado por Sub-ejecución: {{totalValueUnderExecuted}}
+  - Valor no ejecutado por CUPS Faltantes: {{totalValueMissing}}
   
   {{#if additionalConclusions}}
   Conclusiones Adicionales del Auditor (Considerar para el tono y enfoque del análisis):
@@ -93,8 +93,8 @@ const prompt = ai.definePrompt({
 
   3.  **deviationAnalysis** (entre 1500 y 2000 caracteres): Análisis Amplio del Valor de las Desviaciones.
       - **Enfoque Principal: EL VALOR ($) de las desviaciones, no solo la frecuencia.**
-      - Cuantifica el impacto financiero total de los CUPS sobre-ejecutados. Utiliza la suma de los campos 'deviationValue' para explicar cuánto dinero representa el exceso de frecuencia.
-      - Analiza el costo total de los CUPS inesperados (campo 'totalValue') y explica cómo este gasto no planificado impacta directamente la prima y la rentabilidad del contrato.
+      - Cuantifica el impacto financiero total de los CUPS sobre-ejecutados. Utiliza el 'Valor Desviación por Sobre-ejecución' ({{totalValueOverExecuted}}) para explicar cuánto dinero representa el exceso de frecuencia.
+      - Analiza el costo total de los CUPS inesperados ('Valor Ejecutado por CUPS Inesperados': {{totalValueUnexpected}}) y explica cómo este gasto no planificado impacta directamente la prima y la rentabilidad del contrato.
       - Explica las posibles causas de la sobre-ejecución (aumento de incidencia, cambios en guías clínicas, ineficiencias) pero siempre conectándolas con su consecuencia monetaria.
       - Evalúa el riesgo financiero que representan estas desviaciones de valor. ¿Son sostenibles? ¿Qué porcentaje del presupuesto consumen?
       - Recomienda acciones concretas (auditoría, análisis de causa raíz, pertinencia médica) como herramientas para controlar el impacto financiero de estas desviaciones. Sé muy específico sobre cómo estas acciones mitigan el riesgo económico.

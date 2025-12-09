@@ -311,18 +311,18 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
 
   // Exportación a PDF con pdfmake
   const handleGeneratePdf = async (action: 'preview' | 'download') => {
-    if (!data) return;
+    if (!data || !comparisonSummary) return;
     setIsGeneratingPdf(true);
     if(action === 'preview') setPdfPreviewUrl(null);
 
     toast({ title: 'Generando informe...', description: 'La IA está redactando el análisis. Esto puede tardar un momento.' });
 
     try {
-        
-        const overExecutedCupsWithComments = (data.overExecutedCups ?? []).map(cup => ({
-            ...cup,
-            comment: data.adjustedData?.comments[cup.cup],
-        }));
+        const totalValueOverExecuted = comparisonSummary.overExecutedCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
+        const totalValueUnexpected = comparisonSummary.unexpectedCups.reduce((sum, cup) => sum + cup.totalValue, 0);
+        const totalValueUnderExecuted = comparisonSummary.underExecutedCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
+        const totalValueMissing = comparisonSummary.missingCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
+
 
         const analysisInput: ReportAnalysisInput = {
             sumaMensual,
@@ -333,14 +333,14 @@ export default function InformePGP({ data }: { data?: ReportData | null }) {
             unitAvg,
             overExecutedCount: data.overExecutedCups?.length ?? 0,
             unexpectedCount: data.unexpectedCups?.length ?? 0,
-            overExecutedCups: overExecutedCupsWithComments,
-            underExecutedCups: data.underExecutedCups ?? [],
-            missingCups: data.missingCups ?? [],
-            unexpectedCups: data.unexpectedCups ?? [],
             valorNetoFinal: valorNetoFinalAuditoria,
             descuentoAplicado: descuentoAplicadoTotal,
             additionalConclusions: conclusions,
             additionalRecommendations: recommendations,
+            totalValueOverExecuted,
+            totalValueUnexpected,
+            totalValueUnderExecuted,
+            totalValueMissing,
         };
 
         const analysisTexts = await generateReportAnalysis(analysisInput);

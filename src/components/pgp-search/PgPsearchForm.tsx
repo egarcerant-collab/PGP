@@ -956,7 +956,6 @@ const PgPsearchForm = forwardRef<
 
   const descuentoAplicadoTotal = useMemo(() => {
     if (!adjustedData?.adjustedValues) return 0;
-    // Sum only the values for the selected rows
     return Object.entries(adjustedData.adjustedValues).reduce((sum, [cup, value]) => {
         if (adjustedData.selectedRows[cup]) {
             return sum + value;
