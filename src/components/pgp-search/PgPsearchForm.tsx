@@ -9,7 +9,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { analyzePgpData } from '@/ai/flows/analyze-pgp-flow';
+import { analyzePgpData } from '@/ai/flows/analyze-pgp-data';
 import { Separator } from "@/components/ui/separator";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
 import { type ExecutionDataByMonth } from '@/app/page';
@@ -956,7 +956,13 @@ const PgPsearchForm = forwardRef<
 
   const descuentoAplicadoTotal = useMemo(() => {
     if (!adjustedData?.adjustedValues) return 0;
-    return Object.values(adjustedData.adjustedValues).reduce((sum, val) => sum + val, 0);
+    // Sum only the values for the selected rows
+    return Object.entries(adjustedData.adjustedValues).reduce((sum, [cup, value]) => {
+        if (adjustedData.selectedRows[cup]) {
+            return sum + value;
+        }
+        return sum;
+    }, 0);
   }, [adjustedData]);
 
   const valorNetoFinal = useMemo(() => {
