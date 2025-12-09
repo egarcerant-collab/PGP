@@ -128,7 +128,6 @@ function buildDocDefinition(data: InformeDatos, backgroundImageBase64: string): 
             stack: [
                 {
                     columns: [
-                        { text: `${data.ciudad}, ${data.fecha}`, alignment: 'left', style: 'p' },
                         { text: `Página ${currentPage} de ${pageCount}`, alignment: 'right', style: 'p' }
                     ],
                 }
