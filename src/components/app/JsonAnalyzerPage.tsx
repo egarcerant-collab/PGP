@@ -51,7 +51,11 @@ const normalizeDigits = (v: unknown): string => {
 export const getNumericValue = (value: any): number => {
     if (value === null || value === undefined || value === '') return 0;
     
-    const cleanedString = String(value).replace(/[^\d,.-]/g, '');
+    // Convert to string and handle potential scientific notation or other formats
+    const valueStr = String(value);
+
+    // Clean the string: allow digits, minus sign, comma, and dot.
+    const cleanedString = valueStr.replace(/[^0-9,.-]/g, '');
 
     const lastComma = cleanedString.lastIndexOf(',');
     const lastDot = cleanedString.lastIndexOf('.');
@@ -59,14 +63,13 @@ export const getNumericValue = (value: any): number => {
     let numberString: string;
 
     if (lastComma > lastDot) {
-        // Format is likely 1.234,56 (Latin American)
+        // Format is likely 1.234,56 (Latin American). 
+        // Remove dots (thousand separators), replace comma with dot (decimal separator).
         numberString = cleanedString.replace(/\./g, '').replace(',', '.');
-    } else if (lastDot > lastComma) {
-        // Format is likely 1,234.56 (American)
-        numberString = cleanedString.replace(/,/g, '');
     } else {
-        // No clear separator or only one type, treat as plain number
-        numberString = cleanedString.replace(',', '.'); // Treat comma as decimal just in case
+        // Format is likely 1,234.56 (American) or a plain number.
+        // Remove commas (thousand separators). The dot is already the decimal separator.
+        numberString = cleanedString.replace(/,/g, '');
     }
       
     const n = parseFloat(numberString);
