@@ -71,7 +71,6 @@ const prompt = ai.definePrompt({
   3.  **Recomendaciones Estratégicas:** Propón 2-3 acciones concretas y de alto impacto. Sugiere áreas para optimización, gestión de riesgos o negociación contractual.
 
   Sé directo, profesional y utiliza un lenguaje ejecutivo.`,
-   model: 'googleai/gemini-2.5-flash',
 });
 
 const analyzePgpDataFlow = ai.defineFlow(

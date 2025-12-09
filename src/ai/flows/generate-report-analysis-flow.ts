@@ -110,7 +110,6 @@ const prompt = ai.definePrompt({
       - Formula hipótesis clínicas basadas en los datos. Por ejemplo: "El aumento en 'ECOGRAFIA DE MAMA' junto a la sub-ejecución de 'CONSULTA DE CIRUGIA GENERAL' podría sugerir una alta tasa de tamizaje con un posible cuello de botella para la resolución quirúrgica, lo cual debe ser investigado".
       - Sé profundo, detallado y utiliza un lenguaje médico-administrativo. Este análisis es CRÍTICO para la gestión del riesgo en salud.
   `,
-  model: 'googleai/gemini-2.5-flash',
 });
 
 const generateReportAnalysisFlow = ai.defineFlow(
