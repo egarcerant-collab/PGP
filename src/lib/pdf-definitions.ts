@@ -168,7 +168,7 @@ function buildDocDefinition(data: InformeDatos, backgroundImageBase64: string): 
                 if (item.chartImage) {
                     contentBlock.push({
                         image: item.chartImage,
-                        width: 450,
+                        width: 400,
                         alignment: 'center',
                         margin: [0, 5, 0, 10],
                     });
