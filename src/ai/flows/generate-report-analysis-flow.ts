@@ -7,7 +7,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'zod';
-import type { DeviatedCupInfo, UnexpectedCupInfo } from '@/components/pgp-search/PgPsearchForm';
 
 const ReportAnalysisInputSchema = z.object({
     sumaMensual: z.number().describe("El valor total ejecutado en el periodo, basado en los vrServicio del JSON."),
@@ -29,9 +28,9 @@ const ReportAnalysisInputSchema = z.object({
 });
 
 const ReportAnalysisOutputSchema = z.object({
-  financialAnalysis: z.string().describe("Texto del análisis de ejecución financiera y presupuestal."),
-  epidemiologicalAnalysis: z.string().describe("Texto del análisis del comportamiento epidemiológico y de servicios (CUPS)."),
-  deviationAnalysis: z.string().describe("Texto del análisis de desviaciones (CUPS sobre-ejecutados e inesperados)."),
+  financialAnalysis: z.string().describe("Texto del análisis de ejecución financiera y presupuestal (1200-1500 caracteres)."),
+  epidemiologicalAnalysis: z.string().describe("Texto del análisis del comportamiento epidemiológico y de servicios (CUPS) (1200-1500 caracteres)."),
+  deviationAnalysis: z.string().describe("Texto del análisis de desviaciones (CUPS sobre-ejecutados e inesperados) (1500-2000 caracteres)."),
 });
 
 export type ReportAnalysisInput = z.infer<typeof ReportAnalysisInputSchema>;
@@ -42,9 +41,13 @@ export async function generateReportAnalysis(input: ReportAnalysisInput): Promis
 }
 
 
-// Base prompt for context
-const basePromptText = `Eres un analista financiero y médico auditor experto en el sistema de salud colombiano, especializado en contratos de Pago Global Prospectivo (PGP).
-Tu tarea es redactar un texto de análisis para una sección de un informe ejecutivo, basado en los siguientes KPIs y datos clínicos.
+// Unifying into a single prompt for robustness
+const analysisPrompt = ai.definePrompt({
+  name: 'unifiedReportAnalysisPrompt',
+  input: {schema: ReportAnalysisInputSchema},
+  output: {schema: ReportAnalysisOutputSchema},
+  prompt: `Eres un analista financiero y médico auditor experto en el sistema de salud colombiano, especializado en contratos de Pago Global Prospectivo (PGP).
+Tu tarea es redactar los textos de análisis para TRES secciones de un informe ejecutivo, basado en los siguientes KPIs y datos clínicos.
 Usa un lenguaje profesional, claro, y directo, enfocado en la toma de decisiones gerenciales.
 
 KPIs Financieros y Operativos del Periodo (POST-AUDITORÍA):
@@ -73,51 +76,32 @@ Conclusiones Adicionales del Auditor (Considerar para el tono y enfoque del aná
 Recomendaciones Adicionales del Auditor (Considerar para el tono y enfoque del análisis):
 {{{additionalRecommendations}}}
 {{/if}}
-`;
 
-const financialAnalysisPrompt = ai.definePrompt({
-  name: 'financialAnalysisPrompt',
-  input: {schema: ReportAnalysisInputSchema},
-  output: {schema: z.object({ financialAnalysis: z.string() })},
-  prompt: `${basePromptText}
+Genera los textos para las siguientes secciones, cumpliendo los requisitos de cada una:
 
-  Genera ÚNICAMENTE el texto para la sección "Análisis de Ejecución Financiera y Presupuestal" (entre 1200 y 1500 caracteres).
-  - **PUNTO CRÍTICO:** Tu análisis DEBE centrarse en el **'Valor Total a Pagar (Post-Auditoría)' ({{{valorNetoFinal}}})**. Explica claramente que este es el resultado final después de la conciliación.
-  - Compara este valor final con el presupuesto ({{{valorNotaTecnica}}}).
-  - Explica cómo se llegó a este valor, mencionando el **'Descuento Total Aplicado' ({{{descuentoAplicado}})** como resultado de la auditoría de sobre-ejecución e imprevistos.
-  - Concluye sobre la liquidación del contrato. ¿El valor final a pagar está dentro de las bandas esperadas? ¿Cuál es la implicación financiera para el prestador y el asegurador?
+1.  **Análisis de Ejecución Financiera y Presupuestal (1200-1500 caracteres):**
+    - **PUNTO CRÍTICO:** Céntrate en el **'Valor Total a Pagar (Post-Auditoría)' ({{{valorNetoFinal}}})**. Explica que es el resultado final tras la conciliación.
+    - Compara este valor final con el presupuesto ({{{valorNotaTecnica}}}).
+    - Explica cómo se llegó a este valor, mencionando el **'Descuento Total Aplicado' ({{{descuentoAplicado}})** como resultado de la auditoría.
+    - Concluye sobre la liquidación del contrato y su implicación financiera.
+
+2.  **Análisis del Comportamiento Epidemiológico y de Servicios (CUPS) (1200-1500 caracteres):**
+    - Analiza el volumen total de CUPS y su consistencia.
+    - Interpreta el costo unitario promedio como un indicador de complejidad.
+    - Relaciona la demanda con el acceso a servicios y la capacidad de la red.
+    - Proyecta las necesidades de recursos futuros.
+
+3.  **Análisis Amplio del Valor de las Desviaciones (1500-2000 caracteres):**
+    - **Enfoque Principal: EL VALOR ($) de las desviaciones.**
+    - Cuantifica el impacto financiero total de los CUPS sobre-ejecutados ('Valor Desviación por Sobre-ejecución': {{{totalValueOverExecuted}}}).
+    - Analiza el costo total de los CUPS inesperados ('Valor Ejecutado por CUPS Inesperados': {{{totalValueUnexpected}}}) y su impacto en la prima.
+    - Explica las posibles causas de la sobre-ejecución (aumento de incidencia, cambios en guías, etc.) conectándolas con su consecuencia monetaria.
+    - Evalúa el riesgo financiero que representan estas desviaciones y recomienda acciones concretas (auditoría, análisis de causa raíz) para mitigar el riesgo económico.
+
+Devuelve una única estructura JSON con las claves 'financialAnalysis', 'epidemiologicalAnalysis', y 'deviationAnalysis'.
   `,
 });
 
-const epidemiologicalAnalysisPrompt = ai.definePrompt({
-  name: 'epidemiologicalAnalysisPrompt',
-  input: {schema: ReportAnalysisInputSchema},
-  output: {schema: z.object({ epidemiologicalAnalysis: z.string() })},
-  prompt: `${basePromptText}
-
-  Genera ÚNICAMENTE el texto para la sección "Análisis del Comportamiento Epidemiológico y de Servicios (CUPS)" (entre 1200 y 1500 caracteres).
-  - Analiza el volumen total de CUPS y su consistencia mensual.
-  - Interpreta el costo unitario promedio (post-auditoría) como un indicador de complejidad.
-  - Relaciona la estabilidad de la demanda con el acceso a servicios y la capacidad de la red.
-  - Proyecta las necesidades de recursos futuros (financieros, humanos, etc.) basado en la operación.
-  `,
-});
-
-const deviationAnalysisPrompt = ai.definePrompt({
-  name: 'deviationAnalysisPrompt',
-  input: {schema: ReportAnalysisInputSchema},
-  output: {schema: z.object({ deviationAnalysis: z.string() })},
-  prompt: `${basePromptText}
-
-  Genera ÚNICAMENTE el texto para la sección "Análisis Amplio del Valor de las Desviaciones" (entre 1500 y 2000 caracteres).
-  - **Enfoque Principal: EL VALOR ($) de las desviaciones, no solo la frecuencia.**
-  - Cuantifica el impacto financiero total de los CUPS sobre-ejecutados. Utiliza el 'Valor Desviación por Sobre-ejecución' ({{{totalValueOverExecuted}}}) para explicar cuánto dinero representa el exceso de frecuencia.
-  - Analiza el costo total de los CUPS inesperados ('Valor Ejecutado por CUPS Inesperados': {{{totalValueUnexpected}}}) y explica cómo este gasto no planificado impacta directamente la prima y la rentabilidad del contrato.
-  - Explica las posibles causas de la sobre-ejecución (aumento de incidencia, cambios en guías clínicas, ineficiencias) pero siempre conectándolas con su consecuencia monetaria.
-  - Evalúa el riesgo financiero que representan estas desviaciones de valor. ¿Son sostenibles? ¿Qué porcentaje del presupuesto consumen?
-  - Recomienda acciones concretas (auditoría, análisis de causa raíz, pertinencia médica) como herramientas para controlar el impacto financiero de estas desviaciones. Sé muy específico sobre cómo estas acciones mitigan el riesgo económico.
-  `,
-});
 
 const generateReportAnalysisFlow = ai.defineFlow(
   {
@@ -127,30 +111,13 @@ const generateReportAnalysisFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-        // Run prompts sequentially for better stability
-        const financialResult = await financialAnalysisPrompt(input);
-        const financialOutput = financialResult.output;
-        if (!financialOutput) {
-            throw new Error('La IA no pudo generar el análisis financiero.');
-        }
-
-        const epidemiologicalResult = await epidemiologicalAnalysisPrompt(input);
-        const epidemiologicalOutput = epidemiologicalResult.output;
-        if (!epidemiologicalOutput) {
-            throw new Error('La IA no pudo generar el análisis epidemiológico.');
-        }
+        const { output } = await analysisPrompt(input);
         
-        const deviationResult = await deviationAnalysisPrompt(input);
-        const deviationOutput = deviationResult.output;
-        if (!deviationOutput) {
-            throw new Error('La IA no pudo generar el análisis de desviaciones.');
+        if (!output || !output.financialAnalysis || !output.epidemiologicalAnalysis || !output.deviationAnalysis) {
+            throw new Error('La IA no pudo generar una o más secciones del análisis.');
         }
 
-        return {
-            financialAnalysis: financialOutput.financialAnalysis,
-            epidemiologicalAnalysis: epidemiologicalOutput.epidemiologicalAnalysis,
-            deviationAnalysis: deviationOutput.deviationAnalysis,
-        };
+        return output;
 
     } catch (error) {
         console.error("Error en generateReportAnalysisFlow:", error);
