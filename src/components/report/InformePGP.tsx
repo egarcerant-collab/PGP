@@ -149,97 +149,16 @@ async function loadImageAsBase64(url: string): Promise<string> {
     }
 }
 
-// ======= Componente (fusionado y reforzado) =======
-export default function InformePGP({ data, comparisonSummary }: { data?: ReportData | null, comparisonSummary: ComparisonSummary | null }) {
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const { toast } = useToast();
-  const [conclusions, setConclusions] = useState("");
-  const [recommendations, setRecommendations] = useState("");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const financialChartRef = useRef<HTMLDivElement>(null);
-  const cupsChartRef = useRef<HTMLDivElement>(null);
-  
-  // Derivados y KPIs
-  const sumaMensual = useMemo(() => data?.months.reduce((acc, m) => acc + m.valueCOP, 0) ?? 0, [data?.months]);
-  const totalCups = useMemo(() => data?.months.reduce((a, m) => a + m.cups, 0) ?? 0, [data?.months]);
-  
-  const descuentoAplicadoTotal = useMemo(() => data?.notaTecnica?.descuentoAplicado ?? 0, [data?.notaTecnica]);
-  
-  const valorNetoFinalAuditoria = useMemo(() => data?.notaTecnica?.totalPagar ?? 0, [data]);
-
-  const diffVsNota = useMemo(() => valorNetoFinalAuditoria - (data?.notaTecnica?.valor3m || 0), [data?.notaTecnica?.valor3m, valorNetoFinalAuditoria]);
-  
-  const unitAvg = useMemo(() => {
-    if (!data || !data.months || data.months.length === 0 || totalCups === 0) return 0;
-    const mean = valorNetoFinalAuditoria / totalCups;
-    return Number.isFinite(mean) ? mean : 0;
-  }, [data?.months, valorNetoFinalAuditoria, totalCups]);
-
-  const valorNotaTecnica = useMemo(() => data?.notaTecnica?.valor3m || 0, [data]);
-
-  const porcentajeEjecucion = useMemo(() => (valorNotaTecnica > 0 ? (valorNetoFinalAuditoria / valorNotaTecnica) * 100 : 0), [valorNetoFinalAuditoria, valorNotaTecnica]);
-
-
-    const reportTitle = useMemo(() => {
-    if (!data || !data.months || data.months.length === 0) {
-      return "INFORME PGP";
-    }
-
-    const numMonths = data.months.length;
-    const monthNames = data.months.map(m => m.month.substring(0, 3)).join('–');
-
-    switch (numMonths) {
-      case 1:
-        return `INFORME PGP – MENSUAL (${monthNames})`;
-      case 2:
-        return `INFORME PGP – BIMESTRAL (${monthNames})`;
-      case 3:
-        return `INFORME PGP – TRIMESTRAL (${monthNames})`;
-      default:
-        return `INFORME PGP – PERIODO (${monthNames})`;
-    }
-  }, [data]);
-
-
-  // Series para gráficas
-  const pieData = useMemo(() => data?.months.map((m) => ({ name: m.month, value: m.valueCOP, fill: `hsl(var(--chart-${data.months.indexOf(m) + 1}))` })) ?? [], [data?.months]);
-  const cupsData = useMemo(() => data?.months.map((m) => ({ Mes: m.month, CUPS: m.cups })) ?? [], [data?.months]);
-  
-  const financialData = useMemo(() => {
-    if (!data || !data.months.length) return [];
-    const budgetPerMonth = (data.notaTecnica?.valor3m || 0) / data.months.length;
-    return data.months.map(m => ({
-        Mes: m.month,
-        'Valor Ejecutado': m.valueCOP,
-        'Valor Presupuestado': budgetPerMonth
-    }))
-  }, [data]);
-
-
-
-  const getInformeData = (reportData: ReportData, charts: { [key: string]: string }, analysisTexts: ReportAnalysisOutput, auditorConclusions: string, auditorRecommendations: string): InformeDatos => {
+const getInformeData = (
+    reportData: ReportData,
+    charts: { [key: string]: string },
+    analysisTexts: ReportAnalysisOutput,
+    auditorConclusions: string,
+    auditorRecommendations: string,
+    kpis: { label: string; value: string; color?: string; bold?: boolean }[],
+    periodoAnalizado: string,
+): InformeDatos => {
     
-    const periodoAnalizado = reportTitle.split('–')[1]?.trim() || 'Periodo Analizado';
-
-    // **CRITICAL CHANGE**: Use pre-calculated KPIs instead of recalculating.
-    const kpisUnsorted = [
-      { label: 'Valor Ejecutado (Bruto)', value: formatCOP(sumaMensual) },
-      { label: 'Descuento Aplicado (Auditoría)', value: formatCOP(descuentoAplicadoTotal), color: 'red' },
-      { label: 'Valor Final a Pagar (Post-Auditoría)', value: formatCOP(valorNetoFinalAuditoria), bold: true },
-      { label: 'Diferencia vs. Presupuesto', value: formatCOP(diffVsNota) },
-      { label: 'Porcentaje de Ejecución Final', value: `${porcentajeEjecucion.toFixed(2)}%` },
-      { label: 'Total CUPS Ejecutados', value: totalCups.toLocaleString('es-CO') },
-      { label: 'Costo Unitario Promedio (Post-Auditoría)', value: formatCOP(unitAvg) },
-    ];
-
-     const kpis = [
-        ...kpisUnsorted,
-        { label: 'Nota Técnica (Presupuesto)', value: formatCOP(valorNotaTecnica) }
-     ];
-
-
     const topOverExecuted = (reportData.overExecutedCups ?? [])
         .sort((a,b) => b.deviation - a.deviation)
         .slice(0, 5);
@@ -309,7 +228,80 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
     };
   }
 
-  // Exportación a PDF con pdfmake
+// ======= Componente (fusionado y reforzado) =======
+export default function InformePGP({ data, comparisonSummary }: { data?: ReportData | null, comparisonSummary: ComparisonSummary | null }) {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [conclusions, setConclusions] = useState("");
+  const [recommendations, setRecommendations] = useState("");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const financialChartRef = useRef<HTMLDivElement>(null);
+  const cupsChartRef = useRef<HTMLDivElement>(null);
+  
+  // ===================================
+  // 🔹 KPI Calculations (Centralized)
+  // ===================================
+  const sumaMensual = useMemo(() => data?.months.reduce((acc, m) => acc + m.valueCOP, 0) ?? 0, [data?.months]);
+  const totalCups = useMemo(() => data?.months.reduce((a, m) => a + m.cups, 0) ?? 0, [data?.months]);
+  const descuentoAplicadoTotal = useMemo(() => data?.notaTecnica?.descuentoAplicado ?? 0, [data?.notaTecnica]);
+  const valorNetoFinalAuditoria = useMemo(() => data?.notaTecnica?.totalPagar ?? 0, [data]);
+  const valorNotaTecnica = useMemo(() => data?.notaTecnica?.valor3m || 0, [data]);
+  const diffVsNota = useMemo(() => valorNetoFinalAuditoria - valorNotaTecnica, [valorNetoFinalAuditoria, valorNotaTecnica]);
+  
+  const unitAvg = useMemo(() => {
+    if (!data || !data.months || data.months.length === 0 || totalCups === 0) return 0;
+    const mean = valorNetoFinalAuditoria / totalCups;
+    return Number.isFinite(mean) ? mean : 0;
+  }, [data?.months, valorNetoFinalAuditoria, totalCups]);
+
+  const porcentajeEjecucion = useMemo(() => (valorNotaTecnica > 0 ? (valorNetoFinalAuditoria / valorNotaTecnica) * 100 : 0), [valorNetoFinalAuditoria, valorNotaTecnica]);
+  
+  const reportTitle = useMemo(() => {
+    if (!data || !data.months || data.months.length === 0) return "INFORME PGP";
+    const numMonths = data.months.length;
+    const monthNames = data.months.map(m => m.month.substring(0, 3)).join('–');
+    if (numMonths === 1) return `INFORME PGP – MENSUAL (${monthNames})`;
+    if (numMonths === 2) return `INFORME PGP – BIMESTRAL (${monthNames})`;
+    if (numMonths === 3) return `INFORME PGP – TRIMESTRAL (${monthNames})`;
+    return `INFORME PGP – PERIODO (${monthNames})`;
+  }, [data]);
+  
+  const periodoAnalizado = useMemo(() => reportTitle.split('–')[1]?.trim() || 'Periodo Analizado', [reportTitle]);
+
+  const kpisForPdf = useMemo(() => [
+      { label: 'Valor Ejecutado (Bruto)', value: formatCOP(sumaMensual) },
+      { label: 'Descuento Aplicado (Auditoría)', value: formatCOP(descuentoAplicadoTotal), color: 'red' },
+      { label: 'Valor Final a Pagar (Post-Auditoría)', value: formatCOP(valorNetoFinalAuditoria), bold: true },
+      { label: 'Diferencia vs. Presupuesto', value: formatCOP(diffVsNota) },
+      { label: 'Porcentaje de Ejecución Final', value: `${porcentajeEjecucion.toFixed(2)}%` },
+      { label: 'Total CUPS Ejecutados', value: totalCups.toLocaleString('es-CO') },
+      { label: 'Costo Unitario Promedio (Post-Auditoría)', value: formatCOP(unitAvg) },
+      { label: 'Nota Técnica (Presupuesto)', value: formatCOP(valorNotaTecnica) }
+   ], [sumaMensual, descuentoAplicadoTotal, valorNetoFinalAuditoria, diffVsNota, porcentajeEjecucion, totalCups, unitAvg, valorNotaTecnica]);
+
+
+  // ===================================
+  // 🔹 Chart Data
+  // ===================================
+  const pieData = useMemo(() => data?.months.map((m) => ({ name: m.month, value: m.valueCOP, fill: `hsl(var(--chart-${data.months.indexOf(m) + 1}))` })) ?? [], [data?.months]);
+  const cupsData = useMemo(() => data?.months.map((m) => ({ Mes: m.month, CUPS: m.cups })) ?? [], [data?.months]);
+  
+  const financialData = useMemo(() => {
+    if (!data || !data.months.length) return [];
+    const budgetPerMonth = valorNotaTecnica / data.months.length;
+    return data.months.map(m => ({
+        Mes: m.month,
+        'Valor Ejecutado': m.valueCOP,
+        'Valor Presupuestado': budgetPerMonth
+    }))
+  }, [data, valorNotaTecnica]);
+
+
+  // ===================================
+  // 🔹 PDF Generation Logic
+  // ===================================
   const handleGeneratePdf = async (action: 'preview' | 'download') => {
     if (!data || !comparisonSummary) return;
     setIsGeneratingPdf(true);
@@ -362,7 +354,7 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
             cups: await getChartImage(cupsChartRef),
         };
 
-        const informeData = getInformeData(data, chartImages, analysisTexts, conclusions, recommendations);
+        const informeData = getInformeData(data, chartImages, analysisTexts, conclusions, recommendations, kpisForPdf, periodoAnalizado);
         
         if(action === 'preview') {
             const url = await generarURLInformePDF(informeData, backgroundImage);
