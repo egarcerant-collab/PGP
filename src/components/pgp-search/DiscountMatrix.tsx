@@ -445,21 +445,26 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const generateDownloadData = () => {
         const discountedServices: any[] = [];
 
-        const discountedCups = new Set<string>();
+        // 1. Create a map of CUPS that are selected and have a discount
+        const discountedCupsInfo = new Map<string, { discountRatio: number; comment: string; description: string }>();
         Object.entries(selectedRows).forEach(([cup, isSelected]) => {
             if (isSelected) {
                 const rowData = data.find(r => r.CUPS === cup);
                 if (rowData) {
                     const executedQty = rowData.Cantidad_Ejecutada;
                     const validatedQty = adjustedQuantities[cup] ?? executedQty;
-                    if (validatedQty < executedQty) {
-                        discountedCups.add(cup);
+                    if (validatedQty < executedQty && executedQty > 0) {
+                        discountedCupsInfo.set(cup, {
+                            discountRatio: (executedQty - validatedQty) / executedQty,
+                            comment: comments[cup] || '',
+                            description: rowData.Descripcion || 'N/A'
+                        });
                     }
                 }
             }
         });
 
-        if (discountedCups.size === 0) {
+        if (discountedCupsInfo.size === 0) {
             toast({
                 title: "Sin descuentos para descargar",
                 description: "Ajusta la 'Cantidad Validada' a un valor menor que la 'Cantidad Ejecutada' y selecciona las filas para generar el desglose.",
@@ -467,49 +472,41 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             return [];
         }
 
+        // 2. Iterate through all raw services and apply discount if needed
         executionDataByMonth.forEach((monthData) => {
             monthData.rawJsonData.usuarios?.forEach((user: any) => {
                 const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
 
-                const processServicesForDiscount = (services: any[], serviceType: ServiceType, codeField: string) => {
+                const processServicesForDiscount = (services: any[], serviceType: ServiceType, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
                     if (!services) return;
 
                     services.forEach((service: any) => {
                         const cupCode = service[codeField];
-                        if (discountedCups.has(cupCode)) {
-                            const matrixRow = data.find(r => r.CUPS === cupCode);
-                            if (!matrixRow) return;
+                        if (discountedCupsInfo.has(cupCode)) {
+                            const info = discountedCupsInfo.get(cupCode)!;
 
-                            const executedQty = matrixRow.Cantidad_Ejecutada;
-                            const validatedQty = adjustedQuantities[cupCode] ?? executedQty;
-                            
-                            if (executedQty === 0) return;
-
-                            const discountRatio = (executedQty - validatedQty) / executedQty;
-                            
                             let originalServiceValue = 0;
-                            if (serviceType === 'Medicamento') {
-                                originalServiceValue = getNumericValue(service['vrUnitarioMedicamento']) * getNumericValue(service['cantidadMedicamento']);
-                            } else if (serviceType === 'Otro Servicio') {
-                                originalServiceValue = getNumericValue(service['vrServicio']) || (getNumericValue(service['vrUnitarioOS']) * getNumericValue(service['cantidadOS'])) || 0;
+                            if (unitValueField && qtyField) {
+                                originalServiceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
                             } else {
-                                originalServiceValue = getNumericValue(service['vrServicio']);
+                                originalServiceValue = getNumericValue(service[valueField]);
                             }
                             
-                            const discountAmount = originalServiceValue * discountRatio;
+                            const discountAmount = originalServiceValue * info.discountRatio;
                             const recognizedValue = originalServiceValue - discountAmount;
 
                             if (discountAmount > 0) {
                                 discountedServices.push({
                                     'ID Usuario': userId,
                                     'CUPS': cupCode,
-                                    'Descripción': matrixRow.Descripcion,
+                                    'Descripción': info.description,
+                                    'Tipo Servicio': serviceType,
                                     'Fecha Atención': service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
                                     'Diagnóstico Principal': service.codDiagnosticoPrincipal,
                                     'Valor Original Servicio': originalServiceValue,
                                     'Valor a Descontar': discountAmount,
                                     'Valor Final Reconocido': recognizedValue,
-                                    'Comentario de Glosa': comments[cupCode] || ''
+                                    'Comentario de Glosa': info.comment
                                 });
                             }
                         }
@@ -517,10 +514,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 };
 
                 if (user.servicios) {
-                    processServicesForDiscount(user.servicios.consultas, 'Consulta', 'codConsulta');
-                    processServicesForDiscount(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento');
-                    processServicesForDiscount(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud');
-                    processServicesForDiscount(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud');
+                    processServicesForDiscount(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
+                    processServicesForDiscount(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
+                    processServicesForDiscount(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
+                    processServicesForDiscount(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioOS', 'cantidadOS');
                 }
             });
         });
