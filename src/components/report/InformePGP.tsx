@@ -22,9 +22,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { descargarInformePDF, type InformeDatos, generarURLInformePDF } from "@/lib/pdf-definitions";
+import { descargarInformePDF, type InformeDatos, generarURLInformePDF, generateStaticAnalysisTexts } from "@/lib/pdf-definitions";
 import type { DeviatedCupInfo, UnexpectedCupInfo, AdjustedData, ReportData as ReportDataType, ComparisonSummary } from "@/components/pgp-search/PgPsearchForm";
-import { generateReportAnalysis, type ReportAnalysisInput, ReportAnalysisOutput } from "@/ai/flows/generate-report-analysis-flow";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
@@ -152,7 +151,7 @@ async function loadImageAsBase64(url: string): Promise<string> {
 const getInformeData = (
     reportData: ReportData,
     charts: { [key: string]: string },
-    analysisTexts: ReportAnalysisOutput,
+    analysisTexts: { financialAnalysis: string; epidemiologicalAnalysis: string; deviationAnalysis: string },
     auditorConclusions: string,
     auditorRecommendations: string,
     kpis: { label: string; value: string; color?: string; bold?: boolean }[],
@@ -307,7 +306,7 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
     setIsGeneratingPdf(true);
     if(action === 'preview') setPdfPreviewUrl(null);
 
-    toast({ title: 'Generando informe...', description: 'La IA está redactando el análisis. Esto puede tardar un momento.' });
+    toast({ title: 'Generando informe...', description: 'Construyendo el documento PDF.' });
 
     try {
         const totalValueOverExecuted = comparisonSummary.overExecutedCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
@@ -319,7 +318,7 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
           ? porcentajeEjecucion.toFixed(2)
           : "0.00";
 
-        const analysisInput: ReportAnalysisInput = {
+        const analysisInput = {
             sumaMensual,
             valorNotaTecnica,
             diffVsNota,
@@ -338,9 +337,7 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
             totalValueMissing,
         };
 
-        const analysisTexts = await generateReportAnalysis(analysisInput);
-
-        toast({ title: 'Análisis completo.', description: 'Generando gráficos y PDF.' });
+        const analysisTexts = generateStaticAnalysisTexts(analysisInput);
 
         const backgroundImage = await loadImageAsBase64('/imagenes pdf/IMAGENEN UNIFICADA.jpg');
 
