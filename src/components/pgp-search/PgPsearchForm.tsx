@@ -9,7 +9,6 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { analyzePgpData } from '@/ai/flows/analyze-pgp-data';
 import { Separator } from "@/components/ui/separator";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
 import { type ExecutionDataByMonth } from '@/app/page';
@@ -30,12 +29,6 @@ import { getNumericValue, type SavedAuditData } from '../app/JsonAnalyzerPage';
 import { findColumnValue } from '@/lib/matriz-helpers';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 
-
-interface AnalyzePgpDataOutput {
-  keyObservations: string[];
-  potentialRisks: string[];
-  strategicRecommendations: string[];
-}
 
 export type Prestador = PrestadorInfo;
 
@@ -216,60 +209,6 @@ const SummaryCard = ({ summary, title, description, numMonths }: { summary: Summ
         </div>
       </CardContent>
     </Card>
-  )
-};
-
-const AnalysisModal = ({ analysis, isLoading, open, onOpenChange }: { analysis: AnalyzePgpDataOutput | null, isLoading: boolean, open: boolean, onOpenChange: (open: boolean) => void }) => {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-6 w-6 text-blue-600" />
-            Análisis Profesional de la Nota Técnica
-          </DialogTitle>
-          <DialogDescription>
-            La IA ha generado las siguientes observaciones y recomendaciones basadas en los datos.
-          </DialogDescription>
-        </DialogHeader>
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center p-8 gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-muted-foreground">Analizando Nota Técnica...</p>
-          </div>
-        ) : analysis ? (
-          <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Observaciones Clave</h3>
-              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
-                {analysis.keyObservations.map((obs, i) => <li key={i}>{obs}</li>)}
-              </ul>
-            </div>
-            <Separator />
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Potenciales Riesgos</h3>
-              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
-                {analysis.potentialRisks.map((risk, i) => <li key={i}>{risk}</li>)}
-              </ul>
-            </div>
-            <Separator />
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Recomendaciones Estratégicas</h3>
-              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
-                {analysis.strategicRecommendations.map((rec, i) => <li key={i}>{rec}</li>)}
-              </ul>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center p-8">
-            <p>No se pudo generar el análisis.</p>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 };
 
@@ -880,7 +819,6 @@ const PgPsearchForm = forwardRef<
   PgPsearchFormProps
 >(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
-  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false);
   const [loadingPrestadores, setLoadingPrestadores] = useState<boolean>(true);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -888,7 +826,6 @@ const PgPsearchForm = forwardRef<
   const [prestadorToLoad, setPrestadorToLoad] = useState<Prestador | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
   const [globalSummary, setGlobalSummary] = useState<SummaryData | null>(null);
-  const [analysis, setAnalysis] = useState<AnalyzePgpDataOutput | null>(null);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [isAiEnabled, setIsAiEnabled] = useState(false);
@@ -896,7 +833,6 @@ const PgPsearchForm = forwardRef<
   const [lookedUpCupInfo, setLookedUpCupInfo] = useState<CupDescription | null>(null);
   const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
   const [isLookupLoading, setIsLookupLoading] = useState(false);
-  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isGeneratingFinalReport, setIsGeneratingFinalReport] = useState(false);
   const [cie10Info, setCie10Info] = useState<Cie10Description | null>(null);
   const [isCie10ModalOpen, setIsCie10ModalOpen] = useState(false);
@@ -1034,7 +970,7 @@ const PgPsearchForm = forwardRef<
   }
 
   const performLoadPrestador = useCallback(async (prestador: Prestador) => {
-    setLoading(true); setIsDataLoaded(false); setGlobalSummary(null); setAnalysis(null); setMismatchWarning(null);
+    setLoading(true); setIsDataLoaded(false); setGlobalSummary(null); setMismatchWarning(null);
     toast({ title: `Cargando Nota Técnica: ${prestador.PRESTADOR}...` });
 
     try {
@@ -1285,7 +1221,6 @@ const PgPsearchForm = forwardRef<
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-        <AnalysisModal analysis={analysis} isLoading={loadingAnalysis} open={isAnalysisModalOpen} onOpenChange={setIsAnalysisModalOpen} />
          {showComparison && comparisonSummary && (
             <ValorizadoDetailModal 
                 open={isValorizadoModalOpen}
