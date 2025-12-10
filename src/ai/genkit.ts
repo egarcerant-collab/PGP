@@ -7,6 +7,5 @@ export const ai = genkit({
     googleAI({
       apiKey: process.env.GOOGLE_GENAI_API_KEY,
     }),
-    next(),
   ],
 });
