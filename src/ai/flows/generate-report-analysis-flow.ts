@@ -11,7 +11,7 @@ const ReportAnalysisInputSchema = z.object({
     sumaMensual: z.number().describe("El valor total ejecutado en el periodo, basado en los vrServicio del JSON."),
     valorNotaTecnica: z.number().describe("El valor presupuestado en la nota técnica para el periodo."),
     diffVsNota: z.number().describe("La diferencia monetaria entre lo ejecutado (JSON) y lo presupuestado."),
-    porcentajeEjecucion: z.number().describe("El porcentaje de ejecución (ejecutado (JSON) / presupuestado)."),
+    porcentajeEjecucion: z.string().describe("El porcentaje de ejecución (ejecutado (JSON) / presupuestado), formateado como string."),
     totalCups: z.number().describe("La cantidad total de CUPS ejecutados."),
     unitAvg: z.number().describe("El costo unitario promedio (valor total ejecutado (JSON) / cantidad de CUPS)."),
     overExecutedCount: z.number().describe("La cantidad de CUPS que fueron sobre-ejecutados."),

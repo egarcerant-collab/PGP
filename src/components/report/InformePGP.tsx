@@ -315,12 +315,15 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
         const totalValueUnderExecuted = comparisonSummary.underExecutedCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
         const totalValueMissing = comparisonSummary.missingCups.reduce((sum, cup) => sum + cup.deviationValue, 0);
 
+        const executionPercentageAsString = isFinite(porcentajeEjecucion)
+          ? porcentajeEjecucion.toFixed(2)
+          : "0.00";
 
         const analysisInput: ReportAnalysisInput = {
             sumaMensual,
             valorNotaTecnica,
             diffVsNota,
-            porcentajeEjecucion,
+            porcentajeEjecucion: executionPercentageAsString,
             totalCups,
             unitAvg,
             overExecutedCount: data.overExecutedCups?.length ?? 0,
