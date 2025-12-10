@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Flujo para generar texto profesional de análisis (financiero, epidemiológico y de desviaciones)
@@ -122,7 +121,7 @@ Recomendaciones Adicionales del Auditor: {{{additionalRecommendations}}}
 // 🔹 3. Flujo Principal
 // =======================
 
-export const generateReportAnalysisFlow = ai.defineFlow(
+const generateReportAnalysisFlow = ai.defineFlow(
   {
     name: 'generateReportAnalysisFlow',
     inputSchema: ReportAnalysisInputSchema,
