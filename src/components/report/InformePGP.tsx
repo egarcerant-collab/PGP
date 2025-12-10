@@ -503,7 +503,7 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
             <div className="h-60">
               <ChartContainer config={financialChartConfig} className="min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                   <BarChart data={financialData}>
+                   <BarChart data={financialData} margin={{ left: 20 }}>
                       <CartesianGrid vertical={false} />
                       <XAxis
                         dataKey="Mes"
