@@ -145,25 +145,32 @@ const generateReportAnalysisFlow = ai.defineFlow(
         epidemiologicalAnalysisPrompt(input),
         deviationAnalysisPrompt(input),
       ]);
-
-      const fin = financialResult.output;
-      const epi = epidemiologicalResult.output;
-      const dev = deviationResult.output;
       
-      if (!fin?.financialAnalysis || !epi?.epidemiologicalAnalysis || !dev?.deviationAnalysis) {
-        throw new Error("La IA no devolvió todas las secciones esperadas.");
+      const fin = financialResult.output?.financialAnalysis;
+      const epi = epidemiologicalResult.output?.epidemiologicalAnalysis;
+      const dev = deviationResult.output?.deviationAnalysis;
+      
+      if (!fin || !epi || !dev) {
+        // Log individual results for debugging
+        console.error('AI analysis sub-task failed. Results:', {
+            financial: !!fin,
+            epidemiological: !!epi,
+            deviation: !!dev,
+        });
+        throw new Error("La IA no devolvió todas las secciones esperadas del análisis.");
       }
 
       console.log(`✅ [${executionId}] Flujo completado exitosamente.`);
       return {
-        financialAnalysis: fin.financialAnalysis,
-        epidemiologicalAnalysis: epi.epidemiologicalAnalysis,
-        deviationAnalysis: dev.deviationAnalysis,
+        financialAnalysis: fin,
+        epidemiologicalAnalysis: epi,
+        deviationAnalysis: dev,
       };
 
     } catch (error) {
       console.error(`🔥 [${executionId}] Error durante el flujo:`, error);
-      throw new Error("El servicio de IA no pudo generar el análisis. Intente nuevamente más tarde.");
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      throw new Error(`El servicio de IA no pudo generar el análisis. Detalle: ${errorMessage}`);
     }
   }
 );
