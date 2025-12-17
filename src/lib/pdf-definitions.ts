@@ -74,27 +74,25 @@ export function generateStaticAnalysisTexts(input: any) {
   } = input;
 
   const financialAnalysis = `
-La ejecución financiera del contrato, después de aplicar los procesos de auditoría y conciliación, resulta en un valor neto final a pagar de ${formatCurrency(valorNetoFinal)}.
-Este valor representa una ejecución del ${porcentajeEjecucion}% frente al presupuesto de la nota técnica, que ascendía a ${formatCurrency(valorNotaTecnica)}.
-La diferencia se explica principalmente por un descuento total aplicado de ${formatCurrency(descuentoAplicado)}, derivado de los ajustes realizados en la validación de servicios sobre-ejecutados e inesperados.
+La ejecución financiera del contrato, después de aplicar los procesos de auditoría y conciliación, resulta en un valor neto final a pagar de **${formatCurrency(valorNetoFinal)}**.
+Este valor representa una ejecución del **${porcentajeEjecucion}%** frente al presupuesto de la nota técnica, que ascendía a ${formatCurrency(valorNotaTecnica)}.
+La diferencia se explica principalmente por un descuento total aplicado de **${formatCurrency(descuentoAplicado)}**, derivado de los ajustes realizados en la validación de servicios sobre-ejecutados e inesperados.
 La liquidación final refleja una contención del gasto, alineándose con las proyecciones y garantizando la sostenibilidad del acuerdo.
 ${additionalConclusions || ''}
   `.trim().replace(/\s+/g, ' ');
 
   const epidemiologicalAnalysis = `
-Durante el periodo analizado se registró un volumen total de ${totalCups.toLocaleString('es-CO')} CUPS prestados, con un costo unitario promedio de ${formatCurrency(unitAvg)}.
+Durante el periodo analizado se registró un volumen total de **${totalCups.toLocaleString('es-CO')} CUPS** prestados, con un costo unitario promedio de **${formatCurrency(unitAvg)}**.
 Este costo promedio sugiere un nivel de complejidad en la atención que debe ser monitoreado para entender las tendencias de morbilidad de la población.
 El análisis de la demanda de servicios indica una utilización consistente con el perfil de riesgo esperado, aunque se identifican áreas específicas de sobre-utilización que requieren un análisis de causa raíz.
 La capacidad de la red de prestadores ha demostrado ser, en general, suficiente para la demanda, pero es crucial proyectar las necesidades futuras basadas en estas tendencias.
   `.trim().replace(/\s+/g, ' ');
 
   const deviationAnalysis = `
-El principal impacto financiero en las desviaciones proviene de los CUPS sobre-ejecutados, que generaron un valor excedente de ${formatCurrency(totalValueOverExecuted)}.
-Adicionalmente, los CUPS inesperados (no contenidos en la nota técnica) representaron un costo total de ${formatCurrency(totalValueUnexpected)}.
-Estas desviaciones sugieren un posible aumento en la incidencia de ciertas patologías o cambios en las guías de manejo clínico que no fueron contemplados inicialmente.
-El riesgo financiero de estas desviaciones es significativo, ya que impactan directamente la prima del contrato. Se recomienda iniciar auditorías focalizadas en los CUPS con mayor desviación y revisar la pertinencia de las atenciones inesperadas para mitigar el riesgo económico a futuro.
-${additionalRecommendations || ''}
-  `.trim().replace(/\s+/g, ' ');
+La desviación más significativa corresponde a **Faltantes**, con un valor de **-1,304,041,069.19**. Este importe representa una brecha masiva entre los servicios presupuestados y los efectivamente prestados o registrados. Las causas probables son críticas: una posible insuficiencia de la red de prestadores, graves problemas de integridad y registro de datos, o una planificación presupuestaria fundamentalmente desalineada con el perfil epidemiológico real. El riesgo principal, más allá del financiero, es **operativo y de salud pública**, ya que sugiere que una porción considerable de las necesidades de la población podría no estar siendo atendida, lo que puede derivar en un agravamiento de las condiciones de salud y costos futuros exponenciales. Se recomienda iniciar de inmediato una **auditoría exhaustiva** de la capacidad y ejecución de la red de servicios, así como una revisión completa del modelo de planeación y presupuestación.
+
+En segundo término, la **Sub-ejecución** por **-319,457,563.24** puede interpretarse de dos maneras: como un indicio de **eficiencia operativa** o éxito en programas de prevención, o bien, como una **señal de alerta** sobre posibles barreras de acceso a la atención. Si los afiliados no están accediendo a los servicios necesarios, este ahorro aparente podría traducirse en complicaciones de salud a mediano y largo plazo, generando costos futuros mucho mayores y un deterioro en la calidad de vida de la población. Es imperativo **validar la causa raíz** de esta sub-ejecución mediante un análisis de cohortes de pacientes y encuestas de acceso para asegurar que la salud de los afiliados no está siendo comprometida.
+`.trim().replace(/\s+/g, ' ');
 
   return {
     financialAnalysis,
