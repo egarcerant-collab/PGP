@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import SavedAuditsPage from "@/components/app/SavedAuditsPage";
 import { Separator } from "@/components/ui/separator";
+import PgPsearchForm from "@/components/pgp-search/PgPsearchForm";
 
 
 const JsonAnalyzerPage = dynamic(
@@ -16,15 +17,6 @@ const JsonAnalyzerPage = dynamic(
     ssr: false 
   }
 );
-
-const PgpSearchPage = dynamic(
-  () => import("@/components/app/PgpSearchPage"),
-  { 
-    loading: () => <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Cargando Analizador PGP...</div>,
-    ssr: false
-  }
-);
-
 
 export type CupCountInfo = {
   total: number;
@@ -93,7 +85,7 @@ export default function Home() {
           {/* Columna Derecha: Buscador PGP */}
           <div className="space-y-6">
              <h2 className="text-2xl font-semibold text-center">Paso 2: Análisis de Nota Técnica (PGP)</h2>
-             <PgpSearchPage 
+             <PgPsearchForm 
                 ref={pgpSearchRef}
                 executionDataByMonth={executionData}
                 jsonPrestadorCode={jsonPrestadorCode}
