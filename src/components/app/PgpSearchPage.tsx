@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { forwardRef, useImperativeHandle, useRef } from 'react';
@@ -18,7 +19,7 @@ interface PgpSearchPageHandle {
   handleSelectPrestador: (prestador: { PRESTADOR: string; WEB: string }) => void;
 }
 
-const PgpSearchPage = forwardRef<PgpSearchPageHandle, PgpSearchPageProps>(
+const PgpSearchPageComponent = forwardRef<PgpSearchPageHandle, PgpSearchPageProps>(
   ({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData }, ref) => {
     
     // Create a ref for the child component PgPsearchForm
@@ -47,6 +48,6 @@ const PgpSearchPage = forwardRef<PgpSearchPageHandle, PgpSearchPageProps>(
   }
 );
 
-PgpSearchPage.displayName = 'PgpSearchPage';
+PgpSearchPageComponent.displayName = 'PgpSearchPage';
 
-export default PgpSearchPage;
+export default PgpSearchPageComponent;

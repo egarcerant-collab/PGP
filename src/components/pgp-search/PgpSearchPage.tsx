@@ -16,6 +16,7 @@ export default function PgpSearchPage({ executionDataByMonth, jsonPrestadorCode,
         executionDataByMonth={executionDataByMonth}
         jsonPrestadorCode={jsonPrestadorCode} 
         uniqueUserCount={uniqueUserCount}
+        initialAuditData={null}
       />
     </div>
   );
