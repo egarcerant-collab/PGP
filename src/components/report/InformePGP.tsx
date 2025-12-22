@@ -412,19 +412,26 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Generación de Informe Ejecutivo PDF</CardTitle>
+          <CardTitle>Generación de Informes PDF</CardTitle>
            <CardDescription>
                 Genera un informe PDF completo con análisis de IA y tus conclusiones personalizadas.
             </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
+        <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-4">
              <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Editar Conclusiones y Recomendaciones
             </Button>
             <Button id="generate-pdf-report-button" variant="default" onClick={() => handleGeneratePdf('preview')} disabled={isGeneratingPdf}>
                 {isGeneratingPdf ? <Loader2 className="h-4 w-4 mr-1 animate-spin"/> : <DownloadCloud className="h-4 w-4 mr-1"/>}
-                Generar Informe PDF
+                Informe Ejecutivo PDF
+            </Button>
+            <Button variant="secondary" onClick={() => {
+                const clinicalButton = document.getElementById('generate-clinical-report-button');
+                clinicalButton?.click();
+            }}>
+                <FileText className="h-4 w-4 mr-2" />
+                Informe Clínico
             </Button>
         </CardContent>
       </Card>
@@ -581,3 +588,5 @@ export default function InformePGP({ data, comparisonSummary }: { data?: ReportD
     </div>
   );
 }
+
+    
