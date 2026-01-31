@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
@@ -352,8 +351,8 @@ export const formatCurrency = (value: number | null | undefined): string => {
 };
 
 const getMonthName = (monthNumber: string) => {
-    const date = new Date();
-    date.setMonth(parseInt(monthNumber) - 1);
+    // Fixed rollover bug: set a specific day (1st) before setting the month
+    const date = new Date(2024, parseInt(monthNumber) - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
     return name.charAt(0).toUpperCase() + name.slice(1);
 };
@@ -1247,5 +1246,3 @@ const PgPsearchForm = forwardRef<
 PgPsearchForm.displayName = 'PgPsearchForm';
 
 export default PgPsearchForm;
-
-    

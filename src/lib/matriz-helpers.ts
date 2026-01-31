@@ -1,5 +1,4 @@
 
-
 import type { ExecutionDataByMonth, CupCountsMap } from "@/app/page";
 import { getNumericValue } from "@/components/app/JsonAnalyzerPage";
 
@@ -49,8 +48,8 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
   });
 
   const getMonthName = (monthNumber: string) => {
-    const date = new Date();
-    date.setMonth(parseInt(monthNumber) - 1);
+    // Fixed rollover bug: set a specific day (1st) before setting the month
+    const date = new Date(2024, parseInt(monthNumber) - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
     return name.charAt(0).toUpperCase() + name.slice(1);
   };

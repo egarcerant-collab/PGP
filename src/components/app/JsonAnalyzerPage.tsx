@@ -151,7 +151,7 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
         const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
         if (!userId || userId === '-') return;
 
-        const processServices = (services: any[], codeField: string, diagField: string, isProcedure = false, qtyField?: string, valueField: string = 'vrServicio', unitValueField?: string) => {
+        const processServices = (services: any[], codeField: string, dField: string, isProcedure = false, qtyField?: string, valueField: string = 'vrServicio', unitValueField?: string) => {
             if (!services) return;
 
             const uniqueProceduresForUser = new Set<string>();
@@ -193,7 +193,7 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
                 cupData.totalValue += value;
                 cupData.uniqueUsers.add(userId);
 
-                const diagnosis = service[diagField];
+                const diagnosis = service[dField];
                 if (diagnosis) {
                     cupData.diagnoses.set(diagnosis, (cupData.diagnoses.get(diagnosis) || 0) + quantity);
                 }
@@ -209,6 +209,51 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
     });
 
     return counts;
+};
+
+const extractMostFrequentMonth = (jsonData: any): string | null => {
+    if (!jsonData || !jsonData.usuarios) return null;
+    const monthCounts: Record<string, number> = {};
+    
+    jsonData.usuarios.forEach((user: any) => {
+        const services = [
+            ...(user.servicios?.consultas || []),
+            ...(user.servicios?.procedimientos || []),
+            ...(user.servicios?.medicamentos || []),
+            ...(user.servicios?.otrosServicios || [])
+        ];
+        
+        services.forEach((s: any) => {
+            const dateStr = s.fechaInicioAtencion || s.fechaAtencion || s.fechaFactura;
+            if (dateStr) {
+                let month: number | null = null;
+                if (dateStr.includes('-')) {
+                    month = new Date(dateStr).getUTCMonth() + 1;
+                } else if (dateStr.includes('/')) {
+                    const parts = dateStr.split('/');
+                    if (parts.length >= 2) {
+                        // Assuming common DD/MM/YYYY
+                        month = parseInt(parts[1], 10);
+                    }
+                }
+                
+                if (month && !isNaN(month) && month >= 1 && month <= 12) {
+                    const mKey = String(month);
+                    monthCounts[mKey] = (monthCounts[mKey] || 0) + 1;
+                }
+            }
+        });
+    });
+
+    let maxCount = 0;
+    let suggestedMonth: string | null = null;
+    for (const [m, count] of Object.entries(monthCounts)) {
+        if (count > maxCount) {
+            maxCount = count;
+            suggestedMonth = m;
+        }
+    }
+    return suggestedMonth;
 };
 
 
@@ -266,6 +311,13 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     }
   }, [isClient, handleLoadProviders]);
 
+  const getMonthName = (monthNumber: string) => {
+    // Fixed: Use a specific day (like the 1st) to avoid rollover issues if today is e.g. the 31st.
+    const date = new Date(2024, parseInt(monthNumber) - 1, 1);
+    const name = date.toLocaleString('es-CO', { month: 'long' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
   const handleFileLoad = useCallback((loadedFiles: File[]) => {
     setError(null);
     setShowDuplicateAlert(false);
@@ -292,11 +344,23 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
             const prestadorInfo = (prestadorCode && providers?.get(prestadorCode)) || null;
             const finalName = buildFileNameWithPrestador(file.name, prestadorCode);
 
+            // Suggest month based on data
+            const suggested = extractMostFrequentMonth(parsedJson);
+            let targetMonth = selectedMonth;
+            if (suggested && suggested !== selectedMonth) {
+                targetMonth = suggested;
+                setSelectedMonth(suggested);
+                toast({
+                    title: "Mes sugerido detectado",
+                    description: `El archivo ${file.name} parece corresponder a ${getMonthName(suggested)}. Se ha actualizado el mes automáticamente.`,
+                });
+            }
+
             resolve({
               jsonData: parsedJson,
               fileName: finalName,
               prestadorInfo: prestadorInfo,
-              month: selectedMonth
+              month: targetMonth
             });
 
           } catch (err: any) {
@@ -393,13 +457,6 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   const isUploadDisabled = isLoadingProviders || !canUploadForCurrentMonth || !canSelectNewMonth;
   const anyFileLoaded = files.length > 0;
 
-  const getMonthName = (monthNumber: string) => {
-    const date = new Date();
-    date.setMonth(parseInt(monthNumber) - 1);
-    const name = date.toLocaleString('es-CO', { month: 'long' });
-    return name.charAt(0).toUpperCase() + name.slice(1);
-  };
-
   return (
     <div className="w-full space-y-8 mt-4">
       <Card className="w-full shadow-lg">
@@ -490,5 +547,3 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     </div>
   );
 }
-
-    
