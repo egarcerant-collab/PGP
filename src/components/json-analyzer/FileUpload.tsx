@@ -14,7 +14,7 @@ interface FileUploadProps {
   maxFiles?: number;
 }
 
-export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxFiles = 2 }: FileUploadProps) {
+export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxFiles = 50 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -36,7 +36,7 @@ export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxF
     if (loadedFileNames.length + jsonFiles.length > maxFiles) {
         toast({
             title: 'Límite de archivos excedido',
-            description: `Solo puedes cargar un máximo de ${maxFiles} archivos por mes.`,
+            description: `Solo puedes cargar un máximo de ${maxFiles} archivos.`,
             variant: 'destructive'
         });
         return;
@@ -99,7 +99,7 @@ export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxF
   return (
     <div
       className={cn(
-        'relative flex w-full h-[178px] flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed p-8 text-center transition-colors duration-300',
+        'relative flex w-full h-[220px] flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed p-8 text-center transition-colors duration-300',
         isDragging ? 'border-accent bg-accent/10' : 'border-border',
         disabled ? 'cursor-not-allowed bg-muted/50' : 'cursor-pointer hover:border-accent/70',
         hasFiles && 'border-green-500 bg-green-50'
@@ -121,25 +121,27 @@ export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxF
       />
 
       {hasFiles ? (
-        <div className="flex flex-col items-center justify-center gap-2 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 text-center w-full">
             <FileJson className="h-10 w-10 text-green-600" />
-            <p className="font-medium text-green-800">Archivos cargados para este mes:</p>
-            <ul className="text-sm text-green-700 list-none p-0 m-0">
-            {loadedFileNames.map((name, index) => (
-                 <li key={index} className="truncate max-w-xs">{name}</li>
-            ))}
-            </ul>
+            <p className="font-medium text-green-800">Archivos cargados ({loadedFileNames.length}):</p>
+            <div className="max-h-[80px] overflow-y-auto w-full px-4">
+                <ul className="text-xs text-green-700 list-none p-0 m-0 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+                {loadedFileNames.map((name, index) => (
+                    <li key={index} className="truncate text-left">• {name}</li>
+                ))}
+                </ul>
+            </div>
              {loadedFileNames.length < maxFiles && !disabled && (
-                 <Button type="button" variant="secondary" size="sm" className="mt-2">Añadir otro archivo</Button>
+                 <Button type="button" variant="secondary" size="sm" className="mt-2">Añadir más archivos</Button>
             )}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <UploadCloud className="h-12 w-12" />
             <p className="font-semibold text-foreground">
-             Arrastra o selecciona hasta {maxFiles} archivos
+             Arrastra múltiples archivos JSON aquí
             </p>
-            <p className="text-sm">o</p>
+            <p className="text-sm">El sistema detectará el mes automáticamente</p>
             <Button type="button" variant="secondary" size="sm" disabled={disabled}>
             Buscar archivos
             </Button>
@@ -148,5 +150,3 @@ export default function FileUpload({ onFileLoad, disabled, loadedFileNames, maxF
     </div>
   );
 }
-
-    

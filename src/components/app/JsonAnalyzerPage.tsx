@@ -278,8 +278,8 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
   const loadedMonthsCount = filesByMonth.size;
   const filesInCurrentMonth = filesByMonth.get(selectedMonth)?.length || 0;
-  const canUploadForCurrentMonth = filesInCurrentMonth < 2;
-  const canSelectNewMonth = loadedMonthsCount < 3 || filesByMonth.has(selectedMonth);
+  const canUploadForCurrentMonth = true; // Relaxed
+  const canSelectNewMonth = true; // Relaxed
 
   useEffect(() => {
     setIsClient(true);
@@ -312,7 +312,6 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   }, [isClient, handleLoadProviders]);
 
   const getMonthName = (monthNumber: string) => {
-    // Fixed: Use a specific day (like the 1st) to avoid rollover issues if today is e.g. the 31st.
     const date = new Date(2024, parseInt(monthNumber) - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
     return name.charAt(0).toUpperCase() + name.slice(1);
@@ -322,13 +321,8 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     setError(null);
     setShowDuplicateAlert(false);
 
-    if (filesInCurrentMonth + loadedFiles.length > 2) {
-      toast({ title: 'Límite de archivos excedido', description: `Solo puedes cargar un máximo de 2 archivos por mes.`, variant: 'destructive' });
-      return;
-    }
-
-    if (loadedMonthsCount >= 3 && !filesByMonth.has(selectedMonth)) {
-      toast({ title: 'Límite de meses alcanzado', description: `Solo puedes cargar archivos para un máximo de 3 meses distintos.`, variant: 'destructive' });
+    if (files.length + loadedFiles.length > 50) {
+      toast({ title: 'Límite de archivos excedido', description: `Solo puedes cargar un máximo de 50 archivos.`, variant: 'destructive' });
       return;
     }
 
@@ -346,13 +340,12 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
             // Suggest month based on data
             const suggested = extractMostFrequentMonth(parsedJson);
-            let targetMonth = selectedMonth;
-            if (suggested && suggested !== selectedMonth) {
-                targetMonth = suggested;
-                setSelectedMonth(suggested);
+            let targetMonth = suggested || selectedMonth;
+            
+            if (suggested) {
                 toast({
-                    title: "Mes sugerido detectado",
-                    description: `El archivo ${file.name} parece corresponder a ${getMonthName(suggested)}. Se ha actualizado el mes automáticamente.`,
+                    title: "Mes detectado",
+                    description: `El archivo ${file.name} se ha asignado a ${getMonthName(suggested)} automáticamente.`,
                 });
             }
 
@@ -377,7 +370,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     Promise.all(filePromises).then(processedFiles => {
       setFiles(prevFiles => [...prevFiles, ...processedFiles]);
     });
-  }, [providers, toast, selectedMonth, filesInCurrentMonth, loadedMonthsCount, filesByMonth]);
+  }, [providers, toast, selectedMonth, files.length]);
 
   useEffect(() => {
     // 1. Combine all users from all files into a single list
@@ -415,7 +408,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
             cupCounts: monthCupCounts,
             summary: combinedSummary,
             totalRealValue: monthTotalRealValue,
-            rawJsonData: combinedJsonDataForMonth // Use the correctly combined data
+            rawJsonData: combinedJsonDataForMonth 
         });
     });
 
@@ -454,7 +447,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     );
   }
 
-  const isUploadDisabled = isLoadingProviders || !canUploadForCurrentMonth || !canSelectNewMonth;
+  const isUploadDisabled = isLoadingProviders;
   const anyFileLoaded = files.length > 0;
 
   return (
@@ -465,14 +458,14 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
             <div>
               <CardTitle>Carga tus Archivos JSON</CardTitle>
               <CardDescription>
-                Selecciona el mes y carga hasta 2 archivos JSON. Puedes añadir hasta 3 meses.
+                Arrastra varios archivos. El sistema detectará el mes de cada uno automáticamente.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={!canSelectNewMonth}>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="w-[180px]">
                   <Calendar className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Seleccionar mes..." />
+                  <SelectValue placeholder="Mes por defecto..." />
                 </SelectTrigger>
                 <SelectContent>
                   {[...Array(12).keys()].map(i => (
@@ -493,8 +486,8 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
           <FileUpload
             onFileLoad={handleFileLoad}
             disabled={isUploadDisabled}
-            loadedFileNames={filesByMonth.get(selectedMonth)?.map(f => f.fileName as string) || []}
-            maxFiles={2}
+            loadedFileNames={files.map(f => `${f.fileName} (${getMonthName(f.month)})`)}
+            maxFiles={50}
           />
         </CardContent>
       </Card>
@@ -511,28 +504,36 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
       {anyFileLoaded && (
         <div className="space-y-6">
-          <h3 className="text-xl font-semibold text-center">Resultados de Archivos Cargados</h3>
-          {files.map((file, index) => file.jsonData && (
-            <Card key={index} className="shadow-md">
-              <Accordion type="single" collapsible>
-                <AccordionItem value={`item-${index}`}>
-                  <AccordionTrigger className="p-6">
-                    <div className="flex flex-col items-start text-left">
-                      <h4 className="text-lg font-bold text-foreground">
-                        <Building className="inline-block mr-2 h-5 w-5 text-primary" />
-                        {file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador no encontrado para código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName} | Mes: {getMonthName(file.month)}
-                      </p>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="p-6 pt-0">
-                    <DataVisualizer data={file.jsonData} />
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </Card>
+          <h3 className="text-xl font-semibold text-center">Resultados por Mes</h3>
+          {Array.from(filesByMonth.entries()).map(([month, monthFiles]) => (
+            <div key={month} className="space-y-4">
+                <h4 className="text-lg font-bold border-b pb-2 flex items-center">
+                    <Calendar className="mr-2 h-5 w-5 text-primary" />
+                    {getMonthName(month)} ({monthFiles.length} archivos)
+                </h4>
+                {monthFiles.map((file, index) => file.jsonData && (
+                    <Card key={index} className="shadow-md">
+                    <Accordion type="single" collapsible>
+                        <AccordionItem value={`item-${index}`}>
+                        <AccordionTrigger className="p-6">
+                            <div className="flex flex-col items-start text-left">
+                            <h4 className="text-lg font-bold text-foreground">
+                                <Building className="inline-block mr-2 h-5 w-5 text-primary" />
+                                {file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador no encontrado para código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                                NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName}
+                            </p>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0">
+                            <DataVisualizer data={file.jsonData} />
+                        </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                    </Card>
+                ))}
+            </div>
           ))}
         </div>
       )}
