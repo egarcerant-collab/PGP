@@ -299,11 +299,12 @@ const PgPsearchForm = forwardRef<
         description: "Esto puede tardar unos segundos dependiendo del volumen de datos.",
     });
 
-    const pgpCupsMap = new Map<string, number>();
+    const pgpCupsMap = new Map<string, { unitValue: number, description: string }>();
     pgpData.forEach(row => {
-      const cup = normalizeString(findColumnValue(row, ['cup/cum', 'cups']));
+      const cup = normalizeString(findColumnValue(row, ['cup/cum', 'cups', 'id resolucion 3100']));
       const unitValue = getNumericValue(findColumnValue(row, ['valor unitario']));
-      if (cup) pgpCupsMap.set(cup, unitValue);
+      const description = normalizeString(findColumnValue(row, ['descripcion cups', 'descripcion', 'descripcion id resolucion']));
+      if (cup) pgpCupsMap.set(cup, { unitValue, description });
     });
 
     const exportRows: any[] = [];
@@ -317,7 +318,9 @@ const PgPsearchForm = forwardRef<
           if (!services) return;
           services.forEach((service: any) => {
             const cupCode = normalizeString(service[codeField]);
-            const valorUnitarioNT = pgpCupsMap.get(cupCode) || 0;
+            const pgpInfo = pgpCupsMap.get(cupCode);
+            const valorUnitarioNT = pgpInfo?.unitValue || 0;
+            const descriptionNT = pgpInfo?.description || 'N/A';
             const cantidadEjecutada = qtyField ? getNumericValue(service[qtyField]) : 1;
             
             let valorServicioJSON = 0;
@@ -332,6 +335,7 @@ const PgPsearchForm = forwardRef<
               ID_Usuario: userId,
               Tipo_Servicio: serviceType,
               CUPS: cupCode,
+              Descripcion_CUPS: descriptionNT,
               Fecha_Atencion: service.fechaInicioAtencion || service.fechaAtencion || 'N/A',
               Diagnostico_Principal: service.codDiagnosticoPrincipal || 'N/A',
               Valor_Servicio_JSON: valorServicioJSON,
