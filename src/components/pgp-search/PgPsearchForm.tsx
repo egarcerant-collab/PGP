@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save, Info } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save, Info, Landmark } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
@@ -345,6 +345,43 @@ const PgPsearchForm = forwardRef<
 
         {showComparison && comparisonSummary && (
           <div className="space-y-12 animate-in fade-in duration-500">
+            {/* Tarjetas de Resumen Estadístico Principal */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <StatCard 
+                title="Cobertura Poblacional" 
+                value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`}
+                icon={Users}
+                footer={`Atendidos: ${uniqueUserCount} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`}
+              />
+              <StatCard 
+                title="Ejecución Real (JSON)" 
+                value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))}
+                icon={Wallet}
+                footer="Costo real total de los archivos JSON"
+              />
+              <StatCard 
+                title="Ejecución Valorizada (NT)" 
+                value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))}
+                icon={FileText}
+                footer="Ejecución valorizada con precios de la Nota Técnica"
+              />
+            </div>
+
+            {/* Resumen Teórico de la Nota Técnica */}
+            {globalSummary && (
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Landmark className="h-5 w-5 text-primary" />
+                    Resumen Teórico: Nota Técnica de {selectedPrestador?.PRESTADOR}
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <StatCard title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
+                    <StatCard title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado por periodo" />
+                    <StatCard title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado por periodo" />
+                  </div>
+                </div>
+            )}
+
             <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} />
             <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} />
             <DiscountMatrix
