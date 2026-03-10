@@ -1,12 +1,12 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save, Info } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
@@ -132,9 +132,6 @@ const getMonthName = (monthNumber: string) => {
     return date.toLocaleString('es-CO', { month: 'long' }).charAt(0).toUpperCase() + date.toLocaleString('es-CO', { month: 'long' }).slice(1);
 };
 
-/**
- * Función central para calcular la comparación entre PGP y ejecución real.
- */
 export function calculateComparison(pgpData: any[], executionDataByMonth: ExecutionDataByMonth): ComparisonSummary {
   const matrizRows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
   
@@ -148,13 +145,11 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   const monthlyFinancialsMap = new Map<string, { expected: number; executed: number }>();
 
   matrizRows.forEach(row => {
-    // Agrupar financieros por mes
     const current = monthlyFinancialsMap.get(row.Mes) || { expected: 0, executed: 0 };
     current.expected += row.Valor_Esperado;
     current.executed += row.Valor_Ejecutado;
     monthlyFinancialsMap.set(row.Mes, current);
 
-    // Información base de auditoría
     const commonInfo: DeviatedCupInfo = {
       cup: row.CUPS,
       description: row.Descripcion,
@@ -172,7 +167,6 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
       unitValueFromNote: row.Valor_Unitario
     };
 
-    // Enriquecer con datos de ejecución real (Usuarios únicos)
     executionDataByMonth.forEach((monthData) => {
         const cupData = monthData.cupCounts.get(row.CUPS);
         if (cupData) {
@@ -181,7 +175,6 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
         }
     });
 
-    // Clasificar según la lógica de auditoría
     if (row.Clasificacion === "Sobre-ejecutado") overExecutedCups.push(commonInfo);
     else if (row.Clasificacion === "Sub-ejecutado") underExecutedCups.push(commonInfo);
     else if (row.Clasificacion === "Faltante") missingCups.push(commonInfo);
@@ -195,7 +188,6 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
         });
     }
 
-    // Preparar fila para la Matriz de Descuentos
     matrizDescuentos.push({
         ...commonInfo,
         CUPS: row.CUPS,
@@ -353,13 +345,8 @@ const PgPsearchForm = forwardRef<
 
         {showComparison && comparisonSummary && (
           <div className="space-y-12 animate-in fade-in duration-500">
-            {/* 1. Resumen Financiero Mensual */}
             <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} />
-            
-            {/* 2. Análisis de Desviaciones */}
             <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} />
-            
-            {/* 3. Matriz de Descuentos para Ajustes */}
             <DiscountMatrix
               data={comparisonSummary.matrizDescuentos}
               executionDataByMonth={executionDataByMonth}
@@ -371,8 +358,6 @@ const PgPsearchForm = forwardRef<
               selectedPrestador={selectedPrestador}
               initialAuditData={initialAuditData}
             />
-
-            {/* 4. Centro de Generación de Informes (Ejecutivo y Clínico) */}
             <div className="pt-8">
                <InformePGP data={reportData} comparisonSummary={comparisonSummary} />
             </div>
