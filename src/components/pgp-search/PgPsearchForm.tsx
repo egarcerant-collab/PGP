@@ -219,7 +219,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   };
 }
 
-const calculateSummary = (data: PgpRow[]): SummaryData | null => {
+const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
   if (data.length === 0) return null;
   const totalCostoMes = data.reduce((acc, row) => {
     const costo = getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes']));
@@ -249,7 +249,7 @@ const PgPsearchForm = forwardRef<
   const showComparison = isDataLoaded && executionDataByMonth.size > 0;
 
   useEffect(() => {
-    if (isDataLoaded) setGlobalSummary(calculateSummary(pgpData));
+    if (isDataLoaded) setGlobalSummary(calculateSummaryData(pgpData));
   }, [isDataLoaded, pgpData]);
 
   const comparisonSummary = useMemo(() => {
@@ -291,34 +291,7 @@ const PgPsearchForm = forwardRef<
     };
   }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData]);
 
-  const handleSelectPrestador = useCallback(async (prestador: Prestador) => {
-    setLoading(true);
-    try {
-      const data = await fetchSheetData<PgpRow>(prestador.WEB);
-      setPgpData(data);
-      setSelectedPrestador(prestador);
-      setIsDataLoaded(true);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useImperativeHandle(ref, () => ({
-    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador)
-  }));
-
-  useEffect(() => {
-    fetchSheetData<Prestador>(PRESTADORES_SHEET_URL).then(data => {
-      setPrestadores(data.map(p => ({
-        ...p, 'ID DE ZONA': normalizeDigits(p['ID DE ZONA']),
-        'CONTRATO': normalizeString(p.CONTRATO),
-      })));
-    });
-  }, []);
-
-  const handleDownloadExecutionDetail = () => {
+  const handleDownloadExecutionDetail = useCallback(() => {
     if (!showComparison || !pgpData || executionDataByMonth.size === 0) return;
 
     toast({
@@ -397,7 +370,34 @@ const PgPsearchForm = forwardRef<
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
+
+  const handleSelectPrestador = useCallback(async (prestador: Prestador) => {
+    setLoading(true);
+    try {
+      const data = await fetchSheetData<PgpRow>(prestador.WEB);
+      setPgpData(data);
+      setSelectedPrestador(prestador);
+      setIsDataLoaded(true);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useImperativeHandle(ref, () => ({
+    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador)
+  }));
+
+  useEffect(() => {
+    fetchSheetData<Prestador>(PRESTADORES_SHEET_URL).then(data => {
+      setPrestadores(data.map(p => ({
+        ...p, 'ID DE ZONA': normalizeDigits(p['ID DE ZONA']),
+        'CONTRATO': normalizeString(p.CONTRATO),
+      })));
+    });
+  }, []);
 
   return (
     <Card className="w-full">

@@ -2,15 +2,15 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import React from "react";
 
-interface StatCardProps {
+interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
     title: string;
     value: string | number;
     icon: React.ElementType;
     footer?: string;
 }
 
-const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, footer }, ref) => (
-    <div ref={ref}>
+const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, footer, ...props }, ref) => (
+    <div ref={ref} {...props}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -25,6 +25,5 @@ const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(({ title, value
 ));
 
 StatCard.displayName = 'StatCard';
-
 
 export default StatCard;
