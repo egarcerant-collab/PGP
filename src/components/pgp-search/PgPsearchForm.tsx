@@ -6,27 +6,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, Target, FileText, Calendar, ChevronDown, Building, BrainCircuit, AlertTriangle, TableIcon, Download, Filter, Search, Users, Wallet, AlertCircle, Save, Info, Landmark } from "lucide-react";
+import { 
+  Loader2, 
+  TrendingUp, 
+  TrendingDown, 
+  Target, 
+  FileText, 
+  Calendar, 
+  ChevronDown, 
+  Building, 
+  AlertTriangle, 
+  Download, 
+  Filter, 
+  Search, 
+  Users, 
+  Wallet, 
+  AlertCircle, 
+  Save, 
+  Info, 
+  Landmark 
+} from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
 import { type ExecutionDataByMonth } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
-import { buildMatrizEjecucion, type MatrizRow as MatrizEjecucionRow } from '@/lib/matriz-helpers';
+import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
-import { ScrollArea } from '../ui/scroll-area';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { describeCup, type CupDescription } from '@/ai/flows/describe-cup-flow';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { getNumericValue, type SavedAuditData } from '../app/JsonAnalyzerPage';
+import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
-import { describeCie10, Cie10Description } from '@/ai/flows/describe-cie10-flow';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getNumericValue, type SavedAuditData } from '../app/JsonAnalyzerPage';
-import { findColumnValue } from '@/lib/matriz-helpers';
-import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 
 export type Prestador = PrestadorInfo;
 
@@ -403,10 +413,8 @@ const PgPsearchForm = forwardRef<
     });
   }, []);
 
-  // Lógica de Sugerencia y Selección Automática
   useEffect(() => {
     if (jsonPrestadorCode && prestadores.length > 0 && !loading) {
-      // Si no hay prestador seleccionado O el código del JSON no coincide con la selección actual, sugerir
       if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== jsonPrestadorCode) {
         const suggested = prestadores.find(p => p['ID DE ZONA'] === jsonPrestadorCode);
         if (suggested) {
@@ -447,7 +455,6 @@ const PgPsearchForm = forwardRef<
 
         {showComparison && comparisonSummary && (
           <div className="space-y-12 animate-in fade-in duration-500">
-            {/* Tarjetas de Resumen Estadístico Principal */}
             <div className="grid gap-4 md:grid-cols-3">
               <StatCard 
                 title="Cobertura Poblacional" 
@@ -470,7 +477,6 @@ const PgPsearchForm = forwardRef<
               />
             </div>
 
-            {/* Resumen Teórico de la Nota Técnica */}
             {globalSummary && (
                 <div className="space-y-4">
                   <h3 className="text-xl font-bold flex items-center gap-2">
