@@ -318,6 +318,87 @@ const PgPsearchForm = forwardRef<
     });
   }, []);
 
+  const handleDownloadExecutionDetail = () => {
+    if (!showComparison || !pgpData || executionDataByMonth.size === 0) return;
+
+    toast({
+        title: "Generando Detalle de Ejecución",
+        description: "Esto puede tardar unos segundos dependiendo del volumen de datos.",
+    });
+
+    const pgpCupsMap = new Map<string, number>();
+    pgpData.forEach(row => {
+      const cup = normalizeString(findColumnValue(row, ['cup/cum', 'cups']));
+      const unitValue = getNumericValue(findColumnValue(row, ['valor unitario']));
+      if (cup) pgpCupsMap.set(cup, unitValue);
+    });
+
+    const exportRows: any[] = [];
+
+    executionDataByMonth.forEach((monthData, monthKey) => {
+      const monthName = getMonthName(monthKey);
+      monthData.rawJsonData.usuarios?.forEach((user: any) => {
+        const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
+
+        const processServicesForExport = (services: any[], serviceType: string, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
+          if (!services) return;
+          services.forEach((service: any) => {
+            const cupCode = normalizeString(service[codeField]);
+            const valorUnitarioNT = pgpCupsMap.get(cupCode) || 0;
+            const cantidadEjecutada = qtyField ? getNumericValue(service[qtyField]) : 1;
+            
+            let valorServicioJSON = 0;
+            if (unitValueField && qtyField) {
+              valorServicioJSON = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
+            } else {
+              valorServicioJSON = getNumericValue(service[valueField]);
+            }
+
+            exportRows.push({
+              Mes: monthName,
+              ID_Usuario: userId,
+              Tipo_Servicio: serviceType,
+              CUPS: cupCode,
+              Fecha_Atencion: service.fechaInicioAtencion || service.fechaAtencion || 'N/A',
+              Diagnostico_Principal: service.codDiagnosticoPrincipal || 'N/A',
+              Valor_Servicio_JSON: valorServicioJSON,
+              Cantidad_Ejecutada: cantidadEjecutada,
+              Valor_Unitario_NT: valorUnitarioNT,
+              Valor_Ejecutado_NT: cantidadEjecutada * valorUnitarioNT
+            });
+          });
+        };
+
+        if (user.servicios) {
+          processServicesForExport(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
+          processServicesForExport(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
+          processServicesForExport(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
+          processServicesForExport(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioOS', 'cantidadOS');
+        }
+      });
+    });
+
+    if (exportRows.length === 0) {
+      toast({
+        title: "No hay datos para exportar",
+        description: "Verifique que los archivos JSON tengan servicios válidos.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const csv = Papa.unparse(exportRows, { delimiter: ";" });
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `detalle_ejecucion_valorizada_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -363,7 +444,8 @@ const PgPsearchForm = forwardRef<
                 title="Ejecución Valorizada (NT)" 
                 value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))}
                 icon={FileText}
-                footer="Ejecución valorizada con precios de la Nota Técnica"
+                footer="Doble clic para descargar detalle Excel"
+                onDoubleClick={handleDownloadExecutionDetail}
               />
             </div>
 
