@@ -102,7 +102,7 @@ export const getNumericValue = (value: any): number => {
 };
 
 const sanitizeForFilename = (v: string): string =>
-  v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  v.normalize('NFD').replace(/[\u0300Host\u036f]/g, '').replace(/[^\w.-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
 
 const buildFileNameWithPrestador = (originalName: string, prestadorCodeRaw: string | null): string => {
   const code = sanitizeForFilename(normalizeString(prestadorCodeRaw ?? ''));
@@ -199,6 +199,15 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
                 cupData.total += quantity;
                 cupData.totalValue += value;
                 cupData.uniqueUsers.add(userId);
+                
+                // Captura descripción de Medicamentos y Otros Servicios desde el JSON
+                if (type === "Medicamento" || type === "Otro Servicio") {
+                    const jsonName = service.nomTecnologiaSalud;
+                    if (jsonName && !cupData.jsonDescription) {
+                        cupData.jsonDescription = String(jsonName);
+                    }
+                }
+
                 const diagnosis = service[dField];
                 if (diagnosis) {
                     cupData.diagnoses.set(diagnosis, (cupData.diagnoses.get(diagnosis) || 0) + quantity);

@@ -20,7 +20,7 @@ export interface MatrizRow {
   Valor_Unitario: number;
   Valor_Esperado: number;
   Valor_Ejecutado: number;
-  Tipo_Servicio: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio" | "Desconocido";
+  Tipo_Servicio: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio";
 }
 
 interface BuildMatrizArgs {
@@ -30,7 +30,6 @@ interface BuildMatrizArgs {
 
 /**
  * Busca un valor en una fila intentando coincidir con varios nombres posibles de columna.
- * Ahora incluye una búsqueda difusa para evitar el "N/A" si el nombre varía ligeramente.
  */
 export const findColumnValue = (row: PgpRow, possibleNames: string[]): any => {
   if (!row) return undefined;
@@ -131,8 +130,10 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
         diagnosticoPrincipal = [...monthCupData.diagnoses.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
       }
 
-      // DESCRIPCION: Priorizamos "DESCRIPCION" y "DESCRIPCION CUPS" para eliminar el N/A
-      const descripcion = findColumnValue(pgpRow, [
+      const serviceType = monthCupData?.type || guessServiceTypeByCup(cup);
+
+      // DESCRIPCION: Inteligencia para Medicamentos/Otros (desde JSON) vs Consultas/Proc (desde Sheet)
+      let descripcion = findColumnValue(pgpRow, [
           'descripcion',
           'descripcion cups',
           'descripcion id resolucion',
@@ -140,10 +141,15 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
           'servicio'
       ]);
 
+      // Si es Medicamento u Otro Servicio, priorizar el nombre que viene en el JSON si existe
+      if ((serviceType === "Medicamento" || serviceType === "Otro Servicio") && monthCupData?.jsonDescription) {
+          descripcion = monthCupData.jsonDescription;
+      }
+
       matriz.push({
         Mes: monthName,
         CUPS: cup,
-        Descripcion: descripcion || 'Descripción no encontrada en la Nota Técnica',
+        Descripcion: descripcion || 'Descripción no encontrada',
         Diagnostico_Principal: diagnosticoPrincipal,
         Cantidad_Esperada: cantidadEsperada,
         Cantidad_Ejecutada: cantidadEjecutada,
@@ -154,7 +160,7 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
         Valor_Unitario: unitValue,
         Valor_Esperado: valorEsperado,
         Valor_Ejecutado: valorEjecutado,
-        Tipo_Servicio: monthCupData?.type || guessServiceTypeByCup(cup)
+        Tipo_Servicio: serviceType
       });
     });
   });

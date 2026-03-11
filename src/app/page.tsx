@@ -31,6 +31,7 @@ export type CupCountInfo = {
   totalValue: number;
   uniqueUsers: Set<string>;
   type: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio";
+  jsonDescription?: string;
 };
 
 export type CupCountsMap = Map<string, CupCountInfo>;
