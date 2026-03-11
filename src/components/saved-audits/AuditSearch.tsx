@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search, Play, RefreshCw, FolderOpen } from "lucide-react";
+import { Loader2, Play, RefreshCw, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
@@ -41,7 +41,6 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const fetchAudits = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Consultamos la API que lista los archivos físicos del servidor
             const response = await fetch('/api/list-audits');
             const data: AuditFile[] = await response.json();
             
@@ -71,13 +70,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         if (!selectedAuditPath) return;
         setIsContinuing(true);
         try {
-            // Buscamos el objeto de auditoría en el mapa para tener el nombre
             const allAudits = Object.values(audits).flat();
             const auditInfo = allAudits.find(a => a.path === selectedAuditPath);
 
             if (!auditInfo) throw new Error("Información de auditoría no encontrada.");
 
-            // Cargamos el JSON directamente desde public/
             const response = await fetch(selectedAuditPath);
             if (!response.ok) throw new Error("No se pudo descargar el archivo JSON.");
             

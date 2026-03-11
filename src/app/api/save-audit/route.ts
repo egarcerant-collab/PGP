@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Helper function to sanitize filenames for the OS
 const sanitizeFilename = (name: string) => {
     if (!name) return 'desconocido';
     return name.normalize('NFD')
@@ -24,27 +23,32 @@ export async function POST(request: Request) {
     const sanitizedMonth = sanitizeFilename(month);
     const sanitizedPrestadorName = sanitizeFilename(prestadorName);
     
-    // Resolve path to public/informes/[mes]/[prestador].json
     const rootDir = process.cwd();
     const reportsDir = path.join(rootDir, 'public', 'informes');
     const monthDir = path.join(reportsDir, sanitizedMonth);
     const filePath = path.join(monthDir, `${sanitizedPrestadorName}.json`);
 
-    // Ensure directory exists
-    await fs.mkdir(monthDir, { recursive: true });
-
-    // Write the full audit package to the JSON file
-    await fs.writeFile(filePath, JSON.stringify(auditData, null, 2), 'utf-8');
+    try {
+        await fs.mkdir(monthDir, { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(auditData, null, 2), 'utf-8');
+    } catch (fsError: any) {
+        console.error('File System Error:', fsError);
+        return NextResponse.json({ 
+            message: 'Error al escribir en el disco del servidor.',
+            error: fsError.message,
+            code: fsError.code
+        }, { status: 500 });
+    }
 
     return NextResponse.json({ 
-        message: `Archivo guardado en: public/informes/${sanitizedMonth}/${sanitizedPrestadorName}.json`,
+        message: `Archivo guardado exitosamente.`,
         path: `/informes/${sanitizedMonth}/${sanitizedPrestadorName}.json`
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('Error saving to disk:', error);
+    console.error('General API Error:', error);
     return NextResponse.json({ 
-        message: 'Error al escribir en el servidor. Verifique permisos.',
+        message: 'Error interno en la API de guardado.',
         error: error.message 
     }, { status: 500 });
   }

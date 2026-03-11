@@ -56,7 +56,7 @@ export interface AdjustedData {
 interface DiscountMatrixProps {
   data: DiscountMatrixRow[];
   executionDataByMonth: ExecutionDataByMonth;
-  pgpData: any[]; // Recibimos la data de la Nota Técnica
+  pgpData: any[];
   onAdjustmentsChange: (adjustments: AdjustedData) => void;
   storageKey: string; 
   selectedPrestador: Prestador | null;
@@ -75,9 +75,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     uniqueUserCount,
     jsonPrestadorCode
 }) => {
-    const [selectedCupForDetail, setSelectedCupForDetail] = useState<DeviatedCupInfo | null>(null);
-    const [isCupModalOpen, setIsCupModalOpen] = useState(false);
-    const [executionDetails, setExecutionDetails] = useState<any[]>([]);
     const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
     const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
@@ -127,7 +124,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             executionData: serializeExecutionData(executionDataByMonth),
             jsonPrestadorCode,
             uniqueUserCount,
-            // Guardamos físicamente la Nota Técnica para no depender de URLs externas al cargar
             pgpData: pgpData,
             selectedPrestador: selectedPrestador
         };
@@ -148,7 +144,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             if (response.ok) {
                 toast({ title: "Guardado en Carpeta", description: `Archivo: ${result.path}` });
             } else {
-                throw new Error(result.message);
+                throw new Error(result.message || result.error);
             }
         } catch (error: any) {
             toast({ title: "Error al Guardar", description: error.message, variant: "destructive" });
