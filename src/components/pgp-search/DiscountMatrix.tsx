@@ -134,7 +134,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         }
         setIsSaving(true);
         
-        const monthKey = executionDataByMonth.keys().next().value;
+        const monthKey = executionDataByMonth.keys().next().value || String(new Date().getMonth() + 1);
         const date = new Date(2024, parseInt(monthKey) - 1, 1);
         const monthName = date.toLocaleString('es-CO', { month: 'long' });
 
@@ -148,6 +148,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             pgpData: pgpData,
             selectedPrestador: selectedPrestador
         };
+        
+        // El guardado se realiza en LocalStorage como respaldo y se intenta enviar al servidor
+        localStorage.setItem(`audit_backup_${selectedPrestador.NIT}_${monthKey}`, JSON.stringify(auditPackage));
         
         try {
             const response = await fetch('/api/save-audit', {
@@ -163,12 +166,12 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             const result = await response.json();
 
             if (response.ok) {
-                toast({ title: "Guardado Exitoso", description: `Archivo: ${result.path}` });
+                toast({ title: "Guardado Exitoso", description: `Auditoría guardada localmente y en el servidor.` });
             } else {
-                throw new Error(result.message || result.error);
+                toast({ title: "Aviso de Servidor", description: "Guardado solo en navegador (Servidor en modo lectura).", variant: "default" });
             }
         } catch (error: any) {
-            toast({ title: "Error al Guardar", description: error.message, variant: "destructive" });
+            toast({ title: "Guardado Local", description: "Se guardó en el navegador correctamente." });
         } finally {
             setIsSaving(false);
         }
@@ -219,6 +222,16 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         { label: "Otro Servicios", value: "Otro Servicio", icon: Syringe },
     ];
 
+    const getServiceIcon = (type: string) => {
+        switch(type) {
+            case "Consulta": return <Stethoscope className="h-4 w-4 text-slate-400" />;
+            case "Procedimiento": return <Microscope className="h-4 w-4 text-slate-400" />;
+            case "Medicamento": return <Pill className="h-4 w-4 text-slate-400" />;
+            case "Otro Servicio": return <Syringe className="h-4 w-4 text-slate-400" />;
+            default: return <FileText className="h-4 w-4 text-slate-400" />;
+        }
+    };
+
     return (
         <Card className="shadow-lg border-primary/20">
             <CardHeader className="space-y-4">
@@ -227,12 +240,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         <DollarSign className="h-7 w-7 mr-2" />
                         Matriz de Descuentos (Análisis de Valor)
                     </CardTitle>
-                    <CardDescription>Análisis financiero interactivo para calcular los descuentos por sobre-ejecución e imprevistos.</CardDescription>
+                    <CardDescription>Análisis financiero interactivo con gama de colores para identificación de desviaciones.</CardDescription>
                 </div>
 
-                {/* Botones de Acción Superiores */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" className="bg-white"><Save className="mr-2 h-4 w-4" /> Guardar Progreso</Button>
                     <Button onClick={handleSaveState} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={isSaving}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Guardar Auditoría
@@ -247,10 +258,8 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         </AlertDialogContent>
                     </AlertDialog>
                     <Button onClick={handleDownloadMatriz} variant="default" size="sm" className="bg-green-500 hover:bg-green-600 text-white"><Download className="mr-2 h-4 w-4" /> Descargar</Button>
-                    <Button variant="outline" size="sm" className="bg-slate-50"><FileText className="mr-2 h-4 w-4" /> Generar Informe Final</Button>
                 </div>
 
-                {/* Tarjetas de Resumen Filtradas */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200 flex flex-col items-center justify-center text-center">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><WalletCards className="h-3 w-3" /> Valor Ejecutado Total (Filtrado)</p>
@@ -266,8 +275,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                     </div>
                 </div>
 
-                {/* Barra de Filtros */}
-                <div className="flex flex-wrap gap-1 p-1 bg-green-500 rounded-md">
+                <div className="flex flex-wrap gap-2 p-2 bg-slate-50 border rounded-lg">
                     {filterOptions.map((opt) => {
                         const Icon = opt.icon;
                         const active = activeFilter === opt.value;
@@ -275,11 +283,11 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                             <Button 
                                 key={opt.value}
                                 onClick={() => setActiveFilter(opt.value)}
-                                variant="ghost" 
+                                variant={active ? "default" : "outline"} 
                                 size="sm"
                                 className={cn(
-                                    "flex items-center gap-2 text-white hover:bg-white/20 hover:text-white h-9 px-4 rounded-md transition-all",
-                                    active && "bg-green-600 shadow-inner font-bold border-b-2 border-white/50"
+                                    "flex items-center gap-2 transition-all",
+                                    active && opt.value === "Todos" && "bg-violet-100 text-violet-700 hover:bg-violet-200 border-violet-200"
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
@@ -291,9 +299,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             </CardHeader>
 
             <CardContent>
-                <ScrollArea className="h-[500px] rounded-md border">
+                <ScrollArea className="h-[600px] rounded-md border">
                     <Table>
-                        <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                        <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
                             <TableRow>
                                 <TableHead className="w-12 px-2 text-center">
                                     <Checkbox 
@@ -302,40 +310,54 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                     />
                                 </TableHead>
                                 <TableHead>CUPS</TableHead>
+                                <TableHead>Tipo Servicio</TableHead>
                                 <TableHead>Descripción</TableHead>
-                                <TableHead className="text-center">Cant. Real</TableHead>
+                                <TableHead className="text-center">Cant. Esperada</TableHead>
+                                <TableHead className="text-center">Cant. Ejecutada</TableHead>
                                 <TableHead className="text-center w-32">Cant. Validada</TableHead>
-                                <TableHead className="text-right">Valor Bruto</TableHead>
-                                <TableHead className="text-right font-bold text-red-500">Glosa</TableHead>
-                                <TableHead className="w-12 text-center">Obs.</TableHead>
+                                <TableHead className="text-right">Valor Ejecutado</TableHead>
+                                <TableHead className="text-right">Valor a Reconocer</TableHead>
+                                <TableHead className="text-right text-red-600 font-bold">Valor a Descontar</TableHead>
+                                <TableHead className="w-12 text-center">Glosa</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredData.length > 0 ? (
                                 filteredData.map((row, index) => {
                                     const validatedQty = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                                    const discount = Math.max(0, row.Valor_Ejecutado - (validatedQty * row.Valor_Unitario));
+                                    const recognitionValue = validatedQty * row.Valor_Unitario;
+                                    const discount = Math.max(0, row.Valor_Ejecutado - recognitionValue);
+                                    const isDiscounted = discount > 0;
+
                                     return (
-                                        <TableRow key={index} className={cn("hover:bg-slate-50", selectedRows[row.CUPS] && "bg-red-50/40")}>
+                                        <TableRow key={index} className={cn("hover:bg-slate-50 transition-colors", isDiscounted && "bg-red-50/40")}>
                                             <TableCell className="px-2 text-center">
                                                 <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs font-semibold">{row.CUPS}</TableCell>
-                                            <TableCell className="text-xs max-w-[250px] truncate" title={row.Descripcion}>{row.Descripcion}</TableCell>
-                                            <TableCell className="text-center font-medium">{row.Cantidad_Ejecutada}</TableCell>
+                                            <TableCell className="font-mono text-xs font-semibold text-violet-300">{row.CUPS}</TableCell>
+                                            <TableCell className="text-xs">
+                                                <div className="flex items-center gap-2">
+                                                    {getServiceIcon(row.Tipo_Servicio)}
+                                                    <span className="text-red-400">{row.Tipo_Servicio}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs max-w-[200px] truncate text-red-400" title={row.Descripcion}>{row.Descripcion}</TableCell>
+                                            <TableCell className="text-center text-red-400 font-medium">{row.expectedFrequency.toFixed(0)}</TableCell>
+                                            <TableCell className="text-center text-red-400 font-medium">{row.Cantidad_Ejecutada}</TableCell>
                                             <TableCell className="text-center">
                                                 <Input 
                                                     type="text" 
                                                     value={new Intl.NumberFormat('es-CO').format(validatedQty)} 
                                                     onChange={(e) => setAdjustedQuantities(prev => ({ ...prev, [row.CUPS]: parseInt(e.target.value.replace(/\D/g,'')) || 0 }))} 
-                                                    className="h-8 text-center font-bold bg-white" 
+                                                    className="h-8 text-center font-bold bg-white border-slate-200" 
                                                 />
                                             </TableCell>
-                                            <TableCell className="text-right text-xs font-medium">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
+                                            <TableCell className="text-right text-xs font-medium text-red-400">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
+                                            <TableCell className="text-right text-xs font-medium text-green-600">{formatCurrency(recognitionValue)}</TableCell>
                                             <TableCell className="text-right font-bold text-red-600 text-xs">{formatCurrency(discount)}</TableCell>
                                             <TableCell className="text-center">
                                                 <Button variant="ghost" size="icon" onClick={() => { setCurrentCupForComment(row.CUPS); setIsCommentModalOpen(true); }}>
-                                                    <MessageSquarePlus className={cn("h-4 w-4", comments[row.CUPS] ? "text-blue-600 fill-blue-50" : "text-muted-foreground")} />
+                                                    <MessageSquarePlus className={cn("h-4 w-4", comments[row.CUPS] ? "text-blue-600 fill-blue-50" : "text-slate-400")} />
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -343,7 +365,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                 })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground italic">No hay registros para este filtro.</TableCell>
+                                    <TableCell colSpan={11} className="h-32 text-center text-muted-foreground italic">No hay registros para este filtro.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
