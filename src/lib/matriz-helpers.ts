@@ -20,6 +20,7 @@ export interface MatrizRow {
   Valor_Unitario: number;
   Valor_Esperado: number;
   Valor_Ejecutado: number;
+  Tipo_Servicio: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio" | "Desconocido";
 }
 
 interface BuildMatrizArgs {
@@ -85,7 +86,6 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
         diagnosticoPrincipal = [...monthCupData.diagnoses.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
       }
 
-      // Priorizar nombres de columna que suelen estar en la posición F (Descripción)
       const descripcion = findColumnValue(pgpRow, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre del servicio']);
 
       matriz.push({
@@ -102,6 +102,7 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
         Valor_Unitario: unitValue,
         Valor_Esperado: valorEsperado,
         Valor_Ejecutado: valorEjecutado,
+        Tipo_Servicio: monthCupData?.type || "Desconocido"
       });
     });
   });

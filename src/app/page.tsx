@@ -30,6 +30,7 @@ export type CupCountInfo = {
   diagnoses: Map<string, number>; 
   totalValue: number;
   uniqueUsers: Set<string>;
+  type: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio";
 };
 
 export type CupCountsMap = Map<string, CupCountInfo>;
@@ -44,10 +45,8 @@ export default function Home() {
   const pgpSearchRef = useRef<{ handleSelectPrestador: (prestador: { PRESTADOR: string; WEB: string }) => void } | null>(null);
 
   const handleAuditLoad = useCallback((auditPackage: SavedAuditData, prestadorName: string, month: string) => {
-    // 1. Cargamos el paquete completo de auditoría
     setSavedAuditData(auditPackage);
     
-    // 2. Si la auditoría tiene datos de ejecución persistidos, los restauramos
     if (auditPackage.executionData) {
       const restoredData = deserializeExecutionData(auditPackage.executionData);
       setExecutionData(restoredData);
@@ -55,8 +54,6 @@ export default function Home() {
       if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
     }
 
-    // 3. Si NO tiene pgpData persistido, disparamos la búsqueda por nombre (legacy)
-    // Pero si ya tiene pgpData, el componente PgPsearchForm lo usará automáticamente mediante su useEffect interno
     if (!auditPackage.pgpData && pgpSearchRef.current?.handleSelectPrestador) {
       pgpSearchRef.current.handleSelectPrestador({ PRESTADOR: prestadorName, WEB: '' }); 
     }

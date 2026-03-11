@@ -194,7 +194,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
             cup: row.CUPS,
             realFrequency: row.Cantidad_Ejecutada,
             totalValue: row.Valor_Ejecutado,
-            serviceType: "Procedimiento"
+            serviceType: row.Tipo_Servicio as ServiceType
         });
     }
 
@@ -207,7 +207,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
         Valor_a_Reconocer: commonInfo.valorReconocer,
         Valor_a_Descontar: Math.max(0, row.Valor_Ejecutado - commonInfo.valorReconocer),
         Clasificacion: row.Clasificacion,
-        Tipo_Servicio: "Procedimiento" as ServiceType
+        Tipo_Servicio: row.Tipo_Servicio as ServiceType
     });
   });
 
@@ -256,7 +256,6 @@ const PgPsearchForm = forwardRef<
     adjustedQuantities: {}, adjustedValues: {}, comments: {}, selectedRows: {}
   });
 
-  // Efecto para cargar data restaurada si existe en el paquete inicial
   useEffect(() => {
     if (initialAuditData?.pgpData) {
       setPgpData(initialAuditData.pgpData);
@@ -356,7 +355,6 @@ const PgPsearchForm = forwardRef<
   }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
 
   const handleSelectPrestador = useCallback(async (prestador: Prestador) => {
-    // Si el prestador no tiene URL de web (caso de restauración dummy), no intentamos fetch
     if (!prestador.WEB) return;
 
     setLoading(true);

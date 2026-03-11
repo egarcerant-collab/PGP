@@ -17,7 +17,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 export interface MonthlyExecutionData {
   cupCounts: CupCountsMap;
   summary: any;
-  totalRealValue: number; // Valor total real del JSON
+  totalRealValue: number; 
   rawJsonData: any;
 }
 
@@ -25,16 +25,13 @@ export interface SavedAuditData {
   adjustedQuantities: Record<string, number>;
   comments: Record<string, string>;
   selectedRows: Record<string, boolean>;
-  // Persistimos el estado de ejecución para no tener que re-subir JSONs
   executionData?: any; 
   jsonPrestadorCode?: string | null;
   uniqueUserCount?: number;
-  // Persistimos la Nota Técnica para no depender de Google Sheets al cargar
   pgpData?: any[];
   selectedPrestador?: any;
 }
 
-// Helpers para serializar/deserializar Mapas y Sets (LocalStorage no los soporta nativamente)
 export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
   const obj: any = {};
   data.forEach((monthData, monthKey) => {
@@ -170,7 +167,7 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
     jsonData.usuarios.forEach((user: any) => {
         const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
         if (!userId || userId === '-') return;
-        const processServices = (services: any[], codeField: string, dField: string, isProcedure = false, qtyField?: string, valueField: string = 'vrServicio', unitValueField?: string) => {
+        const processServices = (services: any[], codeField: string, dField: string, isProcedure = false, qtyField?: string, valueField: string = 'vrServicio', unitValueField?: string, type: "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio" = "Procedimiento") => {
             if (!services) return;
             const uniqueProceduresForUser = new Set<string>();
             services.forEach(service => {
@@ -196,7 +193,7 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
                     value = getNumericValue(service[valueField]);
                 }
                 if (!counts.has(code)) {
-                    counts.set(code, { total: 0, diagnoses: new Map(), totalValue: 0, uniqueUsers: new Set() });
+                    counts.set(code, { total: 0, diagnoses: new Map(), totalValue: 0, uniqueUsers: new Set(), type });
                 }
                 const cupData = counts.get(code)!;
                 cupData.total += quantity;
@@ -209,10 +206,10 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
             });
         };
         if (user.servicios) {
-            processServices(user.servicios.consultas, 'codConsulta', 'codDiagnosticoPrincipal', false);
-            processServices(user.servicios.procedimientos, 'codProcedimiento', 'codDiagnosticoPrincipal', true);
-            processServices(user.servicios.medicamentos, 'codTecnologiaSalud', 'codDiagnosticoPrincipal', false, 'cantidadMedicamento', undefined, 'vrUnitarioMedicamento');
-            processServices(user.servicios.otrosServicios, 'codTecnologiaSalud', 'codDiagnosticoPrincipal', false, 'cantidadOS', 'vrServicio');
+            processServices(user.servicios.consultas, 'codConsulta', 'codDiagnosticoPrincipal', false, undefined, 'vrServicio', undefined, 'Consulta');
+            processServices(user.servicios.procedimientos, 'codProcedimiento', 'codDiagnosticoPrincipal', true, undefined, 'vrServicio', undefined, 'Procedimiento');
+            processServices(user.servicios.medicamentos, 'codTecnologiaSalud', 'codDiagnosticoPrincipal', false, 'cantidadMedicamento', undefined, 'vrUnitarioMedicamento', 'Medicamento');
+            processServices(user.servicios.otrosServicios, 'codTecnologiaSalud', 'codDiagnosticoPrincipal', false, 'cantidadOS', 'vrServicio', undefined, 'Otro Servicio');
         }
     });
     return counts;
@@ -258,7 +255,6 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   const [isLoadingProviders, setIsLoadingProviders] = useState<boolean>(true);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
-  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth() + 1));
 
   const filesByMonth = useMemo(() => {
