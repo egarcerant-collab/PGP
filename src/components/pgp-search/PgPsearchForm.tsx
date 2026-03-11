@@ -304,10 +304,7 @@ const PgPsearchForm = forwardRef<
   const handleDownloadExecutionDetail = useCallback(() => {
     if (!showComparison || !pgpData || executionDataByMonth.size === 0) return;
 
-    toast({
-        title: "Generando Detalle de Ejecución",
-        description: "Esto puede tardar unos segundos dependiendo del volumen de datos.",
-    });
+    toast({ title: "Generando Excel...", description: "Cruce de columnas solicitado." });
 
     const pgpCupsMap = new Map<string, { unitValue: number, description: string }>();
     pgpData.forEach(row => {
@@ -318,72 +315,35 @@ const PgPsearchForm = forwardRef<
     });
 
     const exportRows: any[] = [];
-
     executionDataByMonth.forEach((monthData, monthKey) => {
       const monthName = getMonthName(monthKey);
       monthData.rawJsonData.usuarios?.forEach((user: any) => {
         const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
-
-        const processServicesForExport = (services: any[], serviceType: string, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
+        const processServices = (services: any[], serviceType: string, codeField: string, valueField: string, unitValField?: string, qtyF?: string) => {
           if (!services) return;
-          services.forEach((service: any) => {
-            const cupCode = normalizeString(service[codeField]);
-            const pgpInfo = pgpCupsMap.get(cupCode);
-            const valorUnitarioNT = pgpInfo?.unitValue || 0;
-            const descriptionNT = pgpInfo?.description || 'N/A';
-            const cantidadEjecutada = qtyField ? getNumericValue(service[qtyField]) : 1;
-            
-            let valorServicioJSON = 0;
-            if (unitValueField && qtyField) {
-              valorServicioJSON = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
-            } else {
-              valorServicioJSON = getNumericValue(service[valueField]);
-            }
-
-            exportRows.push({
-              Mes: monthName,
-              ID_Usuario: userId,
-              Tipo_Servicio: serviceType,
-              CUPS: cupCode,
-              Descripcion_CUPS: descriptionNT,
-              Fecha_Atencion: service.fechaInicioAtencion || service.fechaAtencion || 'N/A',
-              Diagnostico_Principal: service.codDiagnosticoPrincipal || 'N/A',
-              Valor_Servicio_JSON: valorServicioJSON,
-              Cantidad_Ejecutada: cantidadEjecutada,
-              Valor_Unitario_NT: valorUnitarioNT,
-              Valor_Ejecutado_NT: cantidadEjecutada * valorUnitarioNT
-            });
+          services.forEach((s: any) => {
+            const code = normalizeString(s[codeField]);
+            const pgp = pgpCupsMap.get(code);
+            const qty = qtyF ? getNumericValue(s[qtyF]) : 1;
+            const valJson = (unitValField && qtyF) ? getNumericValue(s[unitValField]) * qty : getNumericValue(s[valueField]);
+            exportRows.push({ Mes: monthName, ID_Usuario: userId, Tipo_Servicio: serviceType, CUPS: code, Descripcion_CUPS: pgp?.description || 'N/A', Fecha_Atencion: s.fechaInicioAtencion || 'N/A', Diagnostico_Principal: s.codDiagnosticoPrincipal || 'N/A', Valor_Servicio_JSON: valJson, Cantidad_Ejecutada: qty, Valor_Unitario_NT: pgp?.unitValue || 0, Valor_Ejecutado_NT: qty * (pgp?.unitValue || 0) });
           });
         };
-
         if (user.servicios) {
-          processServicesForExport(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
-          processServicesForExport(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
-          processServicesForExport(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
-          processServicesForExport(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioOS', 'cantidadOS');
+          processServices(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
+          processServices(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
+          processServices(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
+          processServices(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioOS', 'cantidadOS');
         }
       });
     });
 
-    if (exportRows.length === 0) {
-      toast({
-        title: "No hay datos para exportar",
-        description: "Verifique que los archivos JSON tengan servicios válidos.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     const csv = Papa.unparse(exportRows, { delimiter: ";" });
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `detalle_ejecucion_valorizada_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `detalle_ejecucion_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
     link.click();
-    document.body.removeChild(link);
   }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
 
   const handleSelectPrestador = useCallback(async (prestador: Prestador) => {
@@ -418,10 +378,7 @@ const PgPsearchForm = forwardRef<
       if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== jsonPrestadorCode) {
         const suggested = prestadores.find(p => p['ID DE ZONA'] === jsonPrestadorCode);
         if (suggested) {
-          toast({
-            title: "Nota Técnica Sugerida",
-            description: `Analizaré con esta nota (${suggested.PRESTADOR}) pero puedes escoger otro e inicie el análisis.`,
-          });
+          toast({ title: "Nota Sugerida", description: `Analizaré con (${suggested.PRESTADOR}) automáticamente.` });
           handleSelectPrestador(suggested);
         }
       }
@@ -456,37 +413,18 @@ const PgPsearchForm = forwardRef<
         {showComparison && comparisonSummary && (
           <div className="space-y-12 animate-in fade-in duration-500">
             <div className="grid gap-4 md:grid-cols-3">
-              <StatCard 
-                title="Cobertura Poblacional" 
-                value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`}
-                icon={Users}
-                footer={`Atendidos: ${uniqueUserCount} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`}
-              />
-              <StatCard 
-                title="Ejecución Real (JSON)" 
-                value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))}
-                icon={Wallet}
-                footer="Costo real total de los archivos JSON"
-              />
-              <StatCard 
-                title="Ejecución Valorizada (NT)" 
-                value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))}
-                icon={FileText}
-                footer="Doble clic para descargar detalle Excel"
-                onDoubleClick={handleDownloadExecutionDetail}
-              />
+              <StatCard title="Cobertura Poblacional" value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`} icon={Users} footer={`Atendidos: ${uniqueUserCount} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
+              <StatCard title="Ejecución Real (JSON)" value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))} icon={Wallet} footer="Costo real total de los archivos JSON" />
+              <StatCard title="Ejecución Valorizada (NT)" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar detalle Excel" onDoubleClick={handleDownloadExecutionDetail} />
             </div>
 
             {globalSummary && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Landmark className="h-5 w-5 text-primary" />
-                    Resumen Teórico: Nota Técnica de {selectedPrestador?.PRESTADOR}
-                  </h3>
+                  <h3 className="text-xl font-bold flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Resumen Teórico: Nota Técnica</h3>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <StatCard title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
-                    <StatCard title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado por periodo" />
-                    <StatCard title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado por periodo" />
+                    <StatCard title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado" />
+                    <StatCard title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado" />
                   </div>
                 </div>
             )}
@@ -503,21 +441,15 @@ const PgPsearchForm = forwardRef<
               isGeneratingReport={false}
               selectedPrestador={selectedPrestador}
               initialAuditData={initialAuditData}
+              uniqueUserCount={uniqueUserCount}
+              jsonPrestadorCode={jsonPrestadorCode}
             />
-            <div className="pt-8">
-               <InformePGP data={reportData} comparisonSummary={comparisonSummary} />
-            </div>
+            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
           </div>
         )}
 
         {!showComparison && !loading && (
-           <Alert className="bg-muted/50">
-             <Info className="h-4 w-4" />
-             <AlertTitle>Información</AlertTitle>
-             <AlertDescription>
-               Carga los archivos JSON arriba y selecciona un prestador para iniciar la auditoría comparativa.
-             </AlertDescription>
-           </Alert>
+           <Alert className="bg-muted/50"><Info className="h-4 w-4" /><AlertTitle>Información</AlertTitle><AlertDescription>Carga los archivos JSON arriba y selecciona un prestador para iniciar la auditoría.</AlertDescription></Alert>
         )}
       </CardContent>
     </Card>

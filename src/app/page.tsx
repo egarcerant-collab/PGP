@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { MonthlyExecutionData, SavedAuditData } from "@/components/app/JsonAnalyzerPage";
+import { deserializeExecutionData } from "@/components/app/JsonAnalyzerPage";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import SavedAuditsPage from "@/components/app/SavedAuditsPage";
@@ -26,7 +27,7 @@ const PgPsearchForm = dynamic(
 
 export type CupCountInfo = {
   total: number;
-  diagnoses: Map<string, number>; // Map<diagnosisCode, count>
+  diagnoses: Map<string, number>; 
   totalValue: number;
   uniqueUsers: Set<string>;
 };
@@ -42,12 +43,23 @@ export default function Home() {
 
   const pgpSearchRef = useRef<{ handleSelectPrestador: (prestador: { PRESTADOR: string; WEB: string }) => void } | null>(null);
 
-  const handleAuditLoad = (auditData: SavedAuditData, prestadorName: string, month: string) => {
-    setSavedAuditData(auditData);
+  const handleAuditLoad = useCallback((auditPackage: SavedAuditData, prestadorName: string, month: string) => {
+    // 1. Cargamos los datos de glosa
+    setSavedAuditData(auditPackage);
+    
+    // 2. Si la auditoría tiene datos de ejecución persistidos, los restauramos
+    if (auditPackage.executionData) {
+      const restoredData = deserializeExecutionData(auditPackage.executionData);
+      setExecutionData(restoredData);
+      if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
+      if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
+    }
+
+    // 3. Seleccionamos el prestador en el buscador para gatillar el cruce con la Nota Técnica
     if(pgpSearchRef.current?.handleSelectPrestador) {
       pgpSearchRef.current.handleSelectPrestador({ PRESTADOR: prestadorName, WEB: '' }); 
     }
-  };
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 sm:p-8 md:p-12 bg-background">

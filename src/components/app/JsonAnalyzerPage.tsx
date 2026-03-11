@@ -10,7 +10,7 @@ import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar } from 
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
-import { type CupCountsMap, type CupCountInfo } from '@/app/page';
+import { type CupCountsMap, type CupCountInfo, type ExecutionDataByMonth } from '@/app/page';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -21,15 +21,54 @@ export interface MonthlyExecutionData {
   rawJsonData: any;
 }
 
-export type ExecutionDataByMonth = Map<string, MonthlyExecutionData>;
-
-
-interface FileState {
-  jsonData: any | null;
-  fileName: string | null;
-  prestadorInfo: PrestadorInfo | null;
-  month: string;
+export interface SavedAuditData {
+  adjustedQuantities: Record<string, number>;
+  comments: Record<string, string>;
+  selectedRows: Record<string, boolean>;
+  // Persistimos el estado de ejecución para no tener que re-subir JSONs
+  executionData?: any; 
+  jsonPrestadorCode?: string | null;
+  uniqueUserCount?: number;
 }
+
+// Helpers para serializar/deserializar Mapas y Sets (LocalStorage no los soporta nativamente)
+export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
+  const obj: any = {};
+  data.forEach((monthData, monthKey) => {
+    const serializedCupCounts: any = {};
+    monthData.cupCounts.forEach((cupData, cupKey) => {
+      serializedCupCounts[cupKey] = {
+        ...cupData,
+        diagnoses: Object.fromEntries(cupData.diagnoses),
+        uniqueUsers: Array.from(cupData.uniqueUsers)
+      };
+    });
+    obj[monthKey] = {
+      ...monthData,
+      cupCounts: serializedCupCounts
+    };
+  });
+  return obj;
+};
+
+export const deserializeExecutionData = (obj: any): ExecutionDataByMonth => {
+  const map: ExecutionDataByMonth = new Map();
+  Object.entries(obj).forEach(([monthKey, monthData]: [string, any]) => {
+    const cupCountsMap: CupCountsMap = new Map();
+    Object.entries(monthData.cupCounts).forEach(([cupKey, cupData]: [string, any]) => {
+      cupCountsMap.set(cupKey, {
+        ...cupData,
+        diagnoses: new Map(Object.entries(cupData.diagnoses)),
+        uniqueUsers: new Set(cupData.uniqueUsers)
+      });
+    });
+    map.set(monthKey, {
+      ...monthData,
+      cupCounts: cupCountsMap
+    });
+  });
+  return map;
+};
 
 interface JsonAnalyzerPageProps {
   setExecutionData: (data: ExecutionDataByMonth) => void;
@@ -43,46 +82,27 @@ const normalizeString = (v: unknown): string => String(v ?? "").trim();
 const normalizeDigits = (v: unknown): string => {
     const digitsOnly = String(v ?? "").trim().replace(/\s+/g, "").replace(/\D/g, "");
     if (!digitsOnly) return "";
-    // Convert to number to remove leading zeros, then back to string.
     return parseInt(digitsOnly, 10).toString();
 };
 
-
 export const getNumericValue = (value: any): number => {
     if (value === null || value === undefined || value === '') return 0;
-    
-    // Convert to string and handle potential scientific notation or other formats
     const valueStr = String(value);
-
-    // Clean the string: allow digits, minus sign, comma, and dot.
     const cleanedString = valueStr.replace(/[^0-9,.-]/g, '');
-
     const lastComma = cleanedString.lastIndexOf(',');
     const lastDot = cleanedString.lastIndexOf('.');
-
     let numberString: string;
-
     if (lastComma > lastDot) {
-        // Format is likely 1.234,56 (Latin American). 
-        // Remove dots (thousand separators), replace comma with dot (decimal separator).
         numberString = cleanedString.replace(/\./g, '').replace(',', '.');
     } else {
-        // Format is likely 1,234.56 (American) or a plain number.
-        // Remove commas (thousand separators). The dot is already the decimal separator.
         numberString = cleanedString.replace(/,/g, '');
     }
-      
     const n = parseFloat(numberString);
     return isNaN(n) ? 0 : n;
 };
 
-
 const sanitizeForFilename = (v: string): string =>
-  v
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\w.-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
+  v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
 
 const buildFileNameWithPrestador = (originalName: string, prestadorCodeRaw: string | null): string => {
   const code = sanitizeForFilename(normalizeString(prestadorCodeRaw ?? ''));
@@ -133,12 +153,10 @@ const getCodPrestadorFromJson = (jsonData: any): string | null => {
     prestadorCodeRaw = jsonData.usuarios[0]?.servicios?.consultas?.[0]?.codPrestador;
     if (prestadorCodeRaw) return normalizeDigits(prestadorCodeRaw);
   } catch (e) {}
-  
   try {
      prestadorCodeRaw = jsonData.usuarios[0]?.servicios?.procedimientos?.[0]?.codPrestador;
      if (prestadorCodeRaw) return normalizeDigits(prestadorCodeRaw);
   } catch (e) {}
-
   prestadorCodeRaw = findValueByKeyCaseInsensitive(jsonData, 'codPrestador');
   return prestadorCodeRaw ? normalizeDigits(prestadorCodeRaw) : null;
 };
@@ -146,60 +164,47 @@ const getCodPrestadorFromJson = (jsonData: any): string | null => {
 export const calculateCupCounts = (jsonData: any): CupCountsMap => {
     const counts: CupCountsMap = new Map();
     if (!jsonData || !jsonData.usuarios) return counts;
-
     jsonData.usuarios.forEach((user: any) => {
         const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
         if (!userId || userId === '-') return;
-
         const processServices = (services: any[], codeField: string, dField: string, isProcedure = false, qtyField?: string, valueField: string = 'vrServicio', unitValueField?: string) => {
             if (!services) return;
-
             const uniqueProceduresForUser = new Set<string>();
-
             services.forEach(service => {
                 const code = service[codeField];
                 if (!code) return;
-
                 let quantity = 1;
                 let value = 0;
-
                 if (isProcedure) {
                     const uniqueKey = `${service.codProcedimiento}|${service.fechaInicioAtencion}`;
                     if (uniqueProceduresForUser.has(uniqueKey)) {
-                        quantity = 0; // Don't count frequency for duplicates
+                        quantity = 0;
                     } else {
                         uniqueProceduresForUser.add(uniqueKey);
-                        quantity = 1; // Count frequency for the first time
+                        quantity = 1;
                     }
                 } else if (qtyField) {
                      quantity = getNumericValue(service[qtyField]);
                 }
-                
-                // Always calculate value based on original quantity
                 const valueQuantity = qtyField ? getNumericValue(service[qtyField]) : 1;
                 if (unitValueField) {
                     value = valueQuantity * getNumericValue(service[unitValueField]);
                 } else {
                     value = getNumericValue(service[valueField]);
                 }
-
-
                 if (!counts.has(code)) {
                     counts.set(code, { total: 0, diagnoses: new Map(), totalValue: 0, uniqueUsers: new Set() });
                 }
                 const cupData = counts.get(code)!;
-                
                 cupData.total += quantity;
                 cupData.totalValue += value;
                 cupData.uniqueUsers.add(userId);
-
                 const diagnosis = service[dField];
                 if (diagnosis) {
                     cupData.diagnoses.set(diagnosis, (cupData.diagnoses.get(diagnosis) || 0) + quantity);
                 }
             });
         };
-
         if (user.servicios) {
             processServices(user.servicios.consultas, 'codConsulta', 'codDiagnosticoPrincipal', false);
             processServices(user.servicios.procedimientos, 'codProcedimiento', 'codDiagnosticoPrincipal', true);
@@ -207,22 +212,14 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
             processServices(user.servicios.otrosServicios, 'codTecnologiaSalud', 'codDiagnosticoPrincipal', false, 'cantidadOS', 'vrServicio');
         }
     });
-
     return counts;
 };
 
 const extractMostFrequentMonth = (jsonData: any): string | null => {
     if (!jsonData || !jsonData.usuarios) return null;
     const monthCounts: Record<string, number> = {};
-    
     jsonData.usuarios.forEach((user: any) => {
-        const services = [
-            ...(user.servicios?.consultas || []),
-            ...(user.servicios?.procedimientos || []),
-            ...(user.servicios?.medicamentos || []),
-            ...(user.servicios?.otrosServicios || [])
-        ];
-        
+        const services = [...(user.servicios?.consultas || []), ...(user.servicios?.procedimientos || []), ...(user.servicios?.medicamentos || []), ...(user.servicios?.otrosServicios || [])];
         services.forEach((s: any) => {
             const dateStr = s.fechaInicioAtencion || s.fechaAtencion || s.fechaFactura;
             if (dateStr) {
@@ -231,12 +228,8 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
                     month = new Date(dateStr).getUTCMonth() + 1;
                 } else if (dateStr.includes('/')) {
                     const parts = dateStr.split('/');
-                    if (parts.length >= 2) {
-                        // Assuming common DD/MM/YYYY
-                        month = parseInt(parts[1], 10);
-                    }
+                    if (parts.length >= 2) month = parseInt(parts[1], 10);
                 }
-                
                 if (month && !isNaN(month) && month >= 1 && month <= 12) {
                     const mKey = String(month);
                     monthCounts[mKey] = (monthCounts[mKey] || 0) + 1;
@@ -244,7 +237,6 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
             }
         });
     });
-
     let maxCount = 0;
     let suggestedMonth: string | null = null;
     for (const [m, count] of Object.entries(monthCounts)) {
@@ -255,7 +247,6 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
     }
     return suggestedMonth;
 };
-
 
 export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCode, setUniqueUserCount }: JsonAnalyzerPageProps) {
   const [files, setFiles] = useState<FileState[]>([]);
@@ -276,39 +267,22 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     }, new Map<string, FileState[]>());
   }, [files]);
 
-  const loadedMonthsCount = filesByMonth.size;
-  const filesInCurrentMonth = filesByMonth.get(selectedMonth)?.length || 0;
-  const canUploadForCurrentMonth = true; // Relaxed
-  const canSelectNewMonth = true; // Relaxed
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  useEffect(() => { setIsClient(true); }, []);
 
   const handleLoadProviders = useCallback(async () => {
     setIsLoadingProviders(true);
-    setError(null);
-    toast({ title: "Accediendo a la Base de Datos de Prestadores...", description: "Espere un momento, por favor." });
     try {
       const providersMap = await fetchProvidersData();
-      if (providersMap.size === 0) {
-        throw new Error("No se encontraron datos de prestadores. Verifique la hoja de cálculo.");
-      }
       setProviders(providersMap);
-      toast({ title: "Datos de Prestadores Cargados", description: `Se cargaron ${providersMap.size} registros.` });
     } catch (e: any) {
-      const errorMessage = e instanceof Error ? e.message : 'Ocurrió un error inesperado.';
-      setError('Error al cargar la base de datos de prestadores: ' + errorMessage);
-      toast({ title: "Error al Cargar Datos", description: errorMessage, variant: "destructive" });
+      console.error(e);
     } finally {
       setIsLoadingProviders(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
-    if (isClient) {
-      handleLoadProviders();
-    }
+    if (isClient) handleLoadProviders();
   }, [isClient, handleLoadProviders]);
 
   const getMonthName = (monthNumber: string) => {
@@ -319,136 +293,69 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
   const handleFileLoad = useCallback((loadedFiles: File[]) => {
     setError(null);
-    setShowDuplicateAlert(false);
-
     if (files.length + loadedFiles.length > 50) {
-      toast({ title: 'Límite de archivos excedido', description: `Solo puedes cargar un máximo de 50 archivos.`, variant: 'destructive' });
+      toast({ title: 'Límite excedido', description: `Máximo 50 archivos.`, variant: 'destructive' });
       return;
     }
-
     const filePromises = loadedFiles.map(file => {
       return new Promise<FileState>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e: ProgressEvent<FileReader>) => {
-          if (!e.target?.result) return reject(new Error("No se pudo leer el archivo."));
           try {
             const content = e.target.result as string;
             const parsedJson = JSON.parse(content);
             const prestadorCode = getCodPrestadorFromJson(parsedJson);
             const prestadorInfo = (prestadorCode && providers?.get(prestadorCode)) || null;
             const finalName = buildFileNameWithPrestador(file.name, prestadorCode);
-
-            // Suggest month based on data
             const suggested = extractMostFrequentMonth(parsedJson);
             let targetMonth = suggested || selectedMonth;
-            
             if (suggested) {
-                toast({
-                    title: "Mes detectado",
-                    description: `El archivo ${file.name} se ha asignado a ${getMonthName(suggested)} automáticamente.`,
-                });
+                toast({ title: "Mes detectado", description: `${file.name} asignado a ${getMonthName(suggested)}.` });
             }
-
-            resolve({
-              jsonData: parsedJson,
-              fileName: finalName,
-              prestadorInfo: prestadorInfo,
-              month: targetMonth
-            });
-
+            resolve({ jsonData: parsedJson, fileName: finalName, prestadorInfo: prestadorInfo, month: targetMonth });
           } catch (err: any) {
-            const errorMessage = err instanceof Error ? `Error al parsear ${file.name}: ${err.message}` : `Error inesperado al parsear ${file.name}.`;
-            setError(prev => prev ? `${prev}\n${errorMessage}` : errorMessage);
-            toast({ title: "Error de Archivo", description: errorMessage, variant: "destructive" });
             reject(err);
           }
         };
         reader.readAsText(file);
       });
     });
-
     Promise.all(filePromises).then(processedFiles => {
       setFiles(prevFiles => [...prevFiles, ...processedFiles]);
     });
   }, [providers, toast, selectedMonth, files.length]);
 
   useEffect(() => {
-    // 1. Combine all users from all files into a single list
     const allUsersCombined = files.flatMap(file => file.jsonData?.usuarios || []);
-
-    // 2. Calculate unique user count from the combined list
     const uniqueUserIdentifiers = new Set<string>();
     allUsersCombined.forEach((user: any) => {
         const id = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
-        if (id && id !== '-') {
-            uniqueUserIdentifiers.add(id);
-        }
+        if (id && id !== '-') uniqueUserIdentifiers.add(id);
     });
     setUniqueUserCount(uniqueUserIdentifiers.size);
 
-    // 3. Process data by month
     const dataByMonth: ExecutionDataByMonth = new Map();
-    
     filesByMonth.forEach((monthFiles, month) => {
-        // Create a combined JSON object for the entire month
-        const combinedJsonDataForMonth = {
-            usuarios: monthFiles.flatMap(f => f.jsonData?.usuarios || [])
-        };
-
+        const combinedJsonDataForMonth = { usuarios: monthFiles.flatMap(f => f.jsonData?.usuarios || []) };
         const monthCupCounts = calculateCupCounts(combinedJsonDataForMonth);
         let monthTotalRealValue = 0;
-        monthCupCounts.forEach(cupData => {
-            monthTotalRealValue += cupData.totalValue;
-        });
-
+        monthCupCounts.forEach(cupData => { monthTotalRealValue += cupData.totalValue; });
         const combinedSummary = calculateSummary(combinedJsonDataForMonth);
         combinedSummary.numFactura = monthFiles.length > 1 ? `Combinado (${monthFiles.length} archivos)` : (monthFiles.length > 0 ? monthFiles[0].fileName : 'N/A');
-
-        dataByMonth.set(month, {
-            cupCounts: monthCupCounts,
-            summary: combinedSummary,
-            totalRealValue: monthTotalRealValue,
-            rawJsonData: combinedJsonDataForMonth 
-        });
+        dataByMonth.set(month, { cupCounts: monthCupCounts, summary: combinedSummary, totalRealValue: monthTotalRealValue, rawJsonData: combinedJsonDataForMonth });
     });
-
     setExecutionData(dataByMonth);
-
-    // Check for duplicate NITs and set prestador code
-    const allNits: string[] = [];
-    files.forEach(file => {
-        if (file.jsonData) {
-            const nit = findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado');
-            if (nit) allNits.push(nit);
-        }
-    });
-    const uniqueNits = new Set(allNits);
-    setShowDuplicateAlert(allNits.length > uniqueNits.size);
     setJsonPrestadorCode(files.length > 0 ? getCodPrestadorFromJson(files[0].jsonData) : null);
-
-}, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount]);
-
+  }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount]);
 
   const handleReset = () => {
     setFiles([]);
-    setError(null);
-    setShowDuplicateAlert(false);
     setExecutionData(new Map());
     setJsonPrestadorCode(null);
     setUniqueUserCount(0);
   };
 
-  if (!isClient) {
-    return (
-      <div className="flex items-center justify-center py-6">
-        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-        <p>Cargando analizador...</p>
-      </div>
-    );
-  }
-
-  const isUploadDisabled = isLoadingProviders;
-  const anyFileLoaded = files.length > 0;
+  if (!isClient) return <div className="flex items-center justify-center py-6"><Loader2 className="mr-2 h-6 w-6 animate-spin" /><p>Cargando...</p></div>;
 
   return (
     <div className="w-full space-y-8 mt-4">
@@ -457,9 +364,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle>Carga tus Archivos JSON</CardTitle>
-              <CardDescription>
-                Arrastra varios archivos. El sistema detectará el mes de cada uno automáticamente.
-              </CardDescription>
+              <CardDescription>Arrastra múltiples archivos. El sistema los organizará por mes automáticamente.</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -473,62 +378,32 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
                   ))}
                 </SelectContent>
               </Select>
-              {anyFileLoaded && (
-                <Button onClick={handleReset} variant="outline">
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Limpiar
-                </Button>
-              )}
+              {files.length > 0 && <Button onClick={handleReset} variant="outline"><RefreshCw className="mr-2 h-4 w-4" />Limpiar</Button>}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <FileUpload
-            onFileLoad={handleFileLoad}
-            disabled={isUploadDisabled}
-            loadedFileNames={files.map(f => `${f.fileName} (${getMonthName(f.month)})`)}
-            maxFiles={50}
-          />
+          <FileUpload onFileLoad={handleFileLoad} disabled={isLoadingProviders} loadedFileNames={files.map(f => `${f.fileName} (${getMonthName(f.month)})`)} maxFiles={50} />
         </CardContent>
       </Card>
 
-      {showDuplicateAlert && (
-        <Alert variant="destructive" className="bg-yellow-50 border-yellow-400 text-yellow-800 [&>svg]:text-yellow-800">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Alerta de NIT Duplicado</AlertTitle>
-          <AlertDescription>
-            Has cargado múltiples archivos que pertenecen al mismo prestador (NIT). El análisis combinará los datos.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {anyFileLoaded && (
+      {files.length > 0 && (
         <div className="space-y-6">
           <h3 className="text-xl font-semibold text-center">Resultados por Mes</h3>
           {Array.from(filesByMonth.entries()).map(([month, monthFiles]) => (
             <div key={month} className="space-y-4">
-                <h4 className="text-lg font-bold border-b pb-2 flex items-center">
-                    <Calendar className="mr-2 h-5 w-5 text-primary" />
-                    {getMonthName(month)} ({monthFiles.length} archivos)
-                </h4>
+                <h4 className="text-lg font-bold border-b pb-2 flex items-center"><Calendar className="mr-2 h-5 w-5 text-primary" />{getMonthName(month)} ({monthFiles.length} archivos)</h4>
                 {monthFiles.map((file, index) => file.jsonData && (
                     <Card key={index} className="shadow-md">
                     <Accordion type="single" collapsible>
                         <AccordionItem value={`item-${index}`}>
                         <AccordionTrigger className="p-6">
                             <div className="flex flex-col items-start text-left">
-                            <h4 className="text-lg font-bold text-foreground">
-                                <Building className="inline-block mr-2 h-5 w-5 text-primary" />
-                                {file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador no encontrado para código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                                NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName}
-                            </p>
+                            <h4 className="text-lg font-bold text-foreground"><Building className="inline-block mr-2 h-5 w-5 text-primary" />{file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}</h4>
+                            <p className="text-sm text-muted-foreground">NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName}</p>
                             </div>
                         </AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0">
-                            <DataVisualizer data={file.jsonData} />
-                        </AccordionContent>
+                        <AccordionContent className="p-6 pt-0"><DataVisualizer data={file.jsonData} /></AccordionContent>
                         </AccordionItem>
                     </Accordion>
                     </Card>
@@ -537,14 +412,13 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
           ))}
         </div>
       )}
-
-      {error && (
-        <Alert variant="destructive">
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
     </div>
   );
+}
+
+interface FileState {
+  jsonData: any | null;
+  fileName: string | null;
+  prestadorInfo: PrestadorInfo | null;
+  month: string;
 }

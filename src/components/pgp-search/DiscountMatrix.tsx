@@ -18,9 +18,8 @@ import { ExecutionDataByMonth } from '@/app/page';
 import { CupDetailsModal } from '../report/InformeDesviaciones';
 import type { DeviatedCupInfo, Prestador } from './PgPsearchForm';
 import { Textarea } from '../ui/textarea';
-import { getNumericValue, SavedAuditData } from '../app/JsonAnalyzerPage';
+import { getNumericValue, type SavedAuditData, serializeExecutionData } from '../app/JsonAnalyzerPage';
 import { useToast } from '@/hooks/use-toast';
-
 
 export type ServiceType = "Consulta" | "Procedimiento" | "Medicamento" | "Otro Servicio" | "Desconocido";
 
@@ -34,7 +33,6 @@ export interface DiscountMatrixRow {
     Valor_a_Descontar: number;
     Clasificacion: string;
     Tipo_Servicio: ServiceType;
-    // Add all properties from DeviatedCupInfo to allow passing it to the modal
     expectedFrequency: number;
     realFrequency: number;
     uniqueUsers: number;
@@ -59,163 +57,68 @@ export interface AdjustedData {
 interface DiscountMatrixProps {
   data: DiscountMatrixRow[];
   executionDataByMonth: ExecutionDataByMonth;
-  pgpData: any[]; // PgpRow[]
+  pgpData: any[]; 
   onAdjustmentsChange: (adjustments: AdjustedData) => void;
-  storageKey: string; // Unique key for localStorage
+  storageKey: string; 
   onGenerateReport: () => void;
   isGeneratingReport: boolean;
   selectedPrestador: Prestador | null;
   initialAuditData: SavedAuditData | null;
+  uniqueUserCount: number;
+  jsonPrestadorCode: string | null;
 }
 
-const handleDownloadXls = (data: any[], filename: string) => {
-    const csv = Papa.unparse(data);
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-};
-
-const serviceTypeIcons: Record<ServiceType, React.ElementType> = {
-    "Consulta": Stethoscope,
-    "Procedimiento": Microscope,
-    "Medicamento": Pill,
-    "Otro Servicio": Syringe,
-    "Desconocido": DollarSign,
-};
-
-const CommentModal = ({ open, onOpenChange, onSave, initialComment }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (comment: string) => void;
-  initialComment: string;
-}) => {
-  const [comment, setComment] = useState(initialComment);
-
-  useEffect(() => {
-    if (open) {
-      setComment(initialComment);
-    }
-  }, [open, initialComment]);
-
-  const handleSave = () => {
-    onSave(comment);
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Añadir Comentario de Glosa</DialogTitle>
-          <DialogDescription>
-            Justifica el ajuste realizado en la cantidad validada. Este comentario es obligatorio.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Escribe aquí tu justificación..."
-          className="min-h-[120px]"
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave}>Guardar Comentario</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
+const GLOBAL_STORAGE_KEY = 'dusakawi_audits_v1';
 
 const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ 
     data, 
     executionDataByMonth, 
-    pgpData, 
     onAdjustmentsChange, 
     storageKey, 
     onGenerateReport, 
     isGeneratingReport,
     selectedPrestador,
-    initialAuditData
+    initialAuditData,
+    uniqueUserCount,
+    jsonPrestadorCode
 }) => {
     const [selectedCupForDetail, setSelectedCupForDetail] = useState<DeviatedCupInfo | null>(null);
     const [isCupModalOpen, setIsCupModalOpen] = useState(false);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
-    
-    // States for adjustments
     const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
     const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
-    
-    // Modals
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
-    
-    // Filters
     const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceType | 'all'>('all');
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
 
-
-     // Load initial state from localStorage or initialAuditData
-    const initializeStateFromData = useCallback(() => {
+    useEffect(() => {
         const initialQuantities: Record<string, number> = {};
-        data.forEach(row => {
-            initialQuantities[row.CUPS] = row.Cantidad_Ejecutada;
-        });
+        data.forEach(row => { initialQuantities[row.CUPS] = row.Cantidad_Ejecutada; });
 
         if (initialAuditData) {
             setAdjustedQuantities(initialAuditData.adjustedQuantities || initialQuantities);
             setComments(initialAuditData.comments || {});
             setSelectedRows(initialAuditData.selectedRows || {});
-             toast({
-                title: "Auditoría Cargada",
-                description: "Se restauró el progreso de la auditoría seleccionada.",
-            });
-        } else {
-             try {
-                if (!storageKey) {
-                    setAdjustedQuantities(initialQuantities);
-                    setComments({});
-                    setSelectedRows({});
-                    return;
-                };
-                const savedState = localStorage.getItem(storageKey);
-                if (savedState) {
+        } else if (storageKey) {
+            const savedState = localStorage.getItem(storageKey);
+            if (savedState) {
+                try {
                     const parsed = JSON.parse(savedState);
-                    // Handle cases where saved state might be just the audit object or the wrapped state
-                    const sq = parsed.adjustedQuantities || parsed; 
-                    const sc = parsed.comments || {};
-                    const sr = parsed.selectedRows || {};
-                    
-                    if(sq) setAdjustedQuantities(sq);
-                    if(sc) setComments(sc);
-                    if(sr) setSelectedRows(sr);
-                } else {
-                     setAdjustedQuantities(initialQuantities);
-                     setComments({});
-                     setSelectedRows({});
-                }
-            } catch (error) {
-                console.error("Error loading state from localStorage", error);
+                    if(parsed.adjustedQuantities) setAdjustedQuantities(parsed.adjustedQuantities);
+                    if(parsed.comments) setComments(parsed.comments);
+                    if(parsed.selectedRows) setSelectedRows(parsed.selectedRows);
+                } catch (e) {}
+            } else {
                 setAdjustedQuantities(initialQuantities);
                 setComments({});
                 setSelectedRows({});
             }
         }
-    }, [data, storageKey, initialAuditData, toast]);
-
-    useEffect(() => {
-        initializeStateFromData();
-    }, [initializeStateFromData]);
+    }, [data, storageKey, initialAuditData]);
     
-    // This effect now passes data up
     useEffect(() => {
         const adjustedValues: Record<string, number> = {};
         data.forEach(row => {
@@ -227,79 +130,55 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
       onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments, selectedRows });
     }, [adjustedQuantities, comments, selectedRows, data, onAdjustmentsChange]);
     
-    const handleSaveStateToServer = async () => {
+    const handleSaveState = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
-            toast({
-                title: "No se puede guardar",
-                description: "Se necesita un prestador y datos de ejecución cargados.",
-                variant: "destructive",
-            });
+            toast({ title: "No se puede guardar", description: "Se necesita un prestador y datos cargados.", variant: "destructive" });
             return;
         }
         setIsSaving(true);
         
-        const getMonthName = (monthNumber: string) => {
-            const date = new Date(2024, parseInt(monthNumber) - 1, 1);
-            const name = date.toLocaleString('es-CO', { month: 'long' });
-            return name.charAt(0).toUpperCase() + name.slice(1);
-        };
-        
         const monthKey = executionDataByMonth.keys().next().value;
-        const monthName = getMonthName(monthKey);
+        const date = new Date(2024, parseInt(monthKey) - 1, 1);
+        const monthName = date.toLocaleString('es-CO', { month: 'long' }).charAt(0).toUpperCase() + date.toLocaleString('es-CO', { month: 'long' }).slice(1);
 
-        const auditData = {
+        // Guardamos TODO el paquete de la auditoría para persistencia total
+        const auditPackage: SavedAuditData = {
             adjustedQuantities,
             comments,
-            selectedRows
+            selectedRows,
+            executionData: serializeExecutionData(executionDataByMonth),
+            jsonPrestadorCode,
+            uniqueUserCount
         };
         
         try {
-            // PIBOT: Since server FS is read-only (EROFS), we save to a central localStorage registry
-            const GLOBAL_STORAGE_KEY = 'dusakawi_audits_v1';
             const existingAuditsJson = localStorage.getItem(GLOBAL_STORAGE_KEY);
             const audits = existingAuditsJson ? JSON.parse(existingAuditsJson) : {};
-            
             const auditId = `${selectedPrestador.PRESTADOR}_${monthName}`.replace(/\s+/g, '_').toLowerCase();
+            
             audits[auditId] = {
                 id: auditId,
-                auditData,
+                auditData: auditPackage,
                 prestadorName: selectedPrestador.PRESTADOR,
                 month: monthName,
                 timestamp: new Date().toISOString()
             };
             
             localStorage.setItem(GLOBAL_STORAGE_KEY, JSON.stringify(audits));
-            
-            // Also save to individual key for the current session consistency
-            localStorage.setItem(storageKey, JSON.stringify(auditData));
+            if (storageKey) localStorage.setItem(storageKey, JSON.stringify(auditPackage));
 
-            toast({
-                title: "Auditoría Guardada",
-                description: `La auditoría para ${selectedPrestador.PRESTADOR} se guardó localmente en el navegador de forma exitosa.`,
-            });
+            toast({ title: "Auditoría Guardada", description: `Los datos de ${selectedPrestador.PRESTADOR} están seguros.` });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Error desconocido al guardar.";
-            console.error("Error saving audit state:", error);
-            toast({
-                title: "Error al Guardar",
-                description: `No se pudo guardar la auditoría: ${errorMessage}`,
-                variant: "destructive",
-            });
+            toast({ title: "Error al Guardar", description: "No se pudo guardar localmente.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleSaveStateToLocal = () => {
-        handleSaveStateToServer();
-    };
-    
     const handleClearAdjustments = () => {
         if (storageKey) localStorage.removeItem(storageKey);
         const initialQuantities: Record<string, number> = {};
-        data.forEach(row => {
-            initialQuantities[row.CUPS] = row.Cantidad_Ejecutada;
-        });
+        data.forEach(row => { initialQuantities[row.CUPS] = row.Cantidad_Ejecutada; });
         setAdjustedQuantities(initialQuantities);
         setComments({});
         setSelectedRows({});
@@ -319,20 +198,8 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                     if (!services) return;
                     services.forEach((service: any) => {
                         if (service[codeField] === cupInfo.CUPS) {
-                            let serviceValue = 0;
-                             if (unitValueField && qtyField) {
-                                serviceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
-                            } else {
-                                serviceValue = getNumericValue(service[valueField]);
-                            }
-
-                            details.push({
-                                tipoServicio: type,
-                                idUsuario: userId,
-                                fechaAtencion: service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
-                                diagnosticoPrincipal: service.codDiagnosticoPrincipal,
-                                valorServicio: serviceValue,
-                            });
+                            let serviceValue = (unitValueField && qtyField) ? getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]) : getNumericValue(service[valueField]);
+                            details.push({ tipoServicio: type, idUsuario: userId, fechaAtencion: service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A', diagnosticoPrincipal: service.codDiagnosticoPrincipal, valorServicio: serviceValue });
                         }
                     });
                 };
@@ -347,247 +214,36 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         setIsCupModalOpen(true);
     };
 
-
     const handleSelectAll = (checked: boolean) => {
         const newSelections: Record<string, boolean> = {};
-        filteredData.forEach(row => {
-            newSelections[row.CUPS] = checked;
-        });
+        filteredData.forEach(row => { newSelections[row.CUPS] = checked; });
         setSelectedRows(prev => ({...prev, ...newSelections}));
     };
 
-    const handleSelectRow = (cup: string, checked: boolean) => {
-        setSelectedRows(prev => ({ ...prev, [cup]: checked }));
-    };
+    const handleSelectRow = (cup: string, checked: boolean) => setSelectedRows(prev => ({ ...prev, [cup]: checked }));
     
     const handleQuantityChange = (cup: string, value: string) => {
         const numericValue = parseInt(value.replace(/[^0-9]+/g,""), 10) || 0;
         const rowData = data.find(r => r.CUPS === cup);
-        if (rowData && numericValue > rowData.Cantidad_Ejecutada) {
-            setAdjustedQuantities(prev => ({ ...prev, [cup]: rowData.Cantidad_Ejecutada }));
-        } else {
-            setAdjustedQuantities(prev => ({ ...prev, [cup]: numericValue }));
+        setAdjustedQuantities(prev => ({ ...prev, [cup]: rowData && numericValue > rowData.Cantidad_Ejecutada ? rowData.Cantidad_Ejecutada : numericValue }));
+    };
+    
+    const handleSaveComment = (comment: string) => { if (currentCupForComment) setComments(prev => ({ ...prev, [currentCupForComment]: comment })); };
+    
+    const totalEjecutadoBruto = useMemo(() => filteredData.reduce((sum, row) => sum + row.Valor_Ejecutado, 0), [filteredData]);
+    const descuentoAplicado = useMemo(() => data.reduce((sum, row) => {
+        if (selectedRows[row.CUPS]) {
+             const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
+             const discountValue = row.Valor_Ejecutado - (validatedQuantity * row.Valor_Unitario);
+             return sum + (discountValue > 0 ? discountValue : 0);
         }
-    };
+        return sum;
+    }, 0), [data, selectedRows, adjustedQuantities]);
     
-    const handleSaveComment = (comment: string) => {
-      if (currentCupForComment) {
-        setComments(prev => ({ ...prev, [currentCupForComment]: comment }));
-      }
-    };
-    
-    const totalEjecutadoBruto = useMemo(() => {
-        return filteredData.reduce((sum, row) => sum + row.Valor_Ejecutado, 0);
-    }, [filteredData]);
-    
-    const descuentoAplicado = useMemo(() => {
-      return data.reduce((sum, row) => {
-          if (selectedRows[row.CUPS]) {
-               const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-               const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
-               const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
-               return sum + (discountValue > 0 ? discountValue : 0);
-          }
-          return sum;
-      }, 0);
-    }, [data, selectedRows, adjustedQuantities]);
-    
-    const valorNetoFinal = useMemo(() => {
-        const totalBrutoAll = data.reduce((sum, row) => sum + row.Valor_Ejecutado, 0);
-        return totalBrutoAll - descuentoAplicado;
-    }, [data, descuentoAplicado]);
-
-
+    const valorNetoFinal = useMemo(() => data.reduce((sum, row) => sum + row.Valor_Ejecutado, 0) - descuentoAplicado, [data, descuentoAplicado]);
     const allSelected = useMemo(() => filteredData.length > 0 && filteredData.every(row => selectedRows[row.CUPS]), [filteredData, selectedRows]);
     
-    if (!data || data.length === 0) {
-        return null;
-    }
-
-    const getRowClass = (classification: string) => {
-        switch (classification) {
-            case "Sobre-ejecutado": return "text-red-600";
-            case "Sub-ejecutado": return "text-blue-600";
-            case "Inesperado": return "text-purple-600";
-            default: return "";
-        }
-    };
-    
-    const generateDownloadData = () => {
-        const discountedServices: any[] = [];
-        const discountedCupsInfo = new Map<string, { discountRatio: number; comment: string; description: string }>();
-        Object.entries(selectedRows).forEach(([cup, isSelected]) => {
-            if (isSelected) {
-                const rowData = data.find(r => r.CUPS === cup);
-                if (rowData) {
-                    const executedQty = rowData.Cantidad_Ejecutada;
-                    const validatedQty = adjustedQuantities[cup] ?? executedQty;
-                    
-                    if (executedQty > 0 && validatedQty < executedQty) {
-                         const ratio = (executedQty - validatedQty) / executedQty;
-                         discountedCupsInfo.set(cup, {
-                            discountRatio: ratio,
-                            comment: comments[cup] || '',
-                            description: rowData.Descripcion || 'N/A'
-                        });
-                    }
-                }
-            }
-        });
-
-        if (discountedCupsInfo.size === 0) {
-            toast({
-                title: "Sin descuentos para descargar",
-                description: "Ajusta la 'Cantidad Validada' a un valor menor que la 'Cantidad Ejecutada' y selecciona las filas para generar el desglose.",
-            });
-            return [];
-        }
-
-        executionDataByMonth.forEach((monthData) => {
-            monthData.rawJsonData.usuarios?.forEach((user: any) => {
-                const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
-
-                const processServicesForDiscount = (services: any[], serviceType: ServiceType, codeField: string, valueField: string, unitValueField?: string, qtyField?: string) => {
-                    if (!services) return;
-
-                    services.forEach((service: any) => {
-                        const cupCode = service[codeField];
-                        if (discountedCupsInfo.has(cupCode)) {
-                            const info = discountedCupsInfo.get(cupCode)!;
-
-                            let originalServiceValue = 0;
-                            if (unitValueField && qtyField) {
-                                originalServiceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
-                            } else {
-                                originalServiceValue = getNumericValue(service[valueField]);
-                            }
-                            
-                            const discountAmount = originalServiceValue * info.discountRatio;
-                            const recognizedValue = originalServiceValue - discountAmount;
-
-                            if (discountAmount > 0) {
-                                discountedServices.push({
-                                    'ID Usuario': userId,
-                                    'CUPS': cupCode,
-                                    'Descripción': info.description,
-                                    'Tipo Servicio': serviceType,
-                                    'Fecha Atención': service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
-                                    'Diagnóstico Principal': service.codDiagnosticoPrincipal,
-                                    'Valor Original Servicio': originalServiceValue,
-                                    'Valor a Descontar': discountAmount,
-                                    'Valor Final Reconocido': recognizedValue,
-                                    'Comentario de Glosa': info.comment
-                                });
-                            }
-                        }
-                    });
-                };
-
-                if (user.servicios) {
-                    processServicesForDiscount(user.servicios.consultas, 'Consulta', 'codConsulta', 'vrServicio');
-                    processServicesForDiscount(user.servicios.procedimientos, 'Procedimiento', 'codProcedimiento', 'vrServicio');
-                    processServicesForDiscount(user.servicios.medicamentos, 'Medicamento', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioMedicamento', 'cantidadMedicamento');
-                    processServicesForDiscount(user.servicios.otrosServicios, 'Otro Servicio', 'codTecnologiaSalud', 'vrServicio', 'vrUnitarioOS', 'cantidadOS');
-                }
-            });
-        });
-
-        return discountedServices;
-    };
-    
-    
-    const renderTable = (tableData: DiscountMatrixRow[]) => (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead className="w-12 px-2">
-                        <Checkbox 
-                            checked={allSelected} 
-                            onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                            aria-label="Seleccionar todo"
-                        />
-                    </TableHead>
-                    <TableHead className="w-28">CUPS</TableHead>
-                    <TableHead>Tipo Servicio</TableHead>
-                    <TableHead className="max-w-[150px]">Descripción</TableHead>
-                    <TableHead className="text-center">Cant. Esperada</TableHead>
-                    <TableHead className="text-center">Cant. Ejecutada</TableHead>
-                    <TableHead className="text-center w-32">Cant. Validada</TableHead>
-                    <TableHead className="text-right">Valor Ejecutado</TableHead>
-                    <TableHead className="text-right">Valor a Reconocer</TableHead>
-                    <TableHead className="text-right text-red-500 font-bold w-40">Valor a Descontar</TableHead>
-                    <TableHead className="w-24 text-center">Glosa</TableHead>
-
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {tableData.map((row, index) => {
-                    const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                    const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
-                    const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
-                    const finalDiscount = discountValue > 0 ? discountValue : 0;
-                    
-                    const commentIsRequired = validatedQuantity !== row.Cantidad_Ejecutada;
-                    const comment = comments[row.CUPS] || '';
-                    const Icon = serviceTypeIcons[row.Tipo_Servicio] || DollarSign;
-                    
-                    return (
-                        <TableRow key={index} className={getRowClass(row.Clasificacion)}>
-                            <TableCell className="px-2">
-                               <Checkbox 
-                                    checked={selectedRows[row.CUPS] || false}
-                                    onCheckedChange={(checked) => handleSelectRow(row.CUPS, Boolean(checked))}
-                               />
-                            </TableCell>
-                            <TableCell>
-                                <Button variant="link" className="p-0 h-auto font-mono text-sm" onClick={() => handleCupClick(row)}>
-                                    {row.CUPS}
-                                </Button>
-                            </TableCell>
-                            <TableCell className="text-xs">
-                                <div className="flex items-center gap-2">
-                                    <Icon className="h-4 w-4 text-muted-foreground" />
-                                    <span>{row.Tipo_Servicio}</span>
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-xs max-w-[150px] truncate" title={row.Descripcion}>{row.Descripcion}</TableCell>
-                            <TableCell className="text-center">{row.expectedFrequency.toFixed(0)}</TableCell>
-                            <TableCell className="text-center">{row.Cantidad_Ejecutada}</TableCell>
-                             <TableCell className="text-center">
-                                <Input
-                                    type="text"
-                                    value={new Intl.NumberFormat('es-CO').format(validatedQuantity)}
-                                    onChange={(e) => handleQuantityChange(row.CUPS, e.target.value)}
-                                    className="h-8 text-center border-blue-200 focus:border-blue-500 focus:ring-blue-500"
-                                />
-                            </TableCell>
-                            <TableCell className="text-right">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
-                            <TableCell className="text-right text-green-600">{formatCurrency(recalculatedValorReconocer)}</TableCell>
-                            <TableCell className="text-right font-bold text-red-600">
-                                 {formatCurrency(finalDiscount)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                                {commentIsRequired && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      onClick={() => {
-                                        setCurrentCupForComment(row.CUPS);
-                                        setIsCommentModalOpen(true);
-                                      }}
-                                    >
-                                        <MessageSquarePlus className={cn("h-5 w-5", comment ? "text-blue-500" : "text-muted-foreground")} />
-                                    </Button>
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    )
-                })}
-            </TableBody>
-        </Table>
-    );
-    
-    const serviceTypes: ServiceType[] = ["Consulta", "Procedimiento", "Medicamento", "Otro Servicio"];
+    if (!data || data.length === 0) return null;
 
     return (
         <>
@@ -595,115 +251,88 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 <CardHeader>
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <CardTitle className="flex items-center">
-                                <DollarSign className="h-6 w-6 mr-3 text-red-500" />
-                                Matriz de Descuentos (Análisis de Valor)
-                            </CardTitle>
-                            <CardDescription>
-                               Análisis financiero interactivo para calcular los descuentos por sobre-ejecución e imprevistos.
-                            </CardDescription>
+                            <CardTitle className="flex items-center"><DollarSign className="h-6 w-6 mr-3 text-red-500" />Matriz de Descuentos</CardTitle>
+                            <CardDescription>Ajusta las cantidades validadas para calcular los descuentos por auditoría.</CardDescription>
                         </div>
-                         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                             <div className="flex items-center gap-2">
-                                <Button onClick={handleSaveStateToLocal} variant="default" size="sm" className="h-8" disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Guardar Auditoría
-                                </Button>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" className="h-8">
-                                            <Eraser className="mr-2 h-4 w-4" />
-                                            Limpiar
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Esta acción eliminará permanentemente todos los ajustes que has realizado en esta matriz.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleClearAdjustments}>Sí, Limpiar</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-
-                                <Button onClick={() => {
-                                    const downloadData = generateDownloadData();
-                                    if(downloadData.length > 0) {
-                                      handleDownloadXls(downloadData, 'desglose_descuentos.xls');
-                                    }
-                                  }} variant="outline" size="sm" className="h-8">
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Descargar
-                                </Button>
-                            </div>
-                             <Button onClick={onGenerateReport} disabled={isGeneratingReport || !data.length} variant="secondary" size="sm" className="h-8 mt-2 sm:mt-0">
-                                {isGeneratingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                Informe Final
+                         <div className="flex items-center gap-2">
+                            <Button onClick={handleSaveState} variant="default" size="sm" className="h-8" disabled={isSaving}>
+                                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Guardar Auditoría
                             </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-8"><Eraser className="mr-2 h-4 w-4" />Limpiar</Button></AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>¿Estás seguro?</AlertDialogTitle><AlertDialogDescription>Se borrarán todos los ajustes realizados.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearAdjustments}>Sí, Limpiar</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     </div>
                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-right w-full mt-4">
-                        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><WalletCards className="h-4 w-4"/> Valor Ejecutado Total</p>
-                            <p className="text-lg font-bold text-blue-600">{formatCurrency(totalEjecutadoBruto)}</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><TrendingDown className="h-4 w-4"/> Descuento Aplicado</p>
-                            <p className="text-lg font-bold text-red-500">{formatCurrency(descuentoAplicado)}</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200">
-                            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><CheckCircle className="h-4 w-4"/> Valor Neto Final</p>
-                            <p className="text-lg font-bold text-green-600">{formatCurrency(valorNetoFinal)}</p>
-                        </div>
-                    </div>
-                     <div className="flex flex-wrap items-center gap-2 pt-4">
-                        <Filter className="h-4 w-4 text-muted-foreground" />
-                        <Button 
-                            variant={serviceTypeFilter === 'all' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setServiceTypeFilter('all')}
-                        >
-                            Todos
-                        </Button>
-                        {serviceTypes.map(type => (
-                             <Button 
-                                key={type}
-                                variant={serviceTypeFilter === type ? 'default' : 'outline'}
-                                size="sm"
-                                onClick={() => setServiceTypeFilter(type)}
-                            >
-                                {React.createElement(serviceTypeIcons[type], { className: "mr-2 h-4 w-4"})}
-                                {type}s
-                            </Button>
-                        ))}
+                        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200"><p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><WalletCards className="h-4 w-4"/> Valor Ejecutado Total</p><p className="text-lg font-bold text-blue-600">{formatCurrency(totalEjecutadoBruto)}</p></div>
+                        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200"><p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><TrendingDown className="h-4 w-4"/> Descuento Aplicado</p><p className="text-lg font-bold text-red-500">{formatCurrency(descuentoAplicado)}</p></div>
+                        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200"><p className="text-xs text-muted-foreground flex items-center justify-end gap-1"><CheckCircle className="h-4 w-4"/> Valor Neto Final</p><p className="text-lg font-bold text-green-600">{formatCurrency(valorNetoFinal)}</p></div>
                     </div>
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="h-72">
-                        {renderTable(filteredData)}
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-12 px-2"><Checkbox checked={allSelected} onCheckedChange={(checked) => handleSelectAll(Boolean(checked))} /></TableHead>
+                                    <TableHead className="w-28">CUPS</TableHead>
+                                    <TableHead>Tipo</TableHead>
+                                    <TableHead>Descripción</TableHead>
+                                    <TableHead className="text-center">Cant. Esperada</TableHead>
+                                    <TableHead className="text-center">Cant. Ejecutada</TableHead>
+                                    <TableHead className="text-center w-32">Cant. Validada</TableHead>
+                                    <TableHead className="text-right">Valor Ejecutado</TableHead>
+                                    <TableHead className="text-right">A Reconocer</TableHead>
+                                    <TableHead className="text-right text-red-500 font-bold">Descuento</TableHead>
+                                    <TableHead className="w-24 text-center">Glosa</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredData.map((row, index) => {
+                                    const validatedQty = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
+                                    const recalculatedValue = validatedQty * row.Valor_Unitario;
+                                    const discount = Math.max(0, row.Valor_Ejecutado - recalculatedValue);
+                                    const comment = comments[row.CUPS] || '';
+                                    return (
+                                        <TableRow key={index}>
+                                            <TableCell className="px-2"><Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => handleSelectRow(row.CUPS, Boolean(checked))} /></TableCell>
+                                            <TableCell><Button variant="link" className="p-0 h-auto font-mono text-sm" onClick={() => handleCupClick(row)}>{row.CUPS}</Button></TableCell>
+                                            <TableCell className="text-xs">{row.Tipo_Servicio}</TableCell>
+                                            <TableCell className="text-xs max-w-[150px] truncate" title={row.Descripcion}>{row.Descripcion}</TableCell>
+                                            <TableCell className="text-center">{row.expectedFrequency.toFixed(0)}</TableCell>
+                                            <TableCell className="text-center">{row.Cantidad_Ejecutada}</TableCell>
+                                             <TableCell className="text-center"><Input type="text" value={new Intl.NumberFormat('es-CO').format(validatedQty)} onChange={(e) => handleQuantityChange(row.CUPS, e.target.value)} className="h-8 text-center" /></TableCell>
+                                            <TableCell className="text-right">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
+                                            <TableCell className="text-right text-green-600">{formatCurrency(recalculatedValue)}</TableCell>
+                                            <TableCell className="text-right font-bold text-red-600">{formatCurrency(discount)}</TableCell>
+                                            <TableCell className="text-center"><Button variant="ghost" size="icon" onClick={() => { setCurrentCupForComment(row.CUPS); setIsCommentModalOpen(true); }}><MessageSquarePlus className={cn("h-5 w-5", comment ? "text-blue-500" : "text-muted-foreground")} /></Button></TableCell>
+                                        </TableRow>
+                                    )
+                                })}
+                            </TableBody>
+                        </Table>
                     </ScrollArea>
                 </CardContent>
             </Card>
-
-            <CupDetailsModal
-                cup={selectedCupForDetail}
-                open={isCupModalOpen}
-                onOpenChange={setIsCupModalOpen}
-                executionDetails={executionDetails}
-            />
-
-            <CommentModal
-              open={isCommentModalOpen}
-              onOpenChange={setIsCommentModalOpen}
-              initialComment={currentCupForComment ? comments[currentCupForComment] || '' : ''}
-              onSave={handleSaveComment}
-            />
+            <CupDetailsModal cup={selectedCupForDetail} open={isCupModalOpen} onOpenChange={setIsCupModalOpen} executionDetails={executionDetails} />
+            <CommentModal open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen} initialComment={currentCupForComment ? comments[currentCupForComment] || '' : ''} onSave={handleSaveComment} />
         </>
     );
+};
+
+const CommentModal = ({ open, onOpenChange, onSave, initialComment }: { open: boolean; onOpenChange: (open: boolean) => void; onSave: (comment: string) => void; initialComment: string; }) => {
+  const [comment, setComment] = useState(initialComment);
+  useEffect(() => { if (open) setComment(initialComment); }, [open, initialComment]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent><DialogHeader><DialogTitle>Comentario de Glosa</DialogTitle></DialogHeader><Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Justificación..." className="min-h-[120px]" /><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { onSave(comment); onOpenChange(false); }}>Guardar</Button></DialogFooter></DialogContent>
+    </Dialog>
+  );
 };
 
 export default DiscountMatrix;
