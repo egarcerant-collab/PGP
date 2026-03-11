@@ -12,15 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search, Play } from "lucide-react";
+import { Loader2, Search, Play, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
 
 interface AuditFile {
+    id: string;
     month: string;
     prestador: string;
     path: string;
+    auditData: SavedAuditData;
 }
 
 interface GroupedAudits {
@@ -34,22 +37,27 @@ interface AuditSearchProps {
 export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [audits, setAudits] = useState<GroupedAudits>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedAuditPath, setSelectedAuditPath] = useState<string | null>(null);
+    const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
     const [isContinuing, setIsContinuing] = useState(false);
     const { toast } = useToast();
 
     const fetchAudits = useCallback(async () => {
         setIsLoading(true);
         try {
-            const response = await fetch('/api/list-audits');
-            if (!response.ok) {
-                // It's ok if it fails, maybe the dir doesn't exist yet
-                setAudits({});
-                return;
-            }
-            const data: AuditFile[] = await response.json();
+            // PIBOT: Use LocalStorage shared registry instead of server API
+            const GLOBAL_STORAGE_KEY = 'dusakawi_audits_v1';
+            const auditsJson = localStorage.getItem(GLOBAL_STORAGE_KEY);
+            const savedAudits = auditsJson ? JSON.parse(auditsJson) : {};
             
-            const grouped = data.reduce((acc, audit) => {
+            const auditList: AuditFile[] = Object.values(savedAudits).map((a: any) => ({
+                id: a.id,
+                month: a.month,
+                prestador: a.prestadorName,
+                path: 'local',
+                auditData: a.auditData
+            }));
+            
+            const grouped = auditList.reduce((acc, audit) => {
                 const { month } = audit;
                 if (!acc[month]) {
                     acc[month] = [];
@@ -60,24 +68,19 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
 
             setAudits(grouped);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-            toast({
-                title: "Error al cargar auditorías",
-                description: `No se pudo obtener la lista de auditorías: ${errorMessage}`,
-                variant: "destructive",
-            });
+            console.error("Error al cargar auditorías locales:", error);
             setAudits({});
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, []);
 
     useEffect(() => {
         fetchAudits();
     }, [fetchAudits]);
 
     const handleContinueAudit = async () => {
-        if (!selectedAuditPath) {
+        if (!selectedAuditId) {
              toast({
                 title: "No se ha seleccionado una auditoría",
                 description: "Por favor, elige una auditoría del menú desplegable.",
@@ -87,26 +90,19 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         }
         setIsContinuing(true);
         try {
-            // The path is already correct from the SelectItem value.
-            const response = await fetch(selectedAuditPath);
-            if (!response.ok) {
-                throw new Error(`No se pudo cargar el archivo de auditoría desde ${selectedAuditPath}`);
-            }
-            const auditData: SavedAuditData = await response.json();
+            const GLOBAL_STORAGE_KEY = 'dusakawi_audits_v1';
+            const auditsJson = localStorage.getItem(GLOBAL_STORAGE_KEY);
+            const savedAudits = auditsJson ? JSON.parse(auditsJson) : {};
+            const selected = savedAudits[selectedAuditId];
 
-            // We need to extract the prestador and month from the path for the onAuditLoad function
-            const pathParts = selectedAuditPath.split('/');
-            const month = pathParts[pathParts.length - 2];
-            const prestadorName = pathParts[pathParts.length - 1].replace('.json', '').replace(/_/g, ' ');
-
-            if (auditData && prestadorName && month) {
-                onAuditLoad(auditData, prestadorName, month);
+            if (selected && selected.auditData) {
+                onAuditLoad(selected.auditData, selected.prestadorName, selected.month);
                 toast({
                     title: "Auditoría Cargada",
-                    description: `Se ha cargado la auditoría para ${prestadorName} del mes de ${month}.`
+                    description: `Se ha cargado la auditoría para ${selected.prestadorName} del mes de ${selected.month}.`
                 });
             } else {
-                 throw new Error("El archivo de auditoría no tiene el formato esperado o faltan datos.");
+                 throw new Error("No se pudo encontrar la auditoría seleccionada.");
             }
 
         } catch (error) {
@@ -125,7 +121,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     return (
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
              <Select 
-                onValueChange={setSelectedAuditPath} 
+                onValueChange={setSelectedAuditId} 
                 disabled={isLoading || Object.keys(audits).length === 0}
             >
                 <SelectTrigger className="w-full sm:w-[350px]">
@@ -138,8 +134,8 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                             <SelectGroup key={month}>
                                 <SelectLabel>{month}</SelectLabel>
                                 {files.map((file) => (
-                                    <SelectItem key={file.path} value={`/informes/${file.month}/${file.prestador}.json`}>
-                                        {file.prestador.replace(/_/g, ' ')}
+                                    <SelectItem key={file.id} value={file.id}>
+                                        {file.prestador}
                                     </SelectItem>
                                 ))}
                             </SelectGroup>
@@ -152,9 +148,13 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 </SelectContent>
             </Select>
 
-            <Button onClick={handleContinueAudit} disabled={!selectedAuditPath || isContinuing}>
+            <Button onClick={handleContinueAudit} disabled={!selectedAuditId || isContinuing}>
                 {isContinuing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                 Continuar Auditoría
+            </Button>
+            
+            <Button variant="outline" size="icon" onClick={fetchAudits} title="Refrescar lista">
+                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             </Button>
         </div>
     );

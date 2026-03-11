@@ -188,7 +188,12 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 };
                 const savedState = localStorage.getItem(storageKey);
                 if (savedState) {
-                    const { adjustedQuantities: sq, comments: sc, selectedRows: sr } = JSON.parse(savedState);
+                    const parsed = JSON.parse(savedState);
+                    // Handle cases where saved state might be just the audit object or the wrapped state
+                    const sq = parsed.adjustedQuantities || parsed; 
+                    const sc = parsed.comments || {};
+                    const sr = parsed.selectedRows || {};
+                    
                     if(sq) setAdjustedQuantities(sq);
                     if(sc) setComments(sc);
                     if(sr) setSelectedRows(sr);
@@ -249,35 +254,35 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         };
         
         try {
-            const response = await fetch('/api/save-audit', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    auditData,
-                    prestadorName: selectedPrestador.PRESTADOR,
-                    month: monthName,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                // If the error message is descriptive, use it.
-                throw new Error(result.message || 'Error en el servidor al intentar guardar el archivo.');
-            }
+            // PIBOT: Since server FS is read-only (EROFS), we save to a central localStorage registry
+            const GLOBAL_STORAGE_KEY = 'dusakawi_audits_v1';
+            const existingAuditsJson = localStorage.getItem(GLOBAL_STORAGE_KEY);
+            const audits = existingAuditsJson ? JSON.parse(existingAuditsJson) : {};
             
+            const auditId = `${selectedPrestador.PRESTADOR}_${monthName}`.replace(/\s+/g, '_').toLowerCase();
+            audits[auditId] = {
+                id: auditId,
+                auditData,
+                prestadorName: selectedPrestador.PRESTADOR,
+                month: monthName,
+                timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem(GLOBAL_STORAGE_KEY, JSON.stringify(audits));
+            
+            // Also save to individual key for the current session consistency
+            localStorage.setItem(storageKey, JSON.stringify(auditData));
+
             toast({
                 title: "Auditoría Guardada",
-                description: result.message || "La auditoría se guardó correctamente en el servidor.",
+                description: `La auditoría para ${selectedPrestador.PRESTADOR} se guardó localmente en el navegador de forma exitosa.`,
             });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Error desconocido al comunicarse con el servidor.";
-            console.error("Error saving audit state to server:", error);
+            const errorMessage = error instanceof Error ? error.message : "Error desconocido al guardar.";
+            console.error("Error saving audit state:", error);
             toast({
                 title: "Error al Guardar",
-                description: `No se pudo guardar la auditoría en el servidor: ${errorMessage}`,
+                description: `No se pudo guardar la auditoría: ${errorMessage}`,
                 variant: "destructive",
             });
         } finally {
@@ -286,26 +291,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     };
 
     const handleSaveStateToLocal = () => {
-        if (!storageKey) return;
-        try {
-            const stateToSave = {
-                adjustedQuantities,
-                comments,
-                selectedRows,
-            };
-            localStorage.setItem(storageKey, JSON.stringify(stateToSave));
-            toast({
-                title: "Progreso Guardado Localmente",
-                description: "El progreso de la auditoría se ha guardado en tu navegador.",
-            });
-        } catch (error) {
-            console.error("Error saving state to localStorage", error);
-            toast({
-                title: "Error al Guardar Localmente",
-                description: "No se pudo guardar el progreso en el navegador.",
-                variant: "destructive",
-            });
-        }
+        handleSaveStateToServer();
     };
     
     const handleClearAdjustments = () => {
@@ -619,13 +605,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         </div>
                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                              <div className="flex items-center gap-2">
-                                <Button onClick={handleSaveStateToLocal} variant="outline" size="sm" className="h-8">
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Guardar Progreso Local
-                                </Button>
-                                <Button onClick={handleSaveStateToServer} variant="default" size="sm" className="h-8" disabled={isSaving}>
+                                <Button onClick={handleSaveStateToLocal} variant="default" size="sm" className="h-8" disabled={isSaving}>
                                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Guardar Auditoría Servidor
+                                    Guardar Auditoría
                                 </Button>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
