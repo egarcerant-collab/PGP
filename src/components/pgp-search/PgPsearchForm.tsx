@@ -256,6 +256,15 @@ const PgPsearchForm = forwardRef<
     adjustedQuantities: {}, adjustedValues: {}, comments: {}, selectedRows: {}
   });
 
+  // Efecto para cargar data restaurada si existe en el paquete inicial
+  useEffect(() => {
+    if (initialAuditData?.pgpData) {
+      setPgpData(initialAuditData.pgpData);
+      setSelectedPrestador(initialAuditData.selectedPrestador || null);
+      setIsDataLoaded(true);
+    }
+  }, [initialAuditData]);
+
   const showComparison = isDataLoaded && executionDataByMonth.size > 0;
 
   useEffect(() => {
@@ -347,6 +356,9 @@ const PgPsearchForm = forwardRef<
   }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
 
   const handleSelectPrestador = useCallback(async (prestador: Prestador) => {
+    // Si el prestador no tiene URL de web (caso de restauración dummy), no intentamos fetch
+    if (!prestador.WEB) return;
+
     setLoading(true);
     try {
       const data = await fetchSheetData<PgpRow>(prestador.WEB);
@@ -374,7 +386,7 @@ const PgPsearchForm = forwardRef<
   }, []);
 
   useEffect(() => {
-    if (jsonPrestadorCode && prestadores.length > 0 && !loading) {
+    if (jsonPrestadorCode && prestadores.length > 0 && !loading && !isDataLoaded) {
       if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== jsonPrestadorCode) {
         const suggested = prestadores.find(p => p['ID DE ZONA'] === jsonPrestadorCode);
         if (suggested) {
@@ -383,7 +395,7 @@ const PgPsearchForm = forwardRef<
         }
       }
     }
-  }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading]);
+  }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
 
   return (
     <Card className="w-full">
@@ -437,8 +449,6 @@ const PgPsearchForm = forwardRef<
               pgpData={pgpData}
               onAdjustmentsChange={setAdjustedData}
               storageKey={`audit-${selectedPrestador?.NIT}`}
-              onGenerateReport={() => {}}
-              isGeneratingReport={false}
               selectedPrestador={selectedPrestador}
               initialAuditData={initialAuditData}
               uniqueUserCount={uniqueUserCount}

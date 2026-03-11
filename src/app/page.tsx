@@ -44,7 +44,7 @@ export default function Home() {
   const pgpSearchRef = useRef<{ handleSelectPrestador: (prestador: { PRESTADOR: string; WEB: string }) => void } | null>(null);
 
   const handleAuditLoad = useCallback((auditPackage: SavedAuditData, prestadorName: string, month: string) => {
-    // 1. Cargamos los datos de glosa
+    // 1. Cargamos el paquete completo de auditoría
     setSavedAuditData(auditPackage);
     
     // 2. Si la auditoría tiene datos de ejecución persistidos, los restauramos
@@ -55,8 +55,9 @@ export default function Home() {
       if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
     }
 
-    // 3. Seleccionamos el prestador en el buscador para gatillar el cruce con la Nota Técnica
-    if(pgpSearchRef.current?.handleSelectPrestador) {
+    // 3. Si NO tiene pgpData persistido, disparamos la búsqueda por nombre (legacy)
+    // Pero si ya tiene pgpData, el componente PgPsearchForm lo usará automáticamente mediante su useEffect interno
+    if (!auditPackage.pgpData && pgpSearchRef.current?.handleSelectPrestador) {
       pgpSearchRef.current.handleSelectPrestador({ PRESTADOR: prestadorName, WEB: '' }); 
     }
   }, []);

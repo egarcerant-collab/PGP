@@ -56,6 +56,7 @@ export interface AdjustedData {
 interface DiscountMatrixProps {
   data: DiscountMatrixRow[];
   executionDataByMonth: ExecutionDataByMonth;
+  pgpData: any[]; // Recibimos la data de la Nota Técnica
   onAdjustmentsChange: (adjustments: AdjustedData) => void;
   storageKey: string; 
   selectedPrestador: Prestador | null;
@@ -67,6 +68,7 @@ interface DiscountMatrixProps {
 const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ 
     data, 
     executionDataByMonth, 
+    pgpData,
     onAdjustmentsChange, 
     selectedPrestador,
     initialAuditData,
@@ -124,11 +126,13 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             selectedRows,
             executionData: serializeExecutionData(executionDataByMonth),
             jsonPrestadorCode,
-            uniqueUserCount
+            uniqueUserCount,
+            // Guardamos físicamente la Nota Técnica para no depender de URLs externas al cargar
+            pgpData: pgpData,
+            selectedPrestador: selectedPrestador
         };
         
         try {
-            // Guardamos físicamente en el servidor
             const response = await fetch('/api/save-audit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

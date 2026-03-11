@@ -29,6 +29,9 @@ export interface SavedAuditData {
   executionData?: any; 
   jsonPrestadorCode?: string | null;
   uniqueUserCount?: number;
+  // Persistimos la Nota Técnica para no depender de Google Sheets al cargar
+  pgpData?: any[];
+  selectedPrestador?: any;
 }
 
 // Helpers para serializar/deserializar Mapas y Sets (LocalStorage no los soporta nativamente)
