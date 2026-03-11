@@ -43,12 +43,11 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
   
   const pgpCupsMap = new Map<string, PgpRow>();
   pgpData.forEach(row => {
-      const cup = findColumnValue(row, ['cup/cum', 'cups']);
-      if(cup) pgpCupsMap.set(String(cup), row);
+      const cup = findColumnValue(row, ['cup/cum', 'cups', 'id resolucion 3100', 'código']);
+      if(cup) pgpCupsMap.set(String(cup).trim().toUpperCase(), row);
   });
 
   const getMonthName = (monthNumber: string) => {
-    // Fixed rollover bug: set a specific day (1st) before setting the month
     const date = new Date(2024, parseInt(monthNumber) - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
     return name.charAt(0).toUpperCase() + name.slice(1);
@@ -56,23 +55,20 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
 
   executionDataByMonth.forEach((monthData, monthKey) => {
     const monthName = getMonthName(monthKey);
-    const allCupsForMonth = new Set([...pgpCupsMap.keys(), ...monthData.cupCounts.keys()]);
+    const allCupsForMonth = new Set([...pgpCupsMap.keys(), ...Array.from(monthData.cupCounts.keys()).map(c => c.trim().toUpperCase())]);
 
     allCupsForMonth.forEach(cup => {
       const pgpRow = pgpCupsMap.get(cup);
-      const monthCupData = monthData.cupCounts.get(cup);
+      const monthCupData = monthData.cupCounts.get(cup) || monthData.cupCounts.get(cup.toLowerCase());
 
-      const cantidadEsperada = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['frecuencia eventos mes'])) : 0;
+      const cantidadEsperada = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['frecuencia eventos mes', 'frecuencia'])) : 0;
       const cantidadEjecutada = monthCupData?.total || 0;
       
-      const valorEsperado = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['costo evento mes (valor mes)', 'costo evento mes'])) : 0;
-      const unitValue = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['valor unitario'])) : 0;
+      const valorEsperado = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['costo evento mes (valor mes)', 'costo evento mes', 'valor total'])) : 0;
+      const unitValue = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['valor unitario', 'vr unitario'])) : 0;
 
-      // ** NEW LOGIC **
-      // Valor Ejecutado is now based on PGP unit value, not JSON's vrServicio.
       const valorEjecutado = cantidadEjecutada * unitValue;
       
-
       if(cantidadEsperada === 0 && cantidadEjecutada === 0) return;
 
       const diferencia = cantidadEjecutada - cantidadEsperada;
@@ -89,10 +85,13 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
         diagnosticoPrincipal = [...monthCupData.diagnoses.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
       }
 
+      // Priorizar nombres de columna que suelen estar en la posición F (Descripción)
+      const descripcion = findColumnValue(pgpRow, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre del servicio']);
+
       matriz.push({
         Mes: monthName,
         CUPS: cup,
-        Descripcion: findColumnValue(pgpRow, ['descripcion cups', 'descripcion']),
+        Descripcion: descripcion,
         Diagnostico_Principal: diagnosticoPrincipal,
         Cantidad_Esperada: cantidadEsperada,
         Cantidad_Ejecutada: cantidadEjecutada,

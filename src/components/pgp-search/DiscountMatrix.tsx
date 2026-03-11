@@ -134,7 +134,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         }
         setIsSaving(true);
         
-        const monthKey = executionDataByMonth.keys().next().value || String(new Date().getMonth() + 1);
+        const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
         const date = new Date(2024, parseInt(monthKey) - 1, 1);
         const monthName = date.toLocaleString('es-CO', { month: 'long' });
 
@@ -149,9 +149,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             selectedPrestador: selectedPrestador
         };
         
-        // El guardado se realiza en LocalStorage como respaldo y se intenta enviar al servidor
-        localStorage.setItem(`audit_backup_${selectedPrestador.NIT}_${monthKey}`, JSON.stringify(auditPackage));
-        
         try {
             const response = await fetch('/api/save-audit', {
                 method: 'POST',
@@ -163,15 +160,13 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 })
             });
 
-            const result = await response.json();
-
             if (response.ok) {
-                toast({ title: "Guardado Exitoso", description: `Auditoría guardada localmente y en el servidor.` });
+                toast({ title: "Guardado Exitoso", description: `Auditoría guardada en la carpeta de ${monthName}.` });
             } else {
-                toast({ title: "Aviso de Servidor", description: "Guardado solo en navegador (Servidor en modo lectura).", variant: "default" });
+                toast({ title: "Aviso de Servidor", description: "No se pudo guardar en el servidor. Verifique permisos.", variant: "destructive" });
             }
         } catch (error: any) {
-            toast({ title: "Guardado Local", description: "Se guardó en el navegador correctamente." });
+            toast({ title: "Error de Red", description: "No se pudo conectar con el servidor.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
@@ -224,154 +219,160 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
     const getServiceIcon = (type: string) => {
         switch(type) {
-            case "Consulta": return <Stethoscope className="h-4 w-4 text-slate-400" />;
-            case "Procedimiento": return <Microscope className="h-4 w-4 text-slate-400" />;
-            case "Medicamento": return <Pill className="h-4 w-4 text-slate-400" />;
-            case "Otro Servicio": return <Syringe className="h-4 w-4 text-slate-400" />;
-            default: return <FileText className="h-4 w-4 text-slate-400" />;
+            case "Consulta": return <Stethoscope className="h-4 w-4 text-red-400" />;
+            case "Procedimiento": return <Microscope className="h-4 w-4 text-red-400" />;
+            case "Medicamento": return <Pill className="h-4 w-4 text-red-400" />;
+            case "Otro Servicio": return <Syringe className="h-4 w-4 text-red-400" />;
+            default: return <FileText className="h-4 w-4 text-red-400" />;
         }
     };
 
     return (
-        <Card className="shadow-lg border-primary/20">
-            <CardHeader className="space-y-4">
-                <div className="flex flex-col gap-2">
-                    <CardTitle className="flex items-center text-primary text-2xl">
-                        <DollarSign className="h-7 w-7 mr-2" />
-                        Matriz de Descuentos (Análisis de Valor)
-                    </CardTitle>
-                    <CardDescription>Análisis financiero interactivo con gama de colores para identificación de desviaciones.</CardDescription>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button onClick={handleSaveState} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={isSaving}>
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Guardar Auditoría
-                    </Button>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="default" size="sm" className="bg-emerald-900 hover:bg-emerald-950 text-white"><Eraser className="mr-2 h-4 w-4" /> Limpiar</Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>¿Reiniciar ajustes?</AlertDialogTitle><AlertDialogDescription>Se perderán las glosas marcadas actualmente.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearAdjustments}>Confirmar</AlertDialogAction></AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                    <Button onClick={handleDownloadMatriz} variant="default" size="sm" className="bg-green-500 hover:bg-green-600 text-white"><Download className="mr-2 h-4 w-4" /> Descargar</Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200 flex flex-col items-center justify-center text-center">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><WalletCards className="h-3 w-3" /> Valor Ejecutado Total (Filtrado)</p>
-                        <p className="text-2xl font-bold text-blue-700">{formatCurrency(totals.ejecutado)}</p>
+        <div className="space-y-6">
+            <Card className="shadow-lg border-primary/20">
+                <CardHeader className="space-y-4">
+                    <div className="flex flex-col gap-2">
+                        <CardTitle className="flex items-center text-primary text-2xl">
+                            <DollarSign className="h-7 w-7 mr-2" />
+                            Matriz de Descuentos (Análisis de Valor)
+                        </CardTitle>
+                        <CardDescription>Análisis financiero interactivo con gama de colores para identificación de desviaciones.</CardDescription>
                     </div>
-                    <div className="p-4 rounded-xl bg-red-50/50 border border-red-200 flex flex-col items-center justify-center text-center">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><TrendingDown className="h-3 w-3" /> Descuento Aplicado (Total)</p>
-                        <p className="text-2xl font-bold text-red-500">{formatCurrency(totals.glosa)}</p>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={handleSaveState} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={isSaving}>
+                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Guardar Auditoría
+                        </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="default" size="sm" className="bg-emerald-900 hover:bg-emerald-950 text-white"><Eraser className="mr-2 h-4 w-4" /> Limpiar</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader><AlertDialogTitle>¿Reiniciar ajustes?</AlertDialogTitle><AlertDialogDescription>Se perderán las glosas marcadas actualmente.</AlertDialogDescription></AlertDialogHeader>
+                                <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearAdjustments}>Confirmar</AlertDialogAction></AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                        <Button onClick={handleDownloadMatriz} variant="default" size="sm" className="bg-green-500 hover:bg-green-600 text-white"><Download className="mr-2 h-4 w-4" /> Descargar</Button>
                     </div>
-                    <div className="p-4 rounded-xl bg-green-50/50 border border-green-200 flex flex-col items-center justify-center text-center">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><CheckCircle className="h-3 w-3" /> Valor Neto Final (Total)</p>
-                        <p className="text-2xl font-bold text-green-700">{formatCurrency(totals.neto)}</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200 flex flex-col items-center justify-center text-center">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><WalletCards className="h-3 w-3" /> Valor Ejecutado Total (Filtrado)</p>
+                            <p className="text-2xl font-bold text-blue-700">{formatCurrency(totals.ejecutado)}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-red-50/50 border border-red-200 flex flex-col items-center justify-center text-center">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><TrendingDown className="h-3 w-3" /> Descuento Aplicado (Total)</p>
+                            <p className="text-2xl font-bold text-red-500">{formatCurrency(totals.glosa)}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-green-50/50 border border-green-200 flex flex-col items-center justify-center text-center">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1"><CheckCircle className="h-3 w-3" /> Valor Neto Final (Total)</p>
+                            <p className="text-2xl font-bold text-green-700">{formatCurrency(totals.neto)}</p>
+                        </div>
                     </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2 p-2 bg-slate-50 border rounded-lg">
-                    {filterOptions.map((opt) => {
-                        const Icon = opt.icon;
-                        const active = activeFilter === opt.value;
-                        return (
-                            <Button 
-                                key={opt.value}
-                                onClick={() => setActiveFilter(opt.value)}
-                                variant={active ? "default" : "outline"} 
-                                size="sm"
-                                className={cn(
-                                    "flex items-center gap-2 transition-all",
-                                    active && opt.value === "Todos" && "bg-violet-100 text-violet-700 hover:bg-violet-200 border-violet-200"
-                                )}
-                            >
-                                <Icon className="h-4 w-4" />
-                                {opt.label}
-                            </Button>
-                        )
-                    })}
-                </div>
-            </CardHeader>
+                    <div className="flex flex-wrap gap-2 p-2 bg-slate-50 border rounded-lg">
+                        {filterOptions.map((opt) => {
+                            const Icon = opt.icon;
+                            const active = activeFilter === opt.value;
+                            return (
+                                <Button 
+                                    key={opt.value}
+                                    onClick={() => setActiveFilter(opt.value)}
+                                    variant={active ? "default" : "outline"} 
+                                    size="sm"
+                                    className={cn(
+                                        "flex items-center gap-2 transition-all",
+                                        active && opt.value === "Todos" && "bg-violet-100 text-violet-700 hover:bg-violet-200 border-violet-200"
+                                    )}
+                                >
+                                    <Icon className="h-4 w-4" />
+                                    {opt.label}
+                                </Button>
+                            )
+                        })}
+                    </div>
+                </CardHeader>
 
-            <CardContent>
-                <ScrollArea className="h-[600px] rounded-md border">
-                    <Table>
-                        <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
-                            <TableRow>
-                                <TableHead className="w-12 px-2 text-center">
-                                    <Checkbox 
-                                        checked={filteredData.length > 0 && filteredData.every(r => selectedRows[r.CUPS])} 
-                                        onCheckedChange={(checked) => filteredData.forEach(r => setSelectedRows(prev => ({...prev, [r.CUPS]: !!checked})))} 
-                                    />
-                                </TableHead>
-                                <TableHead>CUPS</TableHead>
-                                <TableHead>Tipo Servicio</TableHead>
-                                <TableHead>Descripción</TableHead>
-                                <TableHead className="text-center">Cant. Esperada</TableHead>
-                                <TableHead className="text-center">Cant. Ejecutada</TableHead>
-                                <TableHead className="text-center w-32">Cant. Validada</TableHead>
-                                <TableHead className="text-right">Valor Ejecutado</TableHead>
-                                <TableHead className="text-right">Valor a Reconocer</TableHead>
-                                <TableHead className="text-right text-red-600 font-bold">Valor a Descontar</TableHead>
-                                <TableHead className="w-12 text-center">Glosa</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredData.length > 0 ? (
-                                filteredData.map((row, index) => {
-                                    const validatedQty = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                                    const recognitionValue = validatedQty * row.Valor_Unitario;
-                                    const discount = Math.max(0, row.Valor_Ejecutado - recognitionValue);
-                                    const isDiscounted = discount > 0;
-
-                                    return (
-                                        <TableRow key={index} className={cn("hover:bg-slate-50 transition-colors", isDiscounted && "bg-red-50/40")}>
-                                            <TableCell className="px-2 text-center">
-                                                <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs font-semibold text-violet-300">{row.CUPS}</TableCell>
-                                            <TableCell className="text-xs">
-                                                <div className="flex items-center gap-2">
-                                                    {getServiceIcon(row.Tipo_Servicio)}
-                                                    <span className="text-red-400">{row.Tipo_Servicio}</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-xs max-w-[200px] truncate text-red-400" title={row.Descripcion}>{row.Descripcion}</TableCell>
-                                            <TableCell className="text-center text-red-400 font-medium">{row.expectedFrequency.toFixed(0)}</TableCell>
-                                            <TableCell className="text-center text-red-400 font-medium">{row.Cantidad_Ejecutada}</TableCell>
-                                            <TableCell className="text-center">
-                                                <Input 
-                                                    type="text" 
-                                                    value={new Intl.NumberFormat('es-CO').format(validatedQty)} 
-                                                    onChange={(e) => setAdjustedQuantities(prev => ({ ...prev, [row.CUPS]: parseInt(e.target.value.replace(/\D/g,'')) || 0 }))} 
-                                                    className="h-8 text-center font-bold bg-white border-slate-200" 
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-right text-xs font-medium text-red-400">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
-                                            <TableCell className="text-right text-xs font-medium text-green-600">{formatCurrency(recognitionValue)}</TableCell>
-                                            <TableCell className="text-right font-bold text-red-600 text-xs">{formatCurrency(discount)}</TableCell>
-                                            <TableCell className="text-center">
-                                                <Button variant="ghost" size="icon" onClick={() => { setCurrentCupForComment(row.CUPS); setIsCommentModalOpen(true); }}>
-                                                    <MessageSquarePlus className={cn("h-4 w-4", comments[row.CUPS] ? "text-blue-600 fill-blue-50" : "text-slate-400")} />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    )
-                                })
-                            ) : (
+                <CardContent>
+                    <ScrollArea className="h-[600px] rounded-md border">
+                        <Table>
+                            <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
                                 <TableRow>
-                                    <TableCell colSpan={11} className="h-32 text-center text-muted-foreground italic">No hay registros para este filtro.</TableCell>
+                                    <TableHead className="w-12 px-2 text-center">
+                                        <Checkbox 
+                                            checked={filteredData.length > 0 && filteredData.every(r => selectedRows[r.CUPS])} 
+                                            onCheckedChange={(checked) => {
+                                                const newSelected = { ...selectedRows };
+                                                filteredData.forEach(r => newSelected[r.CUPS] = !!checked);
+                                                setSelectedRows(newSelected);
+                                            }} 
+                                        />
+                                    </TableHead>
+                                    <TableHead>CUPS</TableHead>
+                                    <TableHead>Tipo Servicio</TableHead>
+                                    <TableHead>Descripción</TableHead>
+                                    <TableHead className="text-center">Cant. Esperada</TableHead>
+                                    <TableHead className="text-center">Cant. Ejecutada</TableHead>
+                                    <TableHead className="text-center w-32">Cant. Validada</TableHead>
+                                    <TableHead className="text-right">Valor Ejecutado</TableHead>
+                                    <TableHead className="text-right">Valor a Reconocer</TableHead>
+                                    <TableHead className="text-right text-red-600 font-bold">Valor a Descontar</TableHead>
+                                    <TableHead className="w-12 text-center">Glosa</TableHead>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
-            </CardContent>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredData.length > 0 ? (
+                                    filteredData.map((row, index) => {
+                                        const validatedQty = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
+                                        const recognitionValue = validatedQty * row.Valor_Unitario;
+                                        const discount = Math.max(0, row.Valor_Ejecutado - recognitionValue);
+                                        const isDiscounted = discount > 0;
+
+                                        return (
+                                            <TableRow key={index} className={cn("hover:bg-slate-50 transition-colors", isDiscounted && "bg-red-50/40")}>
+                                                <TableCell className="px-2 text-center">
+                                                    <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs font-semibold text-red-400">{row.CUPS}</TableCell>
+                                                <TableCell className="text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        {getServiceIcon(row.Tipo_Servicio)}
+                                                        <span className="text-red-400">{row.Tipo_Servicio}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-xs max-w-[250px] truncate text-red-400 font-medium" title={row.Descripcion}>{row.Descripcion || 'N/A'}</TableCell>
+                                                <TableCell className="text-center text-red-400 font-medium">{row.expectedFrequency.toFixed(0)}</TableCell>
+                                                <TableCell className="text-center text-red-400 font-medium">{row.Cantidad_Ejecutada}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Input 
+                                                        type="text" 
+                                                        value={new Intl.NumberFormat('es-CO').format(validatedQty)} 
+                                                        onChange={(e) => setAdjustedQuantities(prev => ({ ...prev, [row.CUPS]: parseInt(e.target.value.replace(/\D/g,'')) || 0 }))} 
+                                                        className="h-8 text-center font-bold bg-white border-slate-200" 
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-right text-xs font-medium text-red-400">{formatCurrency(row.Valor_Ejecutado)}</TableCell>
+                                                <TableCell className="text-right text-xs font-medium text-green-600">{formatCurrency(recognitionValue)}</TableCell>
+                                                <TableCell className="text-right font-bold text-red-600 text-xs">{formatCurrency(discount)}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Button variant="ghost" size="icon" onClick={() => { setCurrentCupForComment(row.CUPS); setIsCommentModalOpen(true); }}>
+                                                        <MessageSquarePlus className={cn("h-4 w-4", comments[row.CUPS] ? "text-blue-600 fill-blue-50" : "text-slate-400")} />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={11} className="h-32 text-center text-muted-foreground italic">No hay registros para este filtro.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
 
             <CommentModal 
                 open={isCommentModalOpen} 
@@ -379,7 +380,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 initialComment={currentCupForComment ? comments[currentCupForComment] || '' : ''} 
                 onSave={(c) => currentCupForComment && setComments(prev => ({...prev, [currentCupForComment]: c}))} 
             />
-        </Card>
+        </div>
     );
 };
 
