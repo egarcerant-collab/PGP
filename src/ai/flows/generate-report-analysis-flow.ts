@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Flujo de IA Senior para generar la narrativa del Informe de Gestión Anual PGP.
@@ -7,6 +6,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 
 const MonthlyDataSchema = z.object({
   month: z.string(),
@@ -24,6 +24,7 @@ const ReportAnalysisInputSchema = z.object({
   referenciaMensual: z.number(),
   meses: z.array(MonthlyDataSchema),
   conclusionesAdicionales: z.string().optional(),
+  apiKey: z.string().optional().describe("Clave API de Google AI opcional."),
 });
 
 const ReportAnalysisOutputSchema = z.object({
@@ -82,7 +83,12 @@ Genera textos profesionales que utilicen terminología como "estacionalidad de d
 
 export async function generateReportAnalysis(input: ReportAnalysisInput): Promise<ReportAnalysisOutput> {
   try {
-    const { output } = await seniorReportPrompt(input);
+    // Si se proporciona una clave API, la usamos para el modelo dinámicamente
+    const model = input.apiKey 
+      ? googleAI.model('gemini-1.5-flash', { apiKey: input.apiKey })
+      : 'googleai/gemini-1.5-flash';
+
+    const { output } = await seniorReportPrompt(input, { model });
     if (!output) throw new Error('La IA no pudo procesar la solicitud.');
     return output;
   } catch (error: any) {

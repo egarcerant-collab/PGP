@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
@@ -121,6 +120,7 @@ interface PgPsearchFormProps {
   jsonPrestadorCode: string | null;
   uniqueUserCount: number;
   initialAuditData: SavedAuditData | null;
+  apiKey?: string;
 }
 
 const PRESTADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04/edit?gid=0#gid=0";
@@ -244,7 +244,7 @@ const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
 const PgPsearchForm = forwardRef<
   { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void },
   PgPsearchFormProps
->(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData }, ref) => {
+>(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, apiKey }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -452,7 +452,7 @@ const PgPsearchForm = forwardRef<
               uniqueUserCount={uniqueUserCount}
               jsonPrestadorCode={jsonPrestadorCode}
             />
-            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
+            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} apiKey={apiKey} /></div>
           </div>
         )}
 

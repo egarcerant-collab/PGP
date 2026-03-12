@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -25,7 +24,13 @@ async function loadImageAsBase64(url: string): Promise<string> {
     } catch (e) { return ""; }
 }
 
-export default function InformePGP({ data, comparisonSummary }: { data: any, comparisonSummary: any }) {
+interface InformePGPProps {
+  data: any;
+  comparisonSummary: any;
+  apiKey?: string;
+}
+
+export default function InformePGP({ data, comparisonSummary, apiKey }: InformePGPProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [auditorName, setAuditorName] = useState("EDUARDO GARCERANT GONZALEZ");
@@ -82,7 +87,8 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
             totalCups,
             referenciaMensual,
             meses: meses.map(m => ({ month: m.month, cups: m.cups, value: m.value })),
-            conclusionesAdicionales: conclusions
+            conclusionesAdicionales: conclusions,
+            apiKey: apiKey
         });
 
         const reportData: InformeDatosSenior = {
