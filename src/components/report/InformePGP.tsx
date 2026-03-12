@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Loader2, DownloadCloud, User, Edit } from "lucide-react";
+import { FileText, Loader2, DownloadCloud, Landmark, User, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,15 +34,15 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
   const handleGenerate = async (action: 'preview' | 'download') => {
     if (!data || !comparisonSummary) return;
     setIsGenerating(true);
-    toast({ title: "Generando Informe Senior...", description: "Calculando proyecciones y redactando narrativa." });
+    toast({ title: "Generando Informe Senior...", description: "Estructurando documento de 12 páginas." });
 
     try {
-        const metaAnual = data.notaTecnica.valor3m * 4; // Ajuste si la nota es trimestral
+        const metaAnual = data.notaTecnica.valor3m * 4; 
         const ejecucionAnual = comparisonSummary.monthlyFinancials.reduce((acc: number, m: any) => acc + m.totalValorEjecutado, 0);
         const totalCups = comparisonSummary.overExecutedCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0) +
-                         comparisonSummary.normalExecutionCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0);
+                         comparisonSummary.normalExecutionCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0) +
+                         comparisonSummary.underExecutedCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0);
 
-        // Preparar datos mensuales para la tabla
         let accumulated = 0;
         const meses: MonthlyRow[] = comparisonSummary.monthlyFinancials.map((m: any) => {
             accumulated += m.totalValorEjecutado;
@@ -59,7 +59,6 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
             };
         });
 
-        // Preparar datos trimestrales
         const trimestres: QuarterlyRow[] = [
             { 
                 quarter: 'Trimestre I', 
@@ -67,11 +66,10 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
                 value: meses.slice(0,3).reduce((a,b) => a+b.value, 0),
                 reference: data.notaTecnica.valor3m,
                 percVsRef: (meses.slice(0,3).reduce((a,b) => a+b.value, 0) / data.notaTecnica.valor3m) * 100,
-                status: 'En banda (90-110%)'
+                status: 'Dentro de banda (90-110%)'
             }
         ];
 
-        // Narrativa vía IA
         const analysis = await generateReportAnalysis({
             prestador: data.header.ipsNombre,
             nit: data.header.ipsNit,
@@ -87,7 +85,7 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
             header: {
                 prestador: data.header.ipsNombre,
                 nit: data.header.ipsNit,
-                periodo: "Enero - Diciembre 2025",
+                periodo: "01/01/2025 a 31/12/2025",
                 fechaRadicacion: new Date().toLocaleDateString(),
                 responsable: auditorName,
                 cargo: "Supervisor del contrato / Dirección Nacional de Gestión del Riesgo en Salud"
@@ -115,33 +113,40 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
         else await descargarInformeSeniorPDF(reportData, background);
 
     } catch (e: any) {
-        toast({ title: "Error", description: e.message, variant: "destructive" });
+        toast({ 
+          title: "Error de IA", 
+          description: e.message.includes("API key") ? "Clave de API inválida o ausente. Configúrala en los secretos del proyecto." : e.message, 
+          variant: "destructive" 
+        });
     } finally {
-        setIsGenerating(false);
+      setIsGenerating(false);
     }
   };
 
   return (
     <Card className="shadow-lg border-primary/20">
       <CardHeader>
-        <CardTitle>Generación de Informe de Gestión Anual</CardTitle>
-        <CardDescription>Genera el documento oficial de 12 páginas con estructura senior.</CardDescription>
+        <CardTitle className="flex items-center gap-2">
+            <Landmark className="h-6 w-6 text-primary" />
+            Generación de Informe de Gestión Senior
+        </CardTitle>
+        <CardDescription>Genera el documento oficial de Dusakawi EPSI siguiendo el modelo de 12 páginas.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-                <Label>Profesional Responsable</Label>
-                <Input value={auditorName} onChange={e => setAuditorName(e.target.value)} />
+                <Label className="flex items-center gap-2"><User className="h-4 w-4" /> Profesional Responsable</Label>
+                <Input value={auditorName} onChange={e => setAuditorName(e.target.value)} placeholder="EDUARDO GARCERANT GONZALEZ" />
             </div>
             <div className="space-y-2">
-                <Label>Notas del Auditor</Label>
-                <Textarea placeholder="Observaciones adicionales para la IA..." value={conclusions} onChange={e => setConclusions(e.target.value)} />
+                <Label className="flex items-center gap-2"><Settings className="h-4 w-4" /> Notas del Auditor (Opcional)</Label>
+                <Textarea placeholder="Observaciones adicionales para la narrativa..." value={conclusions} onChange={e => setConclusions(e.target.value)} />
             </div>
         </div>
         <div className="flex gap-4">
-            <Button onClick={() => handleGenerate('preview')} disabled={isGenerating} className="flex-1">
+            <Button onClick={() => handleGenerate('preview')} disabled={isGenerating} className="flex-1 bg-primary hover:bg-primary/90">
                 {isGenerating ? <Loader2 className="mr-2 animate-spin" /> : <FileText className="mr-2" />}
-                Vista Previa Informe Senior
+                Vista Previa Informe (Arial 12)
             </Button>
             <Button variant="secondary" onClick={() => handleGenerate('download')} disabled={isGenerating} className="flex-1">
                 <DownloadCloud className="mr-2" /> Descargar PDF Final
@@ -149,11 +154,13 @@ export default function InformePGP({ data, comparisonSummary }: { data: any, com
         </div>
 
         <Dialog open={!!pdfPreviewUrl} onOpenChange={open => !open && setPdfPreviewUrl(null)}>
-            <DialogContent className="max-w-5xl h-[90vh]">
-                <DialogHeader><CardTitle>Vista Previa Informe de Gestión</CardTitle></DialogHeader>
-                <iframe src={pdfPreviewUrl!} className="w-full h-full border rounded" />
+            <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+                <DialogHeader><CardTitle>Vista Previa del Informe de Gestión Anual</CardTitle></DialogHeader>
+                <div className="flex-grow border rounded overflow-hidden">
+                    <iframe src={pdfPreviewUrl!} className="w-full h-full" />
+                </div>
                 <DialogFooter>
-                    <Button onClick={() => handleGenerate('download')}>Descargar PDF</Button>
+                    <Button onClick={() => handleGenerate('download')}>Descargar Archivo PDF</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

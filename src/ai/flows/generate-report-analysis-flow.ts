@@ -5,7 +5,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod';
+import { z } from 'genkit';
 
 const MonthlyDataSchema = z.object({
   month: z.string(),
@@ -50,23 +50,26 @@ DATOS CLAVE DEL EJERCICIO:
 - Ejecución Real Consolidada: {{{ejecucionAnual}}} ({{{porcentajeCumplimiento}}}%)
 - Producción Total: {{{totalCups}}} actividades/CUPS atendidas.
 
-INSTRUCCIONES DE REDACCIÓN (ESTILO EJECUTIVO):
+INSTRUCCIONES DE REDACCIÓN (ESTILO EJECUTIVO SENIOR):
 1. Usa un lenguaje técnico, contundente y con autoridad institucional.
-2. Genera análisis narrativos profundos para cada trimestre del año basándote en los datos mensuales.
-3. El Resumen Ejecutivo debe destacar la favorabilidad y eficiencia del modelo PGP.
+2. Genera análisis narrativos profundos para cada trimestre del año.
+3. El Resumen Ejecutivo debe ser denso, mencionando la favorabilidad y eficiencia del modelo PGP.
 4. Los Hallazgos Clave deben ser puntos directos sobre impacto administrativo y financiero.
 5. Las Acciones de Mejora deben ser correctivas y orientadas al control del gasto.
 {{#if conclusionesAdicionales}}
 6. Integra obligatoriamente estas observaciones técnicas del auditor: {{{conclusionesAdicionales}}}
 {{/if}}
 
-Divide la respuesta exactamente en los campos JSON solicitados. Evita generalidades; menciona cifras y tendencias específicas de los meses reportados.
+Divide la respuesta exactamente en los campos JSON solicitados. Usa el tono de un auditor senior de EPS.
 `,
 });
 
 export async function generateReportAnalysis(input: ReportAnalysisInput): Promise<ReportAnalysisOutput> {
+  if (!process.env.GOOGLE_GENAI_API_KEY) {
+    throw new Error("La clave de API de IA no está configurada. Por favor, añádela en los secretos del proyecto.");
+  }
+
   try {
-    // Limpiamos los datos para evitar que números con muchos decimales afecten el prompt
     const cleanInput = {
         ...input,
         porcentajeCumplimiento: Math.round(input.porcentajeCumplimiento * 100) / 100,
@@ -75,11 +78,10 @@ export async function generateReportAnalysis(input: ReportAnalysisInput): Promis
     };
 
     const { output } = await seniorReportPrompt(cleanInput);
-    if (!output) throw new Error('La IA no devolvió contenido.');
+    if (!output) throw new Error('La IA no pudo procesar la solicitud.');
     return output;
   } catch (error: any) {
     console.error(`Error crítico en redacción senior:`, error);
-    // Devolvemos un error más descriptivo para depuración
-    throw new Error(`Error de Redacción Senior: ${error.message || 'Fallo en conexión con el modelo de lenguaje'}`);
+    throw new Error(error.message || 'Error desconocido en el servicio de IA.');
   }
 }
