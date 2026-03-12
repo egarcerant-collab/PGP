@@ -1,6 +1,6 @@
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import type { Content, TDocumentDefinitions, Column } from 'pdfmake/interfaces';
+import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces';
 
 if (pdfFonts.pdfMake && pdfMake.vfs) {
     pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -65,7 +65,7 @@ export interface InformeDatosSenior {
 function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: string): TDocumentDefinitions {
     const docDefinition: TDocumentDefinitions = {
         pageSize: 'A4',
-        pageMargins: [50, 100, 50, 80],
+        pageMargins: [50, 110, 50, 80],
         background: (currentPage: number) => ({
             image: backgroundImageBase64,
             width: 595,
@@ -74,24 +74,24 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
         }),
         defaultStyle: {
             font: 'Roboto',
-            fontSize: 10,
-            lineHeight: 1.2
+            fontSize: 11,
+            lineHeight: 1.3
         },
         styles: {
-            h1: { fontSize: 13, bold: true, margin: [0, 5, 0, 5], alignment: 'center' },
-            h2: { fontSize: 11, bold: true, margin: [0, 10, 0, 5], color: '#000000' },
-            h3: { fontSize: 10, bold: true, margin: [0, 8, 0, 3] },
-            p: { fontSize: 10, margin: [0, 0, 0, 8], alignment: 'justify' },
-            tableHeader: { bold: true, fontSize: 9, fillColor: '#f3f4f6', margin: [0, 3, 0, 3] },
-            tableCell: { fontSize: 8.5, margin: [0, 2, 0, 2] },
-            footer: { fontSize: 8, italic: true, color: '#666666' }
+            h1: { fontSize: 14, bold: true, margin: [0, 5, 0, 5], alignment: 'center' },
+            h2: { fontSize: 12, bold: true, margin: [0, 15, 0, 8], border: [false, false, false, true] },
+            h3: { fontSize: 11, bold: true, margin: [0, 10, 0, 5] },
+            p: { fontSize: 11, margin: [0, 0, 0, 10], alignment: 'justify' },
+            tableHeader: { bold: true, fontSize: 9, fillColor: '#eeeeee', margin: [0, 3, 0, 3] },
+            tableCell: { fontSize: 9, margin: [0, 3, 0, 3] },
+            footer: { fontSize: 9, italic: true, color: '#666666' }
         },
         content: [
             { text: 'DUSAKAWI EPSI', style: 'h1' },
-            { text: 'COORDINACIÓN DE ATENCIÓN DOMICILIARIA DIRECCIÓN NACIONAL DE GESTIÓN DEL RIESGO EN SALUD', fontSize: 9, bold: true, alignment: 'center', margin: [0, 0, 0, 15] },
+            { text: 'COORDINACIÓN DE ATENCIÓN DOMICILIARIA DIRECCIÓN NACIONAL DE GESTIÓN DEL RIESGO EN SALUD', fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 15] },
             
-            { text: 'INFORME DE GESTIÓN ANUAL — VIGENCIA 2025', style: 'h2', alignment: 'center' },
-            { text: 'SEGUIMIENTO A EJECUCIÓN PGP — FINANZAS RIOHACHA (LA GUAJIRA)', fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 15] },
+            { text: 'INFORME DE GESTIÓN ANUAL — VIGENCIA 2025', style: 'h1', alignment: 'center', color: '#1a365d' },
+            { text: 'SEGUIMIENTO A EJECUCIÓN PGP — FINANZAS RIOHACHA (LA GUAJIRA)', fontSize: 11, bold: true, alignment: 'center', margin: [0, 0, 0, 20] },
 
             {
                 columns: [
@@ -111,28 +111,32 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
                         ]
                     }
                 ],
-                margin: [0, 0, 0, 20]
+                margin: [0, 0, 0, 25]
             },
 
             { text: '1. RESUMEN EJECUTIVO', style: 'h2' },
             { text: data.narrativa.resumenEjecutivo, style: 'p' },
             {
                 ul: [
-                    { text: `Meta anual 2025: ${formatCOP(data.metaAnual)}`, bold: true },
-                    { text: `Ejecución anual consolidada: ${formatCOP(data.ejecucionAnual)} (${(data.ejecucionAnual / data.metaAnual * 100).toFixed(2)}% de la meta).` },
-                    { text: `Producción anual consolidada: ${formatNumber(data.totalCups)} actividades/CUPS.`, bold: true }
+                    { text: `Meta anual 2025 (Referencia Contractual): ${formatCOP(data.metaAnual)}`, bold: true },
+                    { text: `Ejecución anual consolidada: ${formatCOP(data.ejecucionAnual)} (${(data.ejecucionAnual / data.metaAnual * 100).toFixed(2)}% de cumplimiento).` },
+                    { text: `Producción anual consolidada: ${formatNumber(data.totalCups)} actividades/CUPS atendidas.`, bold: true }
                 ],
-                margin: [10, 0, 0, 15]
+                margin: [15, 0, 0, 20]
             },
 
             { text: '2. OBJETIVO, ALCANCE Y METODOLOGÍA', style: 'h2' },
             { text: '2.1 Objetivo', style: 'h3' },
-            { text: 'Evaluar la ejecución del Acuerdo PGP durante la vigencia 2025 en Riohacha, consolidando mensualmente el volumen y valor ejecutado para sustentar decisiones institucionales de control del gasto y cierre verificable.', style: 'p' },
+            { text: 'Evaluar la ejecución del Acuerdo de Pago Global Prospectivo (PGP) durante la vigencia 2025 en Riohacha (La Guajira), consolidando mensualmente el volumen (actividades/CUPS) y el valor ejecutado para sustentar decisiones institucionales de control del gasto y cierre verificable.', style: 'p' },
             { text: '2.2 Alcance', style: 'h3' },
-            { text: 'Consolidado anual (enero–diciembre). Se concentra en resultados, indicadores e impacto administrativo/financiero.', style: 'p' },
+            { text: 'Consolidado anual (enero–diciembre de 2025). Información presentada por territorio conforme a los lineamientos de la Dirección Nacional de Gestión del Riesgo en Salud.', style: 'p' },
+            { text: '2.3 Fuente de información', style: 'h3' },
+            { text: `Certificados e informes trimestrales radicados por el prestador ${data.header.prestador} en la plataforma institucional.`, style: 'p' },
+            { text: '2.4 Metodología', style: 'h3' },
+            { text: 'Extracción mensual de datos reales JSON; consolidación anual; cálculo de desviaciones vs Nota Técnica; análisis de costo promedio y porcentaje de avance.', style: 'p' },
             
             { text: '3. PARÁMETROS DEL PGP Y CONTROL DE GESTIÓN', style: 'h2' },
-            { text: 'Se contempla una banda de control del 90% al 110% sobre la meta trimestral programada.', style: 'p' },
+            { text: 'Se contempla una banda de control técnica del 90% al 110% sobre la meta trimestral programada.', style: 'p' },
             { text: '3.1 Resumen trimestral vs referencia técnica', style: 'h3' },
             {
                 table: {
@@ -142,8 +146,8 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
                         [
                             { text: 'Trimestre', style: 'tableHeader' },
                             { text: 'CUPS', style: 'tableHeader', alignment: 'center' },
-                            { text: 'Valor ($)', style: 'tableHeader', alignment: 'right' },
-                            { text: 'Ref ($)', style: 'tableHeader', alignment: 'right' },
+                            { text: 'Valor Ejecutado', style: 'tableHeader', alignment: 'right' },
+                            { text: 'Referencia (NT)', style: 'tableHeader', alignment: 'right' },
                             { text: '% vs Ref', style: 'tableHeader', alignment: 'center' },
                             { text: 'Lectura', style: 'tableHeader' }
                         ],
@@ -160,7 +164,7 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
                 layout: 'lightHorizontalLines'
             },
 
-            { text: '4. EJECUCIÓN MENSUAL CONSOLIDADA (TABLA VERIFICABLE)', style: 'h2', pageBreak: 'before' },
+            { text: '4. EJECUCIÓN MENSUAL CONSOLIDADA — 2025 (TABLA VERIFICABLE)', style: 'h2', pageBreak: 'before' },
             {
                 table: {
                     headerRows: 1,
@@ -172,8 +176,8 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
                             { text: 'Valor ($)', style: 'tableHeader', alignment: 'right' },
                             { text: 'Costo Prom.', style: 'tableHeader', alignment: 'right' },
                             { text: 'Acumulado ($)', style: 'tableHeader', alignment: 'right' },
-                            { text: '% vs Meta', style: 'tableHeader', alignment: 'center' },
-                            { text: '% vs Ref', style: 'tableHeader', alignment: 'center' }
+                            { text: '% Acum', style: 'tableHeader', alignment: 'center' },
+                            { text: '% Mes/Ref', style: 'tableHeader', alignment: 'center' }
                         ],
                         ...data.meses.map(m => [
                             { text: m.month, style: 'tableCell' },
@@ -189,30 +193,30 @@ function buildDocDefinition(data: InformeDatosSenior, backgroundImageBase64: str
                 layout: 'lightHorizontalLines'
             },
 
-            { text: '7. ANÁLISIS NARRATIVO — TRIMESTRE I (ENE, FEB, MAR)', style: 'h2', pageBreak: 'before' },
+            { text: '5. ANÁLISIS NARRATIVO — TRIMESTRE I (ENE, FEB, MAR)', style: 'h2', pageBreak: 'before' },
             { text: data.narrativa.analisisT1, style: 'p' },
 
-            { text: '8. ANÁLISIS NARRATIVO — TRIMESTRE II (ABR, MAY, JUN)', style: 'h2' },
+            { text: '6. ANÁLISIS NARRATIVO — TRIMESTRE II (ABR, MAY, JUN)', style: 'h2' },
             { text: data.narrativa.analisisT2, style: 'p' },
 
-            { text: '9. ANÁLISIS NARRATIVO — TRIMESTRE III (JUL, AGO, SEP)', style: 'h2' },
+            { text: '7. ANÁLISIS NARRATIVO — TRIMESTRE III (JUL, AGO, SEP)', style: 'h2', pageBreak: 'before' },
             { text: data.narrativa.analisisT3, style: 'p' },
 
-            { text: '10. ANÁLISIS NARRATIVO — TRIMESTRE IV (OCT, NOV, DIC)', style: 'h2' },
+            { text: '8. ANÁLISIS NARRATIVO — TRIMESTRE IV (OCT, NOV, DIC)', style: 'h2' },
             { text: data.narrativa.analisisT4, style: 'p' },
 
-            { text: '10.1 Hallazgos clave (Impacto administrativo y financiero)', style: 'h3' },
-            { ul: data.narrativa.hallazgosClave.map(h => ({ text: h, style: 'p' })), margin: [10, 0, 0, 10] },
+            { text: '9. HALLAZGOS CLAVE (IMPACTO ADMINISTRATIVO Y FINANCIERO)', style: 'h2', pageBreak: 'before' },
+            { ul: data.narrativa.hallazgosClave.map(h => ({ text: h, style: 'p' })), margin: [15, 0, 0, 15] },
 
-            { text: '10.2 Desviaciones y acciones de mejora', style: 'h3' },
-            { ul: data.narrativa.accionesMejora.map(a => ({ text: a, style: 'p' })), margin: [10, 0, 0, 10] },
+            { text: '10. DESVIACIONES Y ACCIONES DE MEJORA', style: 'h2' },
+            { ul: data.narrativa.accionesMejora.map(a => ({ text: a, style: 'p' })), margin: [15, 0, 0, 15] },
 
             { text: '11. CONCLUSIONES Y RECOMENDACIONES', style: 'h2' },
             { text: data.narrativa.conclusiones, style: 'p' },
 
             {
                 stack: [
-                    { text: '_____________________________________', alignment: 'center', margin: [0, 60, 0, 0] },
+                    { text: '_____________________________________', alignment: 'center', margin: [0, 80, 0, 0] },
                     { text: data.header.responsable, bold: true, alignment: 'center' },
                     { text: data.header.cargo, alignment: 'center' },
                     { text: 'DUSAKAWI EPSI', alignment: 'center' }
