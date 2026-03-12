@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -212,10 +211,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const getStatusColor = (clasificacion: string) => {
         switch (clasificacion) {
             case "Sobre-ejecutado": return "text-red-600 font-bold";
-            case "Sub-ejecutado": return "text-blue-600";
-            case "Ejecución Normal": return "text-green-600";
-            case "Inesperado": return "text-purple-600";
-            case "Faltante": return "text-slate-600";
+            case "Sub-ejecutado": return "text-blue-600 font-bold";
+            case "Ejecución Normal": return "text-green-600 font-bold";
+            case "Inesperado": return "text-purple-600 font-bold";
+            case "Faltante": return "text-slate-900 font-bold";
             default: return "text-slate-600";
         }
     };
@@ -225,7 +224,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         { label: "Consultas", value: "Consulta", icon: Stethoscope },
         { label: "Procedimientos", value: "Procedimiento", icon: Microscope },
         { label: "Medicamentos", value: "Medicamento", icon: Pill },
-        { label: "Otro Servicios", value: "Otro Servicio", icon: Syringe },
+        { label: "Otros Servicios", value: "Otro Servicio", icon: Syringe },
     ];
 
     const getServiceIcon = (type: string, colorClass: string) => {
@@ -248,7 +247,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                             <DollarSign className="h-7 w-7 mr-2" />
                             Matriz de Descuentos (Análisis de Valor)
                         </CardTitle>
-                        <CardDescription>Análisis financiero interactivo. Los colores de las columnas CUPS, Tipo y Descripción cambian según el estado de la ejecución.</CardDescription>
+                        <CardDescription>
+                          Análisis financiero interactivo. Las celdas de CUPS, Tipo, Descripción y Cantidades se colorean según el estado de la ejecución (Rojo: Sobre, Verde: Normal, Azul: Sub).
+                        </CardDescription>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -347,16 +348,16 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                                 <TableCell className="px-2 text-center">
                                                     <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
                                                 </TableCell>
-                                                <TableCell className={cn("font-mono text-xs font-semibold", statusColor)}>{row.CUPS}</TableCell>
-                                                <TableCell className={cn("text-xs font-medium", statusColor)}>
+                                                <TableCell className={cn("font-mono text-xs", statusColor)}>{row.CUPS}</TableCell>
+                                                <TableCell className={cn("text-xs", statusColor)}>
                                                     <div className="flex items-center gap-2">
                                                         {getServiceIcon(row.Tipo_Servicio, statusColor)}
                                                         <span>{row.Tipo_Servicio}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className={cn("text-xs max-w-[250px] truncate font-medium", statusColor)} title={row.Descripcion}>{row.Descripcion || 'N/A'}</TableCell>
-                                                <TableCell className={cn("text-center font-medium", statusColor)}>{row.expectedFrequency.toFixed(0)}</TableCell>
-                                                <TableCell className={cn("text-center font-medium", statusColor)}>{row.Cantidad_Ejecutada}</TableCell>
+                                                <TableCell className={cn("text-xs max-w-[250px] truncate", statusColor)} title={row.Descripcion}>{row.Descripcion || 'N/A'}</TableCell>
+                                                <TableCell className={cn("text-center", statusColor)}>{row.expectedFrequency.toFixed(0)}</TableCell>
+                                                <TableCell className={cn("text-center", statusColor)}>{row.Cantidad_Ejecutada}</TableCell>
                                                 <TableCell className="text-center">
                                                     <Input 
                                                         type="text" 
@@ -365,7 +366,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                                         className="h-8 text-center font-bold bg-white border-slate-200" 
                                                     />
                                                 </TableCell>
-                                                <TableCell className={cn("text-right text-xs font-medium", statusColor)}>{formatCurrency(row.Valor_Ejecutado)}</TableCell>
+                                                <TableCell className={cn("text-right text-xs", statusColor)}>{formatCurrency(row.Valor_Ejecutado)}</TableCell>
                                                 <TableCell className="text-right text-xs font-medium text-green-600">{formatCurrency(recognitionValue)}</TableCell>
                                                 <TableCell className="text-right font-bold text-red-600 text-xs">{formatCurrency(discount)}</TableCell>
                                                 <TableCell className="text-center">

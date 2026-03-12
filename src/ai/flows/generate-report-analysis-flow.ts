@@ -2,6 +2,7 @@
 /**
  * @fileOverview Flujo de IA Senior para generar la narrativa del Informe de Gestión Anual PGP.
  * Redacción ejecutiva de alto nivel para Dusakawi EPSI.
+ * Soluciona el error de referencia escapando el símbolo $.
  */
 
 import { ai } from '@/ai/genkit';
@@ -24,7 +25,7 @@ const ReportAnalysisInputSchema = z.object({
   referenciaMensual: z.number(),
   meses: z.array(MonthlyDataSchema),
   conclusionesAdicionales: z.string().optional(),
-  apiKey: z.string().optional().describe("Clave API de Google AI opcional."),
+  apiKey: z.string().optional().describe("Clave API de Google AI."),
 });
 
 const ReportAnalysisOutputSchema = z.object({
@@ -54,22 +55,22 @@ const seniorReportPrompt = ai.definePrompt({
 Eres el Director Nacional de Gestión del Riesgo en Salud de Dusakawi EPSI. Debes redactar el INFORME DE GESTIÓN ANUAL — VIGENCIA 2025 para el prestador {{{prestador}}} (NIT: {{{nit}}}).
 
 DATOS CLAVE DEL CONTRATO:
-- Meta Anual Programada: {{{metaAnual}}}
-- Ejecución Real Consolidada: {{{ejecucionAnual}}} (Cumplimiento: {{{porcentajeCumplimiento}}}%).
-- Referencia Mensual de Gestión (Meta/12): {{{referenciaMensual}}}
+- Meta Anual Programada: \$ {{{metaAnual}}}
+- Ejecución Real Consolidada: \$ {{{ejecucionAnual}}} (Cumplimiento: {{{porcentajeCumplimiento}}}%).
+- Referencia Mensual de Gestión (Meta/12): \$ {{{referenciaMensual}}}
 - Producción Física: {{{totalCups}}} actividades/CUPS atendidas.
 
 INSTRUCCIONES DE REDACCIÓN (ESTILO EJECUTIVO SENIOR):
-1. TONO: Altamente institucional, analítico, contundente y con autoridad técnica. Evita redundancias simples; busca profundidad en la interpretación del dato.
-2. ESTRUCTURA: El informe debe proyectar una extensión de 12 páginas. Por ello, genera párrafos extensos y detallados para cada trimestre.
-3. RESUMEN EJECUTIVO: Define la favorabilidad del modelo PGP. Menciona que no hay señales de sobreejecución y que la variabilidad es consistente con la estacionalidad de la demanda en Riohacha.
-4. ANÁLISIS POR TRIMESTRE: Para cada mes del trimestre, menciona el volumen de actividades, el valor ejecutado y el costo promedio. Interpreta estos datos como una gestión eficiente del riesgo.
-5. HALLAZGOS CLAVE: Identifica mes pico en valor y mes pico en volumen. Resalta la capacidad de compensación del modelo.
-6. ACCIONES DE MEJORA: Propón un tablero mensual único de indicadores y actas de conciliación integral que incluyan retenciones y saldos netos.
+1. TONO: Altamente institucional, analítico, contundente y con autoridad técnica. Evita redundancias simples; busca profundidad en la interpretación del dato. El informe debe proyectar una extensión y detalle equivalente a 12 páginas.
+2. ESTRUCTURA: Sigue estrictamente el orden solicitado: Resumen Ejecutivo, Análisis Trimestrales Extensos, Hallazgos y Acciones.
+3. RESUMEN EJECUTIVO: Define la favorabilidad del modelo PGP. Menciona la ausencia de señales de sobreejecución y la consistencia con la estacionalidad de la demanda en Riohacha.
+4. ANÁLISIS POR TRIMESTRE: Genera análisis técnicos de mínimo 400 palabras por trimestre. Para cada mes, interpreta el volumen de actividades, el valor ejecutado y el costo promedio como una gestión eficiente del riesgo.
+5. HALLAZGOS CLAVE: Identifica meses pico y mínimos en valor/volumen. Resalta la capacidad de compensación del modelo.
+6. ACCIONES DE MEJORA: Propón tableros de control y actas de conciliación integral con retenciones y saldos netos.
 
 DATOS MENSUALES PARA NARRATIVA:
 {{#each meses}}
-- {{month}}: {{cups}} CUPS, Valor \${{value}}.
+- {{month}}: {{cups}} CUPS, Valor \$ {{value}}.
 {{/each}}
 
 {{#if conclusionesAdicionales}}
@@ -77,13 +78,12 @@ OBSERVACIONES ADICIONALES DEL AUDITOR:
 {{{conclusionesAdicionales}}}
 {{/if}}
 
-Genera textos profesionales que utilicen terminología como "estacionalidad de demanda", "mezcla de procedimientos", "trazabilidad verificable" y "sostenibilidad contractural".
+Utiliza terminología técnica como "morbilidad trazadora", "mezcla de procedimientos", "trazabilidad verificable", "sostenibilidad contractural" y "estacionalidad de demanda".
 `,
 });
 
 export async function generateReportAnalysis(input: ReportAnalysisInput): Promise<ReportAnalysisOutput> {
   try {
-    // Si se proporciona una clave API, la usamos para el modelo dinámicamente
     const model = input.apiKey 
       ? googleAI.model('gemini-1.5-flash', { apiKey: input.apiKey })
       : 'googleai/gemini-1.5-flash';
@@ -93,6 +93,6 @@ export async function generateReportAnalysis(input: ReportAnalysisInput): Promis
     return output;
   } catch (error: any) {
     console.error(`Error crítico en redacción senior:`, error);
-    throw new Error('Error al conectar con el motor de IA. Por favor verifique la clave API.');
+    throw new Error('Error al conectar con el motor de IA. Verifique que su API Key sea válida.');
   }
 }
