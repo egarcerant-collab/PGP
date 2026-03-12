@@ -94,8 +94,7 @@ export async function generateReportAnalysis(input: ReportAnalysisInput): Promis
     return output;
   } catch (error: any) {
     console.error(`Error crítico en redacción senior:`, error);
-    // Extraer mensaje real de la API para mejor diagnóstico
     const errorMessage = error?.message || 'Error de conexión con el motor de IA.';
-    throw new Error(`${errorMessage}. Verifique que su API Key sea válida y tenga cuota disponible.`);
+    throw new Error(`${errorMessage}. Verifique que su API Key sea válida.`);
   }
 }
