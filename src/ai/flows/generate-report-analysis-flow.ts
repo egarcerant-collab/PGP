@@ -22,7 +22,6 @@ const ReportAnalysisInputSchema = z.object({
   totalCups: z.number(),
   meses: z.array(MonthlyDataSchema),
   conclusionesAdicionales: z.string().optional(),
-  recomendacionesAdicionales: z.string().optional(),
 });
 
 const ReportAnalysisOutputSchema = z.object({
@@ -46,32 +45,41 @@ const seniorReportPrompt = ai.definePrompt({
   prompt: `
 Eres el Director Nacional de Gestión del Riesgo en Salud de Dusakawi EPSI. Debes redactar el Informe de Gestión Anual 2025 para el prestador {{{prestador}}} (NIT: {{{nit}}}).
 
-DATOS CLAVE:
+DATOS CLAVE DEL EJERCICIO:
 - Meta Anual PGP: {{{metaAnual}}}
-- Ejecución Real: {{{ejecucionAnual}}} ({{{porcentajeCumplimiento}}}%)
-- Producción Total: {{{totalCups}}} actividades/CUPS.
+- Ejecución Real Consolidada: {{{ejecucionAnual}}} ({{{porcentajeCumplimiento}}}%)
+- Producción Total: {{{totalCups}}} actividades/CUPS atendidas.
 
-INSTRUCCIONES DE REDACCIÓN (ESTILO ARIAL PROFESIONAL):
-1. Usa un lenguaje contundente, técnico y ejecutivo.
-2. Genera análisis narrativos específicos para cada trimestre (T1: Ene-Mar, T2: Abr-Jun, T3: Jul-Sep, T4: Oct-Dic) basándote en los datos de los meses proporcionados.
-3. El Resumen Ejecutivo debe destacar la favorabilidad y eficiencia del modelo.
+INSTRUCCIONES DE REDACCIÓN (ESTILO EJECUTIVO):
+1. Usa un lenguaje técnico, contundente y con autoridad institucional.
+2. Genera análisis narrativos profundos para cada trimestre del año basándote en los datos mensuales.
+3. El Resumen Ejecutivo debe destacar la favorabilidad y eficiencia del modelo PGP.
 4. Los Hallazgos Clave deben ser puntos directos sobre impacto administrativo y financiero.
 5. Las Acciones de Mejora deben ser correctivas y orientadas al control del gasto.
 {{#if conclusionesAdicionales}}
-6. Integra estas notas del auditor: {{{conclusionesAdicionales}}}
+6. Integra obligatoriamente estas observaciones técnicas del auditor: {{{conclusionesAdicionales}}}
 {{/if}}
 
-Divide la respuesta en los campos JSON solicitados. No uses generalidades; menciona cifras y tendencias específicas.
+Divide la respuesta exactamente en los campos JSON solicitados. Evita generalidades; menciona cifras y tendencias específicas de los meses reportados.
 `,
 });
 
 export async function generateReportAnalysis(input: ReportAnalysisInput): Promise<ReportAnalysisOutput> {
   try {
-    const { output } = await seniorReportPrompt(input);
-    if (!output) throw new Error('Error al generar narrativa de informe.');
+    // Limpiamos los datos para evitar que números con muchos decimales afecten el prompt
+    const cleanInput = {
+        ...input,
+        porcentajeCumplimiento: Math.round(input.porcentajeCumplimiento * 100) / 100,
+        metaAnual: Math.round(input.metaAnual),
+        ejecucionAnual: Math.round(input.ejecucionAnual)
+    };
+
+    const { output } = await seniorReportPrompt(cleanInput);
+    if (!output) throw new Error('La IA no devolvió contenido.');
     return output;
-  } catch (error) {
-    console.error(`Error en flujo de informe senior:`, error);
-    throw new Error(`Servicio de IA no disponible para redacción senior.`);
+  } catch (error: any) {
+    console.error(`Error crítico en redacción senior:`, error);
+    // Devolvemos un error más descriptivo para depuración
+    throw new Error(`Error de Redacción Senior: ${error.message || 'Fallo en conexión con el modelo de lenguaje'}`);
   }
 }

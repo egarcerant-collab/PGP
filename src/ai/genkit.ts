@@ -13,7 +13,7 @@ export const ai = genkit({
   model: {
     name: 'googleai/gemini-1.5-flash-latest',
     temperature: 0.4,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096, // Aumentado para permitir redacciones de informes extensos
   },
   logLevel: 'debug',
   enableTracing: true,
