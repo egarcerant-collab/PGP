@@ -81,7 +81,7 @@ export async function generateReportAnalysis(input: ReportAnalysisInput): Promis
     });
 
     const { output } = await dynamicAi.generate({
-      model: 'googleai/gemini-1.5-flash',
+      model: 'googleai/gemini-2.0-flash',
       prompt: PROMPT_TEMPLATE,
       input: { schema: ReportAnalysisInputSchema, data: input },
       output: { schema: ReportAnalysisOutputSchema },

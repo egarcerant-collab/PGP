@@ -531,7 +531,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 {data.map((item: UnexpectedCupInfo) => (
                                     <TableRow key={item.cup}>
                                         <TableCell className="font-mono text-sm">{item.cup}</TableCell>
-                                        <TableCell className="text-sm">N/A</TableCell>
+                                        <TableCell className="text-sm">{item.description || 'N/A'}</TableCell>
                                         <TableCell className="text-center text-sm">{item.realFrequency}</TableCell>
                                         <TableCell className="text-right font-bold text-sm">{formatCurrency(item.totalValue)}</TableCell>
                                         <TableCell className="text-center">

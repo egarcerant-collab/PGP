@@ -31,7 +31,7 @@ import { type ExecutionDataByMonth } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
 import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
-import { getNumericValue, type SavedAuditData } from '../app/JsonAnalyzerPage';
+import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
@@ -70,6 +70,7 @@ export interface DeviatedCupInfo {
 
 export interface UnexpectedCupInfo {
     cup: string;
+    description?: string;
     realFrequency: number;
     totalValue: number;
     serviceType: ServiceType;
@@ -120,7 +121,7 @@ interface PgPsearchFormProps {
   jsonPrestadorCode: string | null;
   uniqueUserCount: number;
   initialAuditData: SavedAuditData | null;
-  apiKey?: string;
+  regimenTotals?: RegimenTotals;
 }
 
 const PRESTADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04/edit?gid=0#gid=0";
@@ -192,6 +193,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     else if (row.Clasificacion === "Inesperado") {
         unexpectedCups.push({
             cup: row.CUPS,
+            description: row.Descripcion,
             realFrequency: row.Cantidad_Ejecutada,
             totalValue: row.Valor_Ejecutado,
             serviceType: row.Tipo_Servicio as ServiceType
@@ -244,7 +246,7 @@ const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
 const PgPsearchForm = forwardRef<
   { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void },
   PgPsearchFormProps
->(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, apiKey }, ref) => {
+>(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -334,7 +336,8 @@ const PgPsearchForm = forwardRef<
             const pgp = pgpCupsMap.get(code);
             const qty = qtyF ? getNumericValue(s[qtyF]) : 1;
             const valJson = (unitValField && qtyF) ? getNumericValue(s[unitValField]) * qty : getNumericValue(s[valueField]);
-            exportRows.push({ Mes: monthName, ID_Usuario: userId, Tipo_Servicio: serviceType, CUPS: code, Descripcion_CUPS: pgp?.description || 'N/A', Fecha_Atencion: s.fechaInicioAtencion || 'N/A', Diagnostico_Principal: s.codDiagnosticoPrincipal || 'N/A', Valor_Servicio_JSON: valJson, Cantidad_Ejecutada: qty, Valor_Unitario_NT: pgp?.unitValue || 0, Valor_Ejecutado_NT: qty * (pgp?.unitValue || 0) });
+            const descripcion = pgp?.description || s.nomTecnologiaSalud || 'N/A';
+            exportRows.push({ Mes: monthName, ID_Usuario: userId, Tipo_Servicio: serviceType, CUPS: code, Descripcion_CUPS: descripcion, Fecha_Atencion: s.fechaInicioAtencion || 'N/A', Diagnostico_Principal: s.codDiagnosticoPrincipal || 'N/A', Valor_Servicio_JSON: valJson, Cantidad_Ejecutada: qty, Valor_Unitario_NT: pgp?.unitValue || 0, Valor_Ejecutado_NT: qty * (pgp?.unitValue || 0) });
           });
         };
         if (user.servicios) {
@@ -425,8 +428,27 @@ const PgPsearchForm = forwardRef<
             <div className="grid gap-4 md:grid-cols-3">
               <StatCard title="Cobertura Poblacional" value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`} icon={Users} footer={`Atendidos: ${uniqueUserCount} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
               <StatCard title="Ejecución Real (JSON)" value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))} icon={Wallet} footer="Costo real total de los archivos JSON" />
-              <StatCard title="Ejecución Valorizada (NT)" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar detalle Excel" onDoubleClick={handleDownloadExecutionDetail} />
+              <StatCard title="Ejecución Inicial de la Nota Tecnica" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar detalle Excel" onDoubleClick={handleDownloadExecutionDetail} />
             </div>
+
+            {regimenTotals && (regimenTotals.subsidiado > 0 || regimenTotals.contributivo > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 flex flex-col gap-1">
+                  <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
+                    Subsidiado — Ejecución Real (JSON)
+                  </p>
+                  <p className="text-2xl font-bold text-blue-900">{formatCurrency(regimenTotals.subsidiado)}</p>
+                </div>
+                <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4 flex flex-col gap-1">
+                  <p className="text-sm font-semibold text-orange-700 flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
+                    Contributivo — Ejecución Real (JSON)
+                  </p>
+                  <p className="text-2xl font-bold text-orange-900">{formatCurrency(regimenTotals.contributivo)}</p>
+                </div>
+              </div>
+            )}
 
             {globalSummary && (
                 <div className="space-y-4">
@@ -452,7 +474,7 @@ const PgPsearchForm = forwardRef<
               uniqueUserCount={uniqueUserCount}
               jsonPrestadorCode={jsonPrestadorCode}
             />
-            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} apiKey={apiKey} /></div>
+            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
           </div>
         )}
 

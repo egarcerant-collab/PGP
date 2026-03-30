@@ -54,7 +54,7 @@ export async function analyzePgpData(input: PgpRowForAI[]): Promise<z.infer<type
 
 const prompt = ai.definePrompt({
   name: 'pgpAnalysisPrompt',
-  model: 'googleai/gemini-1.5-flash',
+  model: 'googleai/gemini-2.0-flash',
   input: {schema: AnalyzePgpDataInputSchema},
   output: {schema: AnalyzePgpDataOutputSchema},
   config: {

@@ -24,7 +24,7 @@ export async function describeCup(cupCode: string): Promise<CupDescription> {
 
 const prompt = ai.definePrompt({
   name: 'describeCupPrompt',
-  model: 'googleai/gemini-1.5-flash',
+  model: 'googleai/gemini-2.0-flash',
   input: {schema: DescribeCupInputSchema},
   output: {schema: DescribeCupOutputSchema},
   config: {

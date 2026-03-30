@@ -7,6 +7,7 @@ import DataVisualizer, { calculateSummary } from "@/components/json-analyzer/Dat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
@@ -70,10 +71,16 @@ export const deserializeExecutionData = (obj: any): ExecutionDataByMonth => {
   return map;
 };
 
+export interface RegimenTotals {
+  subsidiado: number;
+  contributivo: number;
+}
+
 interface JsonAnalyzerPageProps {
   setExecutionData: (data: ExecutionDataByMonth) => void;
   setJsonPrestadorCode: (code: string | null) => void;
   setUniqueUserCount: (count: number) => void;
+  setRegimenTotals?: (totals: RegimenTotals) => void;
 }
 
 const PROVIDERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04/edit?gid=0#gid=0";
@@ -257,7 +264,7 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
     return suggestedMonth;
 };
 
-export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCode, setUniqueUserCount }: JsonAnalyzerPageProps) {
+export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCode, setUniqueUserCount, setRegimenTotals }: JsonAnalyzerPageProps) {
   const [files, setFiles] = useState<FileState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<Map<string, PrestadorInfo> | null>(null);
@@ -274,6 +281,41 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
       return acc;
     }, new Map<string, FileState[]>());
   }, [files]);
+
+  // Detecta régimen globalmente: el archivo con más usuarios = Subsidiado, el menor = Contributivo
+  const regimenByKey = useMemo(() => {
+    const map = new Map<string, 'Subsidiado' | 'Contributivo'>();
+    if (files.length >= 2) {
+      const sorted = [...files].sort((a, b) => (b.jsonData?.usuarios?.length || 0) - (a.jsonData?.usuarios?.length || 0));
+      const mid = Math.ceil(sorted.length / 2);
+      sorted.forEach((f, i) => {
+        map.set(`${f.month}-${f.fileName}`, i < mid ? 'Subsidiado' : 'Contributivo');
+      });
+    }
+    return map;
+  }, [files]);
+
+  // Totales por régimen calculados directamente desde el JSON (suma de vrServicio / vrUnitario*cantidad)
+  const regimenTotalsComputed = useMemo<RegimenTotals>(() => {
+    let subsidiado = 0;
+    let contributivo = 0;
+    files.forEach(f => {
+      const key = `${f.month}-${f.fileName}`;
+      const regimen = regimenByKey.get(key);
+      if (!regimen) return;
+      const usuarios: any[] = f.jsonData?.usuarios || [];
+      let total = 0;
+      usuarios.forEach((u: any) => {
+        (u.servicios?.consultas || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
+        (u.servicios?.procedimientos || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
+        (u.servicios?.medicamentos || []).forEach((s: any) => { total += (Number(s.vrUnitarioMedicamento) || 0) * (Number(s.cantidadMedicamento) || 0); });
+        (u.servicios?.otrosServicios || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
+      });
+      if (regimen === 'Subsidiado') subsidiado += total;
+      else contributivo += total;
+    });
+    return { subsidiado, contributivo };
+  }, [files, regimenByKey]);
 
   useEffect(() => { setIsClient(true); }, []);
 
@@ -356,6 +398,10 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     setJsonPrestadorCode(files.length > 0 ? getCodPrestadorFromJson(files[0].jsonData) : null);
   }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount]);
 
+  useEffect(() => {
+    if (setRegimenTotals) setRegimenTotals(regimenTotalsComputed);
+  }, [regimenTotalsComputed, setRegimenTotals]);
+
   const handleReset = () => {
     setFiles([]);
     setExecutionData(new Map());
@@ -395,27 +441,58 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
         </CardContent>
       </Card>
 
+      {files.length >= 2 && (regimenTotalsComputed.subsidiado > 0 || regimenTotalsComputed.contributivo > 0) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-5 flex flex-col gap-1">
+            <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+              <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
+              Subsidiado — Ejecución Real (JSON)
+            </p>
+            <p className="text-2xl font-bold text-blue-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(regimenTotalsComputed.subsidiado)}</p>
+            <p className="text-xs text-blue-600">Archivo con mayor número de usuarios</p>
+          </div>
+          <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-5 flex flex-col gap-1">
+            <p className="text-sm font-semibold text-orange-700 flex items-center gap-2">
+              <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
+              Contributivo — Ejecución Real (JSON)
+            </p>
+            <p className="text-2xl font-bold text-orange-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(regimenTotalsComputed.contributivo)}</p>
+            <p className="text-xs text-orange-600">Archivo con menor número de usuarios</p>
+          </div>
+        </div>
+      )}
+
       {files.length > 0 && (
         <div className="space-y-6">
           <h3 className="text-xl font-semibold text-center">Resultados por Mes</h3>
           {Array.from(filesByMonth.entries()).map(([month, monthFiles]) => (
             <div key={month} className="space-y-4">
                 <h4 className="text-lg font-bold border-b pb-2 flex items-center"><Calendar className="mr-2 h-5 w-5 text-primary" />{getMonthName(month)} ({monthFiles.length} archivos)</h4>
-                {monthFiles.map((file, index) => file.jsonData && (
+                {monthFiles.map((file, index) => {
+                    const regimen = regimenByKey.get(`${file.month}-${file.fileName}`);
+                    return file.jsonData && (
                     <Card key={index} className="shadow-md">
                     <Accordion type="single" collapsible>
                         <AccordionItem value={`item-${index}`}>
                         <AccordionTrigger className="p-6">
-                            <div className="flex flex-col items-start text-left">
-                            <h4 className="text-lg font-bold text-foreground"><Building className="inline-block mr-2 h-5 w-5 text-primary" />{file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}</h4>
-                            <p className="text-sm text-muted-foreground">NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName}</p>
+                            <div className="flex flex-col items-start text-left gap-1">
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-lg font-bold text-foreground"><Building className="inline-block mr-2 h-5 w-5 text-primary" />{file.prestadorInfo ? file.prestadorInfo.PRESTADOR : `Prestador código ${getCodPrestadorFromJson(file.jsonData) || 'desconocido'}`}</h4>
+                                {regimen && (
+                                  <Badge className={regimen === 'Subsidiado' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-orange-500 text-white hover:bg-orange-600'}>
+                                    {regimen}
+                                  </Badge>
+                                )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">NIT: {file.prestadorInfo?.NIT || findValueByKeyCaseInsensitive(file.jsonData, 'numDocumentoIdObligado')} | Archivo: {file.fileName} | Usuarios: {file.jsonData?.usuarios?.length || 0}</p>
                             </div>
                         </AccordionTrigger>
                         <AccordionContent className="p-6 pt-0"><DataVisualizer data={file.jsonData} /></AccordionContent>
                         </AccordionItem>
                     </Accordion>
                     </Card>
-                ))}
+                );
+                })}
             </div>
           ))}
         </div>
@@ -429,4 +506,5 @@ interface FileState {
   fileName: string | null;
   prestadorInfo: PrestadorInfo | null;
   month: string;
+  regimen?: 'Subsidiado' | 'Contributivo';
 }

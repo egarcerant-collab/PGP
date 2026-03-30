@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Loader2, DownloadCloud, Landmark, User, Settings, Key, ShieldCheck } from "lucide-react";
+import { FileText, Loader2, DownloadCloud, Landmark, User, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,23 +27,16 @@ async function loadImageAsBase64(url: string): Promise<string> {
 interface InformePGPProps {
   data: any;
   comparisonSummary: any;
-  apiKey?: string;
 }
 
-export default function InformePGP({ data, comparisonSummary, apiKey: initialApiKey }: InformePGPProps) {
+export default function InformePGP({ data, comparisonSummary }: InformePGPProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [auditorName, setAuditorName] = useState("EDUARDO GARCERANT GONZALEZ");
   const [conclusions, setConclusions] = useState("");
-  const [localApiKey, setLocalApiKey] = useState(initialApiKey || "");
   const { toast } = useToast();
 
   const handleGenerate = async (action: 'preview' | 'download') => {
-    if (!localApiKey) {
-      toast({ title: "Falta API Key", description: "Por favor, introduce tu Gemini API Key para la redacción senior.", variant: "destructive" });
-      return;
-    }
-    
     if (!data || !comparisonSummary) return;
     setIsGenerating(true);
     toast({ title: "Generando Informe Senior...", description: "Redactando informe anual de 12 páginas (Arial)." });
@@ -93,8 +86,7 @@ export default function InformePGP({ data, comparisonSummary, apiKey: initialApi
             totalCups,
             referenciaMensual,
             meses: meses.map(m => ({ month: m.month, cups: m.cups, value: m.value })),
-            conclusionesAdicionales: conclusions,
-            apiKey: localApiKey
+            conclusionesAdicionales: conclusions
         });
 
         const reportData: InformeDatosSenior = {
@@ -146,27 +138,6 @@ export default function InformePGP({ data, comparisonSummary, apiKey: initialApi
       </CardHeader>
       <CardContent className="space-y-6">
         
-        <div className="p-4 bg-white rounded-lg border border-primary/20 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-2">
-                <Key className="h-4 w-4" /> Configuración de Redacción IA
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="gemini-key" className="text-xs">Introduce tu Gemini API Key</Label>
-                <div className="relative">
-                    <Input 
-                      id="gemini-key"
-                      type="password" 
-                      placeholder="AIzaSy..." 
-                      value={localApiKey} 
-                      onChange={e => setLocalApiKey(e.target.value)}
-                      className="pr-10"
-                    />
-                    {localApiKey.length > 10 && <ShieldCheck className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />}
-                </div>
-                <p className="text-[10px] text-muted-foreground">Esta clave se usa exclusivamente para procesar la narrativa técnica del informe.</p>
-            </div>
-        </div>
-
         <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-xs"><User className="h-4 w-4" /> Profesional Responsable</Label>
