@@ -41,7 +41,7 @@ export default function Home() {
   const [jsonPrestadorCode, setJsonPrestadorCode] = useState<string | null>(null);
   const [uniqueUserCount, setUniqueUserCount] = useState<number>(0);
   const [savedAuditData, setSavedAuditData] = useState<SavedAuditData | null>(null);
-  const [regimenTotals, setRegimenTotals] = useState<RegimenTotals>({ subsidiado: 0, contributivo: 0 });
+  const [regimenTotals, setRegimenTotals] = useState<RegimenTotals>({ subsidiado: 0, contributivo: 0, byMonth: {}, subsidiadoUsers: 0, contributivoUsers: 0 });
 
   const pgpSearchRef = useRef<{ handleSelectPrestador: (prestador: { PRESTADOR: string; WEB: string }) => void } | null>(null);
 

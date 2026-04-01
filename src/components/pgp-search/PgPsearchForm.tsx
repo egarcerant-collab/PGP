@@ -36,6 +36,7 @@ import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type Adjusted
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export type Prestador = PrestadorInfo;
 
@@ -431,24 +432,89 @@ const PgPsearchForm = forwardRef<
               <StatCard title="Ejecución Inicial de la Nota Tecnica" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar detalle Excel" onDoubleClick={handleDownloadExecutionDetail} />
             </div>
 
-            {regimenTotals && (regimenTotals.subsidiado > 0 || regimenTotals.contributivo > 0) && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 flex flex-col gap-1">
-                  <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+            {(() => {
+              // Valores base: usa JSON si tiene data, si no usa Nota Técnica proporcionalmente
+              const jsonTotal = Array.from(executionDataByMonth.values()).reduce((a, d) => a + d.totalRealValue, 0);
+              const ntTotal = comparisonSummary?.monthlyFinancials.reduce((a, m) => a + m.totalValorEjecutado, 0) || 0;
+              const subUsers = regimenTotals?.subsidiadoUsers || 0;
+              const conUsers = regimenTotals?.contributivoUsers || 0;
+              const totalUsers = subUsers + conUsers;
+              const useJsonValues = jsonTotal > 0;
+              const baseTotal = useJsonValues ? jsonTotal : ntTotal;
+              const subProp = totalUsers > 0 ? subUsers / totalUsers : 0.5;
+              const conProp = totalUsers > 0 ? conUsers / totalUsers : 0.5;
+              const subVal = useJsonValues ? (regimenTotals?.subsidiado || baseTotal * subProp) : baseTotal * subProp;
+              const conVal = useJsonValues ? (regimenTotals?.contributivo || baseTotal * conProp) : baseTotal * conProp;
+              const hasData = totalUsers > 0 || subVal > 0;
+              if (!hasData) return null;
+              return (
+              <Card className="border-2 border-primary/20 shadow-md">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
-                    Subsidiado — Ejecución Real (JSON)
-                  </p>
-                  <p className="text-2xl font-bold text-blue-900">{formatCurrency(regimenTotals.subsidiado)}</p>
-                </div>
-                <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4 flex flex-col gap-1">
-                  <p className="text-sm font-semibold text-orange-700 flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
-                    Contributivo — Ejecución Real (JSON)
-                  </p>
-                  <p className="text-2xl font-bold text-orange-900">{formatCurrency(regimenTotals.contributivo)}</p>
-                </div>
-              </div>
-            )}
+                    Ejecución Real por Régimen
+                  </CardTitle>
+                  <CardDescription>
+                    {useJsonValues ? 'Desglose del valor ejecutado (JSON) entre Subsidiado y Contributivo' : 'Desglose estimado de la Nota Técnica según proporción de usuarios por régimen'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2 mb-4">
+                    <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 flex flex-col gap-1">
+                      <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+                        <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
+                        Subsidiado — Total
+                      </p>
+                      <p className="text-2xl font-bold text-blue-900">{formatCurrency(subVal)}</p>
+                      {subUsers > 0 && <p className="text-xs text-blue-600">{subUsers.toLocaleString('es-CO')} usuarios ({(subProp * 100).toFixed(1)}%)</p>}
+                    </div>
+                    <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4 flex flex-col gap-1">
+                      <p className="text-sm font-semibold text-orange-700 flex items-center gap-2">
+                        <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
+                        Contributivo — Total
+                      </p>
+                      <p className="text-2xl font-bold text-orange-900">{formatCurrency(conVal)}</p>
+                      {conUsers > 0 && <p className="text-xs text-orange-600">{conUsers.toLocaleString('es-CO')} usuarios ({(conProp * 100).toFixed(1)}%)</p>}
+                    </div>
+                  </div>
+                  {Object.keys(regimenTotals?.byMonth || {}).length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Mes</TableHead>
+                          <TableHead className="text-right text-blue-700">Subsidiado</TableHead>
+                          <TableHead className="text-right text-orange-700">Contributivo</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {Object.entries(regimenTotals?.byMonth || {}).map(([mes, vals]) => {
+                          const mTotal = comparisonSummary?.monthlyFinancials.find(m => m.month === mes)?.totalValorEjecutado || 0;
+                          const mSubVal = useJsonValues ? vals.subsidiado : (mTotal * subProp);
+                          const mConVal = useJsonValues ? vals.contributivo : (mTotal * conProp);
+                          return (
+                            <TableRow key={mes}>
+                              <TableCell className="font-medium">{mes}</TableCell>
+                              <TableCell className="text-right text-blue-800 font-semibold">{formatCurrency(mSubVal)}</TableCell>
+                              <TableCell className="text-right text-orange-800 font-semibold">{formatCurrency(mConVal)}</TableCell>
+                              <TableCell className="text-right font-bold">{formatCurrency(mSubVal + mConVal)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="border-t-2 bg-muted/50">
+                          <TableCell className="font-bold">TOTAL</TableCell>
+                          <TableCell className="text-right text-blue-900 font-bold">{formatCurrency(subVal)}</TableCell>
+                          <TableCell className="text-right text-orange-900 font-bold">{formatCurrency(conVal)}</TableCell>
+                          <TableCell className="text-right font-bold">{formatCurrency(subVal + conVal)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+              );
+            })()}
 
             {globalSummary && (
                 <div className="space-y-4">
@@ -461,7 +527,7 @@ const PgPsearchForm = forwardRef<
                 </div>
             )}
 
-            <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} />
+            <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
             <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} />
             <DiscountMatrix
               data={comparisonSummary.matrizDescuentos}

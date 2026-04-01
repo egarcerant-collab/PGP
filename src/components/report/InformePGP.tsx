@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2, DownloadCloud, Landmark, User, Settings } from "lucide-react";
@@ -9,19 +9,74 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "../ui/textarea";
-import { generateReportAnalysis, type ReportAnalysisInput } from "@/ai/flows/generate-report-analysis-flow";
 import { descargarInformeSeniorPDF, generarURLInformeSeniorPDF, type InformeDatosSenior, type MonthlyRow, type QuarterlyRow } from "@/lib/pdf-definitions";
 
 async function loadImageAsBase64(url: string): Promise<string> {
     try {
         const response = await fetch(url);
         const blob = await response.blob();
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
         });
     } catch (e) { return ""; }
+}
+
+const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+const pct = (n: number) => `${n.toFixed(1)}%`;
+
+function generarNarrativa(
+    prestador: string, nit: string,
+    metaAnual: number, ejecucionAnual: number,
+    totalCups: number, referenciaMensual: number,
+    meses: { month: string; cups: number; value: number }[],
+    conclusionesAdicionales: string
+) {
+    const cumplimiento = metaAnual > 0 ? (ejecucionAnual / metaAnual) * 100 : 0;
+    const mesPico = [...meses].sort((a, b) => b.value - a.value)[0];
+    const mesMinimo = [...meses].sort((a, b) => a.value - b.value)[0];
+    const t1 = meses.slice(0, 3);
+    const t2 = meses.slice(3, 6);
+    const t3 = meses.slice(6, 9);
+    const t4 = meses.slice(9, 12);
+    const sumT = (ms: typeof meses) => ms.reduce((a, b) => a + b.value, 0);
+    const cupsT = (ms: typeof meses) => ms.reduce((a, b) => a + b.cups, 0);
+
+    const resumenEjecutivo = `El presente informe de gestión anual corresponde al seguimiento y control del contrato PGP suscrito con ${prestador} (NIT: ${nit}) durante la vigencia 2025. La ejecución consolidada del período asciende a ${fmt(ejecucionAnual)}, representando el ${pct(cumplimiento)} de la meta anual establecida en ${fmt(metaAnual)}, con una producción total de ${totalCups.toLocaleString('es-CO')} actividades en salud verificadas mediante trazabilidad documental. La referencia mensual de control se situó en ${fmt(referenciaMensual)}, constituyendo el parámetro de verificabilidad utilizado en la evaluación de favorabilidad del modelo de contratación. Los resultados obtenidos reflejan la capacidad instalada del prestador y la dinámica de demanda de la población afiliada atendida en el marco del régimen subsidiado.`;
+
+    const buildTrimestre = (label: string, ms: typeof meses, ref: number) => {
+        const total = sumT(ms);
+        const cups = cupsT(ms);
+        const p = ref > 0 ? (total / ref) * 100 : 0;
+        const detalle = ms.map(m => `${m.month}: ${m.cups.toLocaleString('es-CO')} actividades por valor de ${fmt(m.value)}`).join('; ');
+        return `Durante el ${label}, la ejecución acumulada fue de ${fmt(total)}, equivalente al ${pct(p)} de la referencia trimestral de ${fmt(ref)}, con ${cups.toLocaleString('es-CO')} actividades totales. El comportamiento mensual fue el siguiente: ${detalle}. La mezcla de procedimientos registrada refleja la estacionalidad de demanda propia del perfil epidemiológico de la población atendida, con variaciones explicadas por factores de morbilidad trazadora y presión del gasto unitario en servicios de mayor complejidad.`;
+    };
+
+    const analisisT1 = t1.length > 0 ? buildTrimestre('Trimestre I (Enero–Marzo)', t1, metaAnual / 4) : 'Sin datos para este trimestre.';
+    const analisisT2 = t2.length > 0 ? buildTrimestre('Trimestre II (Abril–Junio)', t2, metaAnual / 4) : 'Sin datos para este trimestre.';
+    const analisisT3 = t3.length > 0 ? buildTrimestre('Trimestre III (Julio–Septiembre)', t3, metaAnual / 4) : 'Sin datos para este trimestre.';
+    const analisisT4 = t4.length > 0 ? buildTrimestre('Trimestre IV (Octubre–Diciembre)', t4, metaAnual / 4) : 'Sin datos para este trimestre.';
+
+    const hallazgosClave = [
+        `El mes de mayor ejecución fue ${mesPico?.month || 'N/D'} con ${fmt(mesPico?.value || 0)}, representando el ${mesPico && referenciaMensual > 0 ? pct((mesPico.value / referenciaMensual) * 100) : 'N/D'} de la referencia mensual.`,
+        `El mes de menor ejecución fue ${mesMinimo?.month || 'N/D'} con ${fmt(mesMinimo?.value || 0)}, evidenciando estacionalidad en la demanda de servicios.`,
+        `La ejecución anual de ${fmt(ejecucionAnual)} representa el ${pct(cumplimiento)} de la meta contractual de ${fmt(metaAnual)}.`,
+        `Se registró una producción total de ${totalCups.toLocaleString('es-CO')} actividades en salud verificadas durante la vigencia.`,
+        `La referencia mensual de control fue de ${fmt(referenciaMensual)}, utilizada como parámetro de verificabilidad del modelo PGP.`,
+        `La variabilidad mensual observada es consistente con el modelo PGP y los perfiles de morbilidad trazadora de la población afiliada.`
+    ];
+
+    const accionesMejora = [
+        'Implementar tablero de control mensual con alertas tempranas ante desviaciones superiores al 10% de la referencia de ejecución.',
+        'Establecer actas de conciliación integral trimestral que incluyan validación cruzada de retenciones y glosas.',
+        'Fortalecer los mecanismos de verificación documental para garantizar la trazabilidad de las actividades reportadas.',
+        'Desarrollar estrategias de compensación en meses de baja ejecución para mantener la curva de cumplimiento dentro de la banda del 90–110%.'
+    ];
+
+    const conclusiones = `El análisis de la ejecución del contrato PGP con ${prestador} durante la vigencia 2025 permite concluir que el prestador ha mantenido un nivel de ejecución ${cumplimiento >= 90 ? 'dentro de los parámetros esperados' : 'por debajo de la meta contractual'}, con una ejecución del ${pct(cumplimiento)} respecto a la meta anual. Se recomienda la conciliación integral del contrato considerando las retenciones aplicadas y los saldos pendientes de reconocimiento, garantizando el cierre contractual conciliable y la sostenibilidad del modelo de atención.${conclusionesAdicionales ? ` Observaciones adicionales del auditor: ${conclusionesAdicionales}` : ''}`;
+
+    return { resumenEjecutivo, analisisT1, analisisT2, analisisT3, analisisT4, hallazgosClave, accionesMejora, conclusiones };
 }
 
 interface InformePGPProps {
@@ -39,15 +94,14 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
   const handleGenerate = async (action: 'preview' | 'download') => {
     if (!data || !comparisonSummary) return;
     setIsGenerating(true);
-    toast({ title: "Generando Informe Senior...", description: "Redactando informe anual de 12 páginas (Arial)." });
+    toast({ title: "Generando Informe...", description: "Construyendo informe con los datos disponibles." });
 
     try {
-        const metaAnual = data.notaTecnica.valor3m * 4; 
+        const metaAnual = data.notaTecnica.valor3m * 4;
         const ejecucionAnual = comparisonSummary.monthlyFinancials.reduce((acc: number, m: any) => acc + m.totalValorEjecutado, 0);
         const totalCups = comparisonSummary.overExecutedCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0) +
                          comparisonSummary.normalExecutionCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0) +
                          comparisonSummary.underExecutedCups.reduce((acc: number, c: any) => acc + c.realFrequency, 0);
-
         const referenciaMensual = metaAnual / 12;
 
         let accumulated = 0;
@@ -67,8 +121,8 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
         });
 
         const trimestres: QuarterlyRow[] = [
-            { 
-                quarter: 'Trimestre I', 
+            {
+                quarter: 'Trimestre I',
                 cups: meses.slice(0,3).reduce((a,b) => a+b.cups, 0),
                 value: meses.slice(0,3).reduce((a,b) => a+b.value, 0),
                 reference: data.notaTecnica.valor3m,
@@ -77,17 +131,12 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
             }
         ];
 
-        const analysis = await generateReportAnalysis({
-            prestador: data.header.ipsNombre,
-            nit: data.header.ipsNit,
-            metaAnual,
-            ejecucionAnual,
-            porcentajeCumplimiento: (ejecucionAnual / metaAnual) * 100,
-            totalCups,
-            referenciaMensual,
-            meses: meses.map(m => ({ month: m.month, cups: m.cups, value: m.value })),
-            conclusionesAdicionales: conclusions
-        });
+        const narrativa = generarNarrativa(
+            data.header.ipsNombre, data.header.ipsNit,
+            metaAnual, ejecucionAnual, totalCups, referenciaMensual,
+            meses.map(m => ({ month: m.month, cups: m.cups, value: m.value })),
+            conclusions
+        );
 
         const reportData: InformeDatosSenior = {
             header: {
@@ -104,14 +153,14 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
             meses,
             trimestres,
             narrativa: {
-                resumenEjecutivo: analysis.resumenEjecutivo,
-                analisisT1: analysis.analisisT1,
-                analisisT2: analysis.analisisT2,
-                analisisT3: analysis.analisisT3,
-                analisisT4: analysis.analisisT4,
-                hallazgosClave: analysis.hallazgosClave,
-                accionesMejora: analysis.accionesMejora,
-                conclusiones: analysis.conclusionesFinales
+                resumenEjecutivo: narrativa.resumenEjecutivo,
+                analisisT1: narrativa.analisisT1,
+                analisisT2: narrativa.analisisT2,
+                analisisT3: narrativa.analisisT3,
+                analisisT4: narrativa.analisisT4,
+                hallazgosClave: narrativa.hallazgosClave,
+                accionesMejora: narrativa.accionesMejora,
+                conclusiones: narrativa.conclusiones
             }
         };
 
@@ -132,12 +181,11 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
             <Landmark className="h-6 w-6 text-primary" />
-            Informe de Gestión Anual Senior (12 Páginas)
+            Informe de Gestión Anual (12 Páginas)
         </CardTitle>
-        <CardDescription>Genera el documento oficial con análisis narrativo trimestral y tablas de control.</CardDescription>
+        <CardDescription>Genera el documento oficial con análisis trimestral y tablas de control basado en los datos cargados.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        
         <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-xs"><User className="h-4 w-4" /> Profesional Responsable</Label>
@@ -148,7 +196,7 @@ export default function InformePGP({ data, comparisonSummary }: InformePGPProps)
                 <Textarea placeholder="Ej: Favorabilidad alta..." value={conclusions} onChange={e => setConclusions(e.target.value)} className="min-h-[60px]" />
             </div>
         </div>
-        
+
         <div className="flex gap-4">
             <Button onClick={() => handleGenerate('preview')} disabled={isGenerating} className="flex-1 bg-primary hover:bg-primary/90">
                 {isGenerating ? <Loader2 className="mr-2 animate-spin" /> : <FileText className="mr-2" />}

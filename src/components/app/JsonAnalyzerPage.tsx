@@ -74,6 +74,9 @@ export const deserializeExecutionData = (obj: any): ExecutionDataByMonth => {
 export interface RegimenTotals {
   subsidiado: number;
   contributivo: number;
+  byMonth: Record<string, { subsidiado: number; contributivo: number }>;
+  subsidiadoUsers: number;
+  contributivoUsers: number;
 }
 
 interface JsonAnalyzerPageProps {
@@ -272,6 +275,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const [localRegimenTotals, setLocalRegimenTotals] = useState<RegimenTotals>({ subsidiado: 0, contributivo: 0, byMonth: {}, subsidiadoUsers: 0, contributivoUsers: 0 });
 
   const filesByMonth = useMemo(() => {
     return files.reduce((acc, file) => {
@@ -282,10 +286,12 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     }, new Map<string, FileState[]>());
   }, [files]);
 
-  // Detecta régimen globalmente: el archivo con más usuarios = Subsidiado, el menor = Contributivo
+  // Detecta régimen: con 1 archivo = Subsidiado; con 2+ el mayor en usuarios = Subsidiado
   const regimenByKey = useMemo(() => {
     const map = new Map<string, 'Subsidiado' | 'Contributivo'>();
-    if (files.length >= 2) {
+    if (files.length === 1) {
+      map.set(`${files[0].month}-${files[0].fileName}`, 'Subsidiado');
+    } else if (files.length >= 2) {
       const sorted = [...files].sort((a, b) => (b.jsonData?.usuarios?.length || 0) - (a.jsonData?.usuarios?.length || 0));
       const mid = Math.ceil(sorted.length / 2);
       sorted.forEach((f, i) => {
@@ -294,28 +300,6 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     }
     return map;
   }, [files]);
-
-  // Totales por régimen calculados directamente desde el JSON (suma de vrServicio / vrUnitario*cantidad)
-  const regimenTotalsComputed = useMemo<RegimenTotals>(() => {
-    let subsidiado = 0;
-    let contributivo = 0;
-    files.forEach(f => {
-      const key = `${f.month}-${f.fileName}`;
-      const regimen = regimenByKey.get(key);
-      if (!regimen) return;
-      const usuarios: any[] = f.jsonData?.usuarios || [];
-      let total = 0;
-      usuarios.forEach((u: any) => {
-        (u.servicios?.consultas || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
-        (u.servicios?.procedimientos || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
-        (u.servicios?.medicamentos || []).forEach((s: any) => { total += (Number(s.vrUnitarioMedicamento) || 0) * (Number(s.cantidadMedicamento) || 0); });
-        (u.servicios?.otrosServicios || []).forEach((s: any) => { total += Number(s.vrServicio) || 0; });
-      });
-      if (regimen === 'Subsidiado') subsidiado += total;
-      else contributivo += total;
-    });
-    return { subsidiado, contributivo };
-  }, [files, regimenByKey]);
 
   useEffect(() => { setIsClient(true); }, []);
 
@@ -396,11 +380,43 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     });
     setExecutionData(dataByMonth);
     setJsonPrestadorCode(files.length > 0 ? getCodPrestadorFromJson(files[0].jsonData) : null);
-  }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount]);
 
-  useEffect(() => {
-    if (setRegimenTotals) setRegimenTotals(regimenTotalsComputed);
-  }, [regimenTotalsComputed, setRegimenTotals]);
+    // Calcula totales por régimen: usa proporción de usuarios para dividir totalRealValue del mes
+    let sub = 0, con = 0, subUsers = 0, conUsers = 0;
+    const regimenByMonth: Record<string, { subsidiado: number; contributivo: number }> = {};
+    // Conteo de usuarios por régimen (siempre correcto, independiente de vrServicio)
+    files.forEach(f => {
+      const key = `${f.month}-${f.fileName}`;
+      const reg = regimenByKey.get(key);
+      if (!reg) return;
+      const count = f.jsonData?.usuarios?.length || 0;
+      if (reg === 'Subsidiado') subUsers += count;
+      else conUsers += count;
+    });
+    // División proporcional del valor ejecutado real por mes
+    filesByMonth.forEach((monthFiles, month) => {
+      const monthData = dataByMonth.get(month);
+      if (!monthData) return;
+      const mName = new Date(2024, parseInt(month) - 1, 1)
+        .toLocaleString('es-CO', { month: 'long' })
+        .replace(/^\w/, c => c.toUpperCase());
+      if (!regimenByMonth[mName]) regimenByMonth[mName] = { subsidiado: 0, contributivo: 0 };
+      const totalMonthUsers = monthFiles.reduce((acc, f) => acc + (f.jsonData?.usuarios?.length || 0), 0);
+      if (totalMonthUsers === 0) return;
+      monthFiles.forEach(f => {
+        const key = `${f.month}-${f.fileName}`;
+        const reg = regimenByKey.get(key);
+        if (!reg) return;
+        const fileUsers = f.jsonData?.usuarios?.length || 0;
+        const value = monthData.totalRealValue * (fileUsers / totalMonthUsers);
+        if (reg === 'Subsidiado') { sub += value; regimenByMonth[mName].subsidiado += value; }
+        else { con += value; regimenByMonth[mName].contributivo += value; }
+      });
+    });
+    const regimenResult = { subsidiado: sub, contributivo: con, byMonth: regimenByMonth, subsidiadoUsers: subUsers, contributivoUsers: conUsers };
+    setLocalRegimenTotals(regimenResult);
+    if (setRegimenTotals) setRegimenTotals(regimenResult);
+  }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount, setRegimenTotals, regimenByKey]);
 
   const handleReset = () => {
     setFiles([]);
@@ -441,14 +457,14 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
         </CardContent>
       </Card>
 
-      {files.length >= 2 && (regimenTotalsComputed.subsidiado > 0 || regimenTotalsComputed.contributivo > 0) && (
+      {files.length >= 1 && (localRegimenTotals.subsidiado > 0 || localRegimenTotals.contributivo > 0) && (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-5 flex flex-col gap-1">
             <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
               <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
               Subsidiado — Ejecución Real (JSON)
             </p>
-            <p className="text-2xl font-bold text-blue-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(regimenTotalsComputed.subsidiado)}</p>
+            <p className="text-2xl font-bold text-blue-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(localRegimenTotals.subsidiado)}</p>
             <p className="text-xs text-blue-600">Archivo con mayor número de usuarios</p>
           </div>
           <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-5 flex flex-col gap-1">
@@ -456,7 +472,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
               <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
               Contributivo — Ejecución Real (JSON)
             </p>
-            <p className="text-2xl font-bold text-orange-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(regimenTotalsComputed.contributivo)}</p>
+            <p className="text-2xl font-bold text-orange-900">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(localRegimenTotals.contributivo)}</p>
             <p className="text-xs text-orange-600">Archivo con menor número de usuarios</p>
           </div>
         </div>

@@ -16,9 +16,10 @@ export interface MonthlyFinancialSummary {
 
 interface FinancialMatrixProps {
   monthlyFinancials: MonthlyFinancialSummary[];
+  regimenByMonth?: Record<string, { subsidiado: number; contributivo: number }>;
 }
 
-const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials }) => {
+const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, regimenByMonth }) => {
     
     if (!monthlyFinancials || monthlyFinancials.length === 0) {
         return null;
@@ -56,7 +57,9 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials }) 
             <CardContent className="space-y-4">
                 {/* Monthly Summary Cards */}
                 <div className="space-y-4">
-                    {monthlyFinancials.map(summary => (
+                    {monthlyFinancials.map(summary => {
+                        const reg = regimenByMonth?.[summary.month];
+                        return (
                          <div key={summary.month} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/20">
                             <h4 className="text-lg font-semibold mb-3 flex items-center">
                                 <Calendar className="h-5 w-5 mr-2 text-muted-foreground"/>
@@ -75,8 +78,25 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials }) 
                                     <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.totalValorEjecutado)}</p>
                                 </div>
                             </div>
+                            {reg && (reg.subsidiado > 0 || reg.contributivo > 0) && (
+                                <div className="grid grid-cols-2 gap-3 mt-3">
+                                    <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 flex justify-between items-center">
+                                        <span className="text-xs font-semibold text-blue-700 flex items-center gap-1">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-blue-600"></span>Subsidiado
+                                        </span>
+                                        <span className="text-sm font-bold text-blue-900">{formatCurrency(reg.subsidiado)}</span>
+                                    </div>
+                                    <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 flex justify-between items-center">
+                                        <span className="text-xs font-semibold text-orange-700 flex items-center gap-1">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-orange-500"></span>Contributivo
+                                        </span>
+                                        <span className="text-sm font-bold text-orange-900">{formatCurrency(reg.contributivo)}</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </CardContent>
         </Card>
