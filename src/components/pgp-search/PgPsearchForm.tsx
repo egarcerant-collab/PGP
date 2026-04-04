@@ -36,6 +36,7 @@ import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type Adjusted
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
+import CertificadoTrimestral from '../report/CertificadoTrimestral';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export type Prestador = PrestadorInfo;
@@ -541,6 +542,14 @@ const PgPsearchForm = forwardRef<
               jsonPrestadorCode={jsonPrestadorCode}
             />
             <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
+            <div className="pt-4">
+              <CertificadoTrimestral
+                comparisonSummary={comparisonSummary}
+                pgpData={reportData}
+                selectedPrestador={selectedPrestador}
+                executionDataByMonth={executionDataByMonth}
+              />
+            </div>
           </div>
         )}
 
