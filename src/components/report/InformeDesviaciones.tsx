@@ -602,11 +602,11 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         color="black"
                     />
                      <DiscrepancyCard
-                        title="CUPS Inesperados"
+                        title="CUPS / Tecnologías Inesperadas"
                         icon={Search}
                         data={comparisonSummary.unexpectedCups}
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('unexpected', 'CUPS Inesperados', comparisonSummary.unexpectedCups, {ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue})}
+                        onDoubleClick={() => handleDoubleClick('unexpected', 'CUPS / Tecnologías Inesperadas', comparisonSummary.unexpectedCups, {ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue})}
                         totalValue={totalUnexpectedValue}
                         valueLabel="Valor Ejecutado"
                         color="purple"
