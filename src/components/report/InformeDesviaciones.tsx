@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign } from "lucide-react";
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
 import { formatCurrency, type ComparisonSummary } from '../pgp-search/PgPsearchForm';
@@ -342,6 +344,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [isLookupLoading, setIsLookupLoading] = useState(false);
     const [modalContent, setModalContent] = useState<{ title: React.ReactNode, data: any[], type: string, totals: {ejecutado: number, desviacion: number} } | null>(null);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
+    const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
 
     const calculateTotals = (items: DeviatedCupInfo[]) => {
         if (!items) return { ejecutado: 0, desviacion: 0 };
@@ -357,9 +360,16 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const underExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.underExecutedCups || []), [comparisonSummary]);
     const normalExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.normalExecutionCups || []), [comparisonSummary]);
 
-    const totalUnexpectedValue = useMemo(() => 
+    const totalUnexpectedValue = useMemo(() =>
         (comparisonSummary?.unexpectedCups || []).reduce((sum, cup) => sum + cup.totalValue, 0),
     [comparisonSummary]);
+
+    const totalNTEjecutado = useMemo(() =>
+        (comparisonSummary?.monthlyFinancials || []).reduce((sum, m) => sum + m.totalValorEjecutado, 0),
+    [comparisonSummary]);
+
+    const valorManual = isNaN(Number(valorConsolidadoManual)) ? 0 : Number(valorConsolidadoManual);
+    const valorFinalEjecucion = totalNTEjecutado + valorManual;
 
     if (!comparisonSummary) {
         return (
@@ -583,22 +593,22 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         color="green"
                     />
                     <DeviatedCupsCard
-                        title="CUPS Subejecutados (<90%)"
+                        title="CUPS / Tecnologías no ejecutadas"
                         icon={TrendingDown}
                         data={comparisonSummary.underExecutedCups}
                         badgeVariant="default"
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS Subejecutados (<90%)", comparisonSummary.underExecutedCups, underExecutionTotals)}
+                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS / Tecnologías no ejecutadas", comparisonSummary.underExecutedCups, underExecutionTotals)}
                         totalValue={underExecutionTotals.desviacion}
                         valueLabel="Valor Desviación"
                         color="blue"
                     />
                      <DiscrepancyCard
-                        title="CUPS Faltantes"
+                        title="CUPS / Tecnologías no ejecutadas"
                         icon={AlertTriangle}
                         data={comparisonSummary.missingCups}
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS Faltantes', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
+                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías no ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
                         color="black"
                     />
                      <DiscrepancyCard
@@ -611,6 +621,58 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         valueLabel="Valor Ejecutado"
                         color="purple"
                     />
+
+                    {/* ── Tarjeta: Valor total ejecutado consolidado ── */}
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <DollarSign className="h-5 w-5 text-primary" />
+                            <span className="font-semibold text-sm text-primary">
+                                Valor total ejecutado discriminado en: CUPS / Tecnologías Inesperadas
+                            </span>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            {/* Col 1: NT ejecutado */}
+                            <div className="rounded-md bg-background border p-3 space-y-1">
+                                <p className="text-xs text-muted-foreground">Ejecución Nota Técnica</p>
+                                <p className="text-lg font-bold text-foreground">{formatCurrency(totalNTEjecutado)}</p>
+                                <p className="text-xs text-muted-foreground">Valor calculado desde los meses cargados</p>
+                            </div>
+
+                            {/* Col 2: Valor manual */}
+                            <div className="rounded-md bg-background border p-3 space-y-2">
+                                <Label className="text-xs text-muted-foreground">
+                                    + Valor CUPS / Tecnologías Inesperadas (manual)
+                                </Label>
+                                <Input
+                                    type="number"
+                                    placeholder="Ej: 45000000"
+                                    value={valorConsolidadoManual}
+                                    onChange={e => setValorConsolidadoManual(e.target.value)}
+                                    className="font-mono"
+                                />
+                                {valorManual > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        {comparisonSummary.unexpectedCups.length} tecnologías inesperadas detectadas
+                                        (auto: {formatCurrency(totalUnexpectedValue)})
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Col 3: Valor final */}
+                            <div className={`rounded-md border-2 p-3 space-y-1 ${valorManual > 0 ? 'border-primary bg-primary/10' : 'border-dashed border-muted-foreground/30 bg-background'}`}>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">= Valor Final de Ejecución</p>
+                                <p className={`text-xl font-bold ${valorManual > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                                    {valorManual > 0 ? formatCurrency(valorFinalEjecucion) : '—'}
+                                </p>
+                                {valorManual > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        NT {formatCurrency(totalNTEjecutado)} + Inesperadas {formatCurrency(valorManual)}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
