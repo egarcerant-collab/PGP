@@ -368,8 +368,17 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
         (comparisonSummary?.monthlyFinancials || []).reduce((sum, m) => sum + m.totalValorEjecutado, 0),
     [comparisonSummary]);
 
+    const totalEsperado = useMemo(() =>
+        (comparisonSummary?.monthlyFinancials || []).reduce((sum, m) => sum + m.totalValorEsperado, 0),
+    [comparisonSummary]);
+
     const valorManual = isNaN(Number(valorConsolidadoManual)) ? 0 : Number(valorConsolidadoManual);
     const valorFinalEjecucion = totalNTEjecutado + valorManual;
+
+    const min90 = totalEsperado * 0.9;
+    const max110 = totalEsperado * 1.1;
+    const pctFinal = totalEsperado > 0 ? (valorFinalEjecucion / totalEsperado) * 100 : 0;
+    const estadoBanda = valorFinalEjecucion < min90 ? 'bajo' : valorFinalEjecucion > max110 ? 'sobre' : 'dentro';
 
     if (!comparisonSummary) {
         return (
@@ -672,6 +681,77 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 )}
                             </div>
                         </div>
+
+                        {/* ── Indicador de banda 90%-110% ── */}
+                        {valorFinalEjecucion > 0 && totalEsperado > 0 && (
+                            <div className={`rounded-md border p-3 space-y-2 ${
+                                estadoBanda === 'sobre' ? 'border-red-400 bg-red-50' :
+                                estadoBanda === 'bajo'  ? 'border-yellow-400 bg-yellow-50' :
+                                                          'border-green-400 bg-green-50'
+                            }`}>
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-lg font-extrabold ${
+                                            estadoBanda === 'sobre' ? 'text-red-600' :
+                                            estadoBanda === 'bajo'  ? 'text-yellow-600' :
+                                                                       'text-green-700'
+                                        }`}>
+                                            {estadoBanda === 'sobre' ? '⚠ SOBREEJECUCIÓN' :
+                                             estadoBanda === 'bajo'  ? '⚠ SUBEJECUCIÓN' :
+                                                                       '✓ DENTRO DE BANDA'}
+                                        </span>
+                                        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
+                                            estadoBanda === 'sobre' ? 'bg-red-100 text-red-700' :
+                                            estadoBanda === 'bajo'  ? 'bg-yellow-100 text-yellow-700' :
+                                                                       'bg-green-100 text-green-700'
+                                        }`}>
+                                            {pctFinal.toFixed(1)}% del contrato
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground text-right space-y-0.5">
+                                        <p>Esperado: <span className="font-semibold">{formatCurrency(totalEsperado)}</span></p>
+                                        <p>Mínimo 90%: <span className="font-semibold">{formatCurrency(min90)}</span></p>
+                                        <p>Máximo 110%: <span className="font-semibold">{formatCurrency(max110)}</span></p>
+                                    </div>
+                                </div>
+                                {/* Barra de progreso */}
+                                <div className="relative h-4 rounded-full bg-gray-200 overflow-hidden">
+                                    {/* Zona 90-110% */}
+                                    <div
+                                        className="absolute h-full bg-green-200/70"
+                                        style={{ left: '81.8%', width: '18.2%' }}
+                                    />
+                                    {/* Marcadores 90% y 110% */}
+                                    <div className="absolute h-full w-0.5 bg-green-600" style={{ left: '81.8%' }} />
+                                    <div className="absolute h-full w-0.5 bg-green-600" style={{ left: '100%' }} />
+                                    {/* Barra de ejecución */}
+                                    <div
+                                        className={`absolute h-full rounded-full transition-all ${
+                                            estadoBanda === 'sobre' ? 'bg-red-500' :
+                                            estadoBanda === 'bajo'  ? 'bg-yellow-500' : 'bg-green-500'
+                                        }`}
+                                        style={{ width: `${Math.min(pctFinal, 130)}%` }}
+                                    />
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>0%</span>
+                                    <span className="text-green-700 font-semibold">90%</span>
+                                    <span className="text-green-700 font-semibold">110%</span>
+                                </div>
+                                {estadoBanda === 'sobre' && (
+                                    <p className="text-xs text-red-700 font-medium">
+                                        Exceso sobre el 110%: <span className="font-bold">{formatCurrency(valorFinalEjecucion - max110)}</span>
+                                        {' '}({(pctFinal - 110).toFixed(1)}% por encima del máximo permitido)
+                                    </p>
+                                )}
+                                {estadoBanda === 'bajo' && (
+                                    <p className="text-xs text-yellow-700 font-medium">
+                                        Déficit respecto al 90%: <span className="font-bold">{formatCurrency(min90 - valorFinalEjecucion)}</span>
+                                        {' '}({(90 - pctFinal).toFixed(1)}% por debajo del mínimo requerido)
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
