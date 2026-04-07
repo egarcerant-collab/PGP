@@ -34,6 +34,7 @@ import Papa from 'papaparse';
 import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
+import CollapsibleSection from '../shared/CollapsibleSection';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
@@ -401,12 +402,11 @@ const PgPsearchForm = forwardRef<
   }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Análisis de Notas Técnicas PGP</CardTitle>
-        <CardDescription>Selecciona un prestador para comparar la Nota Técnica con la ejecución real.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div className="w-full space-y-3">
+      {/* Prestador selector pill */}
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="flex-1 min-w-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-full justify-between">
@@ -423,126 +423,132 @@ const PgPsearchForm = forwardRef<
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {loading && <div className="flex justify-center py-12"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>}
+        {loading && <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>}
+      </div>
+      </div>
 
-        {showComparison && comparisonSummary && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-            <div className="grid gap-4 md:grid-cols-3">
-              <StatCard title="Cobertura Poblacional" value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`} icon={Users} footer={`Atendidos: ${uniqueUserCount} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
-              <StatCard title="Ejecución Real (JSON)" value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))} icon={Wallet} footer="Costo real total de los archivos JSON" />
-              <StatCard title="Ejecución Inicial de la Nota Tecnica" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar detalle Excel" onDoubleClick={handleDownloadExecutionDetail} />
-            </div>
+      {showComparison && comparisonSummary && (
+        <div className="space-y-3 animate-in fade-in duration-300">
 
-            {(() => {
-              // Valores base: usa JSON si tiene data, si no usa Nota Técnica proporcionalmente
-              const jsonTotal = Array.from(executionDataByMonth.values()).reduce((a, d) => a + d.totalRealValue, 0);
-              const ntTotal = comparisonSummary?.monthlyFinancials.reduce((a, m) => a + m.totalValorEjecutado, 0) || 0;
-              const subUsers = regimenTotals?.subsidiadoUsers || 0;
-              const conUsers = regimenTotals?.contributivoUsers || 0;
-              const totalUsers = subUsers + conUsers;
-              const useJsonValues = jsonTotal > 0;
-              const baseTotal = useJsonValues ? jsonTotal : ntTotal;
-              const subProp = totalUsers > 0 ? subUsers / totalUsers : 0.5;
-              const conProp = totalUsers > 0 ? conUsers / totalUsers : 0.5;
-              const subVal = useJsonValues ? (regimenTotals?.subsidiado || baseTotal * subProp) : baseTotal * subProp;
-              const conVal = useJsonValues ? (regimenTotals?.contributivo || baseTotal * conProp) : baseTotal * conProp;
-              const hasData = totalUsers > 0 || subVal > 0;
-              if (!hasData) return null;
-              return (
-              <Card className="border-2 border-primary/20 shadow-md">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
-                    <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
-                    Ejecución Real por Régimen
-                  </CardTitle>
-                  <CardDescription>
-                    {useJsonValues ? 'Desglose del valor ejecutado (JSON) entre Subsidiado y Contributivo' : 'Desglose estimado de la Nota Técnica según proporción de usuarios por régimen'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 mb-4">
-                    <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 flex flex-col gap-1">
-                      <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
-                        <span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span>
-                        Subsidiado — Total
-                      </p>
-                      <p className="text-2xl font-bold text-blue-900">{formatCurrency(subVal)}</p>
-                      {subUsers > 0 && <p className="text-xs text-blue-600">{subUsers.toLocaleString('es-CO')} usuarios ({(subProp * 100).toFixed(1)}%)</p>}
-                    </div>
-                    <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4 flex flex-col gap-1">
-                      <p className="text-sm font-semibold text-orange-700 flex items-center gap-2">
-                        <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
-                        Contributivo — Total
-                      </p>
-                      <p className="text-2xl font-bold text-orange-900">{formatCurrency(conVal)}</p>
-                      {conUsers > 0 && <p className="text-xs text-orange-600">{conUsers.toLocaleString('es-CO')} usuarios ({(conProp * 100).toFixed(1)}%)</p>}
-                    </div>
+          {/* ── KPIs siempre visibles ── */}
+          <div className="grid gap-3 md:grid-cols-3">
+            <StatCard accent="blue" title="Cobertura Poblacional" value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`} icon={Users} footer={`Atendidos: ${uniqueUserCount.toLocaleString('es-CO')} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
+            <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))} icon={Wallet} footer="Costo real total de los archivos JSON" />
+            <StatCard accent="purple" title="Ejecución Nota Técnica" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar Excel" onDoubleClick={handleDownloadExecutionDetail} />
+          </div>
+
+          {/* ── Régimen ── */}
+          {(() => {
+            const jsonTotal = Array.from(executionDataByMonth.values()).reduce((a, d) => a + d.totalRealValue, 0);
+            const ntTotal = comparisonSummary?.monthlyFinancials.reduce((a, m) => a + m.totalValorEjecutado, 0) || 0;
+            const subUsers = regimenTotals?.subsidiadoUsers || 0;
+            const conUsers = regimenTotals?.contributivoUsers || 0;
+            const totalUsers = subUsers + conUsers;
+            const useJsonValues = jsonTotal > 0;
+            const baseTotal = useJsonValues ? jsonTotal : ntTotal;
+            const subProp = totalUsers > 0 ? subUsers / totalUsers : 0.5;
+            const conProp = totalUsers > 0 ? conUsers / totalUsers : 0.5;
+            const subVal = useJsonValues ? (regimenTotals?.subsidiado || baseTotal * subProp) : baseTotal * subProp;
+            const conVal = useJsonValues ? (regimenTotals?.contributivo || baseTotal * conProp) : baseTotal * conProp;
+            if (!(totalUsers > 0 || subVal > 0)) return null;
+            return (
+              <CollapsibleSection title="Ejecución Real por Régimen" icon={Wallet} badge={`Sub: ${(subProp*100).toFixed(0)}% / Con: ${(conProp*100).toFixed(0)}%`} badgeColor="bg-blue-100 text-blue-700">
+                <div className="grid gap-3 md:grid-cols-2 pt-3">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex flex-col gap-1">
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Subsidiado</p>
+                    <p className="text-2xl font-bold text-blue-900">{formatCurrency(subVal)}</p>
+                    {subUsers > 0 && <p className="text-xs text-blue-600">{subUsers.toLocaleString('es-CO')} usuarios ({(subProp * 100).toFixed(1)}%)</p>}
                   </div>
-                  {Object.keys(regimenTotals?.byMonth || {}).length > 0 && (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Mes</TableHead>
-                          <TableHead className="text-right text-blue-700">Subsidiado</TableHead>
-                          <TableHead className="text-right text-orange-700">Contributivo</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {Object.entries(regimenTotals?.byMonth || {}).map(([mes, vals]) => {
-                          const mTotal = comparisonSummary?.monthlyFinancials.find(m => m.month === mes)?.totalValorEjecutado || 0;
-                          const mSubVal = useJsonValues ? vals.subsidiado : (mTotal * subProp);
-                          const mConVal = useJsonValues ? vals.contributivo : (mTotal * conProp);
-                          return (
-                            <TableRow key={mes}>
-                              <TableCell className="font-medium">{mes}</TableCell>
-                              <TableCell className="text-right text-blue-800 font-semibold">{formatCurrency(mSubVal)}</TableCell>
-                              <TableCell className="text-right text-orange-800 font-semibold">{formatCurrency(mConVal)}</TableCell>
-                              <TableCell className="text-right font-bold">{formatCurrency(mSubVal + mConVal)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                        <TableRow className="border-t-2 bg-muted/50">
-                          <TableCell className="font-bold">TOTAL</TableCell>
-                          <TableCell className="text-right text-blue-900 font-bold">{formatCurrency(subVal)}</TableCell>
-                          <TableCell className="text-right text-orange-900 font-bold">{formatCurrency(conVal)}</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(subVal + conVal)}</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-              );
-            })()}
-
-            {globalSummary && (
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Resumen Teórico: Nota Técnica</h3>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <StatCard title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
-                    <StatCard title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado" />
-                    <StatCard title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado" />
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 flex flex-col gap-1">
+                    <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Contributivo</p>
+                    <p className="text-2xl font-bold text-orange-900">{formatCurrency(conVal)}</p>
+                    {conUsers > 0 && <p className="text-xs text-orange-600">{conUsers.toLocaleString('es-CO')} usuarios ({(conProp * 100).toFixed(1)}%)</p>}
                   </div>
                 </div>
-            )}
+                {Object.keys(regimenTotals?.byMonth || {}).length > 0 && (
+                  <Table className="mt-3">
+                    <TableHeader><TableRow>
+                      <TableHead>Mes</TableHead>
+                      <TableHead className="text-right text-blue-700">Subsidiado</TableHead>
+                      <TableHead className="text-right text-orange-700">Contributivo</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {Object.entries(regimenTotals?.byMonth || {}).map(([mes, vals]) => {
+                        const mTotal = comparisonSummary?.monthlyFinancials.find(m => m.month === mes)?.totalValorEjecutado || 0;
+                        const mSubVal = useJsonValues ? vals.subsidiado : mTotal * subProp;
+                        const mConVal = useJsonValues ? vals.contributivo : mTotal * conProp;
+                        return (<TableRow key={mes}>
+                          <TableCell className="font-medium">{mes}</TableCell>
+                          <TableCell className="text-right text-blue-800 font-semibold">{formatCurrency(mSubVal)}</TableCell>
+                          <TableCell className="text-right text-orange-800 font-semibold">{formatCurrency(mConVal)}</TableCell>
+                          <TableCell className="text-right font-bold">{formatCurrency(mSubVal + mConVal)}</TableCell>
+                        </TableRow>);
+                      })}
+                      <TableRow className="bg-muted/50 font-bold">
+                        <TableCell>TOTAL</TableCell>
+                        <TableCell className="text-right text-blue-900">{formatCurrency(subVal)}</TableCell>
+                        <TableCell className="text-right text-orange-900">{formatCurrency(conVal)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(subVal + conVal)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CollapsibleSection>
+            );
+          })()}
 
-            <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
-            <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
-            <DiscountMatrix
-              data={comparisonSummary.matrizDescuentos}
-              executionDataByMonth={executionDataByMonth}
-              pgpData={pgpData}
-              onAdjustmentsChange={setAdjustedData}
-              storageKey={`audit-${selectedPrestador?.NIT}`}
-              selectedPrestador={selectedPrestador}
-              initialAuditData={initialAuditData}
-              uniqueUserCount={uniqueUserCount}
-              jsonPrestadorCode={jsonPrestadorCode}
-            />
-            <div className="pt-8"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
-            <div className="pt-4">
+          {/* ── Nota Técnica resumen ── */}
+          {globalSummary && (
+            <CollapsibleSection title="Resumen Nota Técnica (bandas 90-110%)" icon={Landmark} badge="Ver proyecciones" badgeColor="bg-muted text-muted-foreground">
+              <div className="grid gap-3 sm:grid-cols-3 pt-3">
+                <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
+                <StatCard accent="amber" title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado" />
+                <StatCard accent="green" title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Matriz financiera ── */}
+          <CollapsibleSection title="Matriz Financiera Mensual" icon={Calendar} defaultOpen={true}>
+            <div className="pt-3">
+              <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
+            </div>
+          </CollapsibleSection>
+
+          {/* ── Análisis de desviaciones ── */}
+          <CollapsibleSection title="Análisis de Frecuencias y Desviaciones" icon={TrendingUp} defaultOpen={true}
+            badge={`${(comparisonSummary.overExecutedCups?.length || 0) + (comparisonSummary.underExecutedCups?.length || 0)} CUPS`}
+            badgeColor="bg-amber-100 text-amber-700">
+            <div className="pt-3">
+              <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
+            </div>
+          </CollapsibleSection>
+
+          {/* ── Matriz de descuentos ── */}
+          <CollapsibleSection title="Matriz de Descuentos y Ajustes" icon={FileText}>
+            <div className="pt-3">
+              <DiscountMatrix
+                data={comparisonSummary.matrizDescuentos}
+                executionDataByMonth={executionDataByMonth}
+                pgpData={pgpData}
+                onAdjustmentsChange={setAdjustedData}
+                storageKey={`audit-${selectedPrestador?.NIT}`}
+                selectedPrestador={selectedPrestador}
+                initialAuditData={initialAuditData}
+                uniqueUserCount={uniqueUserCount}
+                jsonPrestadorCode={jsonPrestadorCode}
+              />
+            </div>
+          </CollapsibleSection>
+
+          {/* ── Informes ── */}
+          <CollapsibleSection title="Informe de Gestión Anual (PDF)" icon={FileText}>
+            <div className="pt-3"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Certificado de Ejecución (DI-MT-SD-F-14)" icon={FileText}>
+            <div className="pt-3">
               <CertificadoTrimestral
                 comparisonSummary={comparisonSummary}
                 pgpData={reportData}
@@ -550,14 +556,19 @@ const PgPsearchForm = forwardRef<
                 executionDataByMonth={executionDataByMonth}
               />
             </div>
-          </div>
-        )}
+          </CollapsibleSection>
 
-        {!showComparison && !loading && (
-           <Alert className="bg-muted/50"><Info className="h-4 w-4" /><AlertTitle>Información</AlertTitle><AlertDescription>Carga los archivos JSON arriba y selecciona un prestador para iniciar la auditoría.</AlertDescription></Alert>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+
+      {!showComparison && !loading && (
+        <Alert className="bg-muted/50 rounded-xl border-dashed">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Listo para analizar</AlertTitle>
+          <AlertDescription>Carga los archivos JSON arriba y selecciona un prestador para iniciar la auditoría.</AlertDescription>
+        </Alert>
+      )}
+    </div>
   );
 });
 
