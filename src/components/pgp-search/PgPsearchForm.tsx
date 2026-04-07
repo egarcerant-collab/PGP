@@ -2,39 +2,34 @@
 
 import { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Loader2, 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  FileText, 
-  Calendar, 
-  ChevronDown, 
-  Building, 
-  AlertTriangle, 
-  Download, 
-  Filter, 
-  Search, 
-  Users, 
-  Wallet, 
-  AlertCircle, 
-  Save, 
-  Info, 
-  Landmark 
+import {
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  FileText,
+  Calendar,
+  ChevronDown,
+  Building,
+  AlertTriangle,
+  Search,
+  Users,
+  Wallet,
+  AlertCircle,
+  Info,
+  Landmark,
+  CheckCircle2
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
-import { type ExecutionDataByMonth } from '@/app/page';
+import { type ExecutionDataByMonth, type ModuleId } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
 import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
 import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
-import CollapsibleSection from '../shared/CollapsibleSection';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
@@ -125,6 +120,8 @@ interface PgPsearchFormProps {
   uniqueUserCount: number;
   initialAuditData: SavedAuditData | null;
   regimenTotals?: RegimenTotals;
+  activeModule?: ModuleId;
+  onPrestadorLoaded?: (name: string) => void;
 }
 
 const PRESTADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04/edit?gid=0#gid=0";
@@ -148,7 +145,7 @@ const getMonthName = (monthNumber: string) => {
 
 export function calculateComparison(pgpData: any[], executionDataByMonth: ExecutionDataByMonth): ComparisonSummary {
   const matrizRows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
-  
+
   const overExecutedCups: DeviatedCupInfo[] = [];
   const underExecutedCups: DeviatedCupInfo[] = [];
   const missingCups: DeviatedCupInfo[] = [];
@@ -249,7 +246,7 @@ const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
 const PgPsearchForm = forwardRef<
   { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void },
   PgPsearchFormProps
->(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals }, ref) => {
+>(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -266,6 +263,9 @@ const PgPsearchForm = forwardRef<
       setPgpData(initialAuditData.pgpData);
       setSelectedPrestador(initialAuditData.selectedPrestador || null);
       setIsDataLoaded(true);
+      if (initialAuditData.selectedPrestador?.PRESTADOR) {
+        onPrestadorLoaded?.(initialAuditData.selectedPrestador.PRESTADOR);
+      }
     }
   }, [initialAuditData]);
 
@@ -282,7 +282,7 @@ const PgPsearchForm = forwardRef<
 
   const reportData = useMemo((): ReportData | null => {
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
-    
+
     const totalDescuentoCalculado = Object.entries(adjustedData.adjustedValues).reduce((acc, [cup, val]) => {
       if (adjustedData.selectedRows[cup]) return acc + val;
       return acc;
@@ -303,12 +303,12 @@ const PgPsearchForm = forwardRef<
       notaTecnica: {
         min90: globalSummary.costoMinimoPeriodo, valor3m: globalSummary.totalPeriodo, max110: globalSummary.costoMaximoPeriodo,
         anticipos: 0, totalPagar: sumaMensual,
-        totalFinal: sumaMensual - totalDescuentoCalculado, 
+        totalFinal: sumaMensual - totalDescuentoCalculado,
         descuentoAplicado: totalDescuentoCalculado
       },
-      overExecutedCups: comparisonSummary.overExecutedCups, 
+      overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,
-      missingCups: comparisonSummary.missingCups, 
+      missingCups: comparisonSummary.missingCups,
       unexpectedCups: comparisonSummary.unexpectedCups,
       adjustedData,
     };
@@ -369,12 +369,13 @@ const PgPsearchForm = forwardRef<
       setPgpData(data);
       setSelectedPrestador(prestador);
       setIsDataLoaded(true);
+      onPrestadorLoaded?.(prestador.PRESTADOR);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, onPrestadorLoaded]);
 
   useImperativeHandle(ref, () => ({
     handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador)
@@ -401,175 +402,260 @@ const PgPsearchForm = forwardRef<
     }
   }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
 
-  return (
-    <div className="w-full space-y-3">
-      {/* Prestador selector pill */}
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between">
-              {selectedPrestador ? selectedPrestador.PRESTADOR : "Seleccionar un Prestador"}
-              <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
-            {prestadores.map((p, i) => (
-              <DropdownMenuItem key={i} onSelect={() => handleSelectPrestador(p)}>
-                {p.PRESTADOR}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {loading && <div className="flex justify-center py-8"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>}
-      </div>
-      </div>
-
-      {showComparison && comparisonSummary && (
-        <div className="space-y-3 animate-in fade-in duration-300">
-
-          {/* ── KPIs siempre visibles ── */}
-          <div className="grid gap-3 md:grid-cols-3">
-            <StatCard accent="blue" title="Cobertura Poblacional" value={`${((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1)}%`} icon={Users} footer={`Atendidos: ${uniqueUserCount.toLocaleString('es-CO')} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
-            <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0))} icon={Wallet} footer="Costo real total de los archivos JSON" />
-            <StatCard accent="purple" title="Ejecución Nota Técnica" value={formatCurrency(comparisonSummary.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0))} icon={FileText} footer="Doble clic para descargar Excel" onDoubleClick={handleDownloadExecutionDetail} />
-          </div>
-
-          {/* ── Régimen ── */}
-          {(() => {
-            const jsonTotal = Array.from(executionDataByMonth.values()).reduce((a, d) => a + d.totalRealValue, 0);
-            const ntTotal = comparisonSummary?.monthlyFinancials.reduce((a, m) => a + m.totalValorEjecutado, 0) || 0;
-            const subUsers = regimenTotals?.subsidiadoUsers || 0;
-            const conUsers = regimenTotals?.contributivoUsers || 0;
-            const totalUsers = subUsers + conUsers;
-            const useJsonValues = jsonTotal > 0;
-            const baseTotal = useJsonValues ? jsonTotal : ntTotal;
-            const subProp = totalUsers > 0 ? subUsers / totalUsers : 0.5;
-            const conProp = totalUsers > 0 ? conUsers / totalUsers : 0.5;
-            const subVal = useJsonValues ? (regimenTotals?.subsidiado || baseTotal * subProp) : baseTotal * subProp;
-            const conVal = useJsonValues ? (regimenTotals?.contributivo || baseTotal * conProp) : baseTotal * conProp;
-            if (!(totalUsers > 0 || subVal > 0)) return null;
-            return (
-              <CollapsibleSection title="Ejecución Real por Régimen" icon={Wallet} badge={`Sub: ${(subProp*100).toFixed(0)}% / Con: ${(conProp*100).toFixed(0)}%`} badgeColor="bg-blue-100 text-blue-700">
-                <div className="grid gap-3 md:grid-cols-2 pt-3">
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex flex-col gap-1">
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Subsidiado</p>
-                    <p className="text-2xl font-bold text-blue-900">{formatCurrency(subVal)}</p>
-                    {subUsers > 0 && <p className="text-xs text-blue-600">{subUsers.toLocaleString('es-CO')} usuarios ({(subProp * 100).toFixed(1)}%)</p>}
-                  </div>
-                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 flex flex-col gap-1">
-                    <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Contributivo</p>
-                    <p className="text-2xl font-bold text-orange-900">{formatCurrency(conVal)}</p>
-                    {conUsers > 0 && <p className="text-xs text-orange-600">{conUsers.toLocaleString('es-CO')} usuarios ({(conProp * 100).toFixed(1)}%)</p>}
-                  </div>
-                </div>
-                {Object.keys(regimenTotals?.byMonth || {}).length > 0 && (
-                  <Table className="mt-3">
-                    <TableHeader><TableRow>
-                      <TableHead>Mes</TableHead>
-                      <TableHead className="text-right text-blue-700">Subsidiado</TableHead>
-                      <TableHead className="text-right text-orange-700">Contributivo</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                      {Object.entries(regimenTotals?.byMonth || {}).map(([mes, vals]) => {
-                        const mTotal = comparisonSummary?.monthlyFinancials.find(m => m.month === mes)?.totalValorEjecutado || 0;
-                        const mSubVal = useJsonValues ? vals.subsidiado : mTotal * subProp;
-                        const mConVal = useJsonValues ? vals.contributivo : mTotal * conProp;
-                        return (<TableRow key={mes}>
-                          <TableCell className="font-medium">{mes}</TableCell>
-                          <TableCell className="text-right text-blue-800 font-semibold">{formatCurrency(mSubVal)}</TableCell>
-                          <TableCell className="text-right text-orange-800 font-semibold">{formatCurrency(mConVal)}</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(mSubVal + mConVal)}</TableCell>
-                        </TableRow>);
-                      })}
-                      <TableRow className="bg-muted/50 font-bold">
-                        <TableCell>TOTAL</TableCell>
-                        <TableCell className="text-right text-blue-900">{formatCurrency(subVal)}</TableCell>
-                        <TableCell className="text-right text-orange-900">{formatCurrency(conVal)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(subVal + conVal)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                )}
-              </CollapsibleSection>
-            );
-          })()}
-
-          {/* ── Nota Técnica resumen ── */}
-          {globalSummary && (
-            <CollapsibleSection title="Resumen Nota Técnica (bandas 90-110%)" icon={Landmark} badge="Ver proyecciones" badgeColor="bg-muted text-muted-foreground">
-              <div className="grid gap-3 sm:grid-cols-3 pt-3">
-                <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
-                <StatCard accent="amber" title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado" />
-                <StatCard accent="green" title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado" />
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* ── Matriz financiera ── */}
-          <CollapsibleSection title="Matriz Financiera Mensual" icon={Calendar} defaultOpen={true}>
-            <div className="pt-3">
-              <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
-            </div>
-          </CollapsibleSection>
-
-          {/* ── Análisis de desviaciones ── */}
-          <CollapsibleSection title="Análisis de Frecuencias y Desviaciones" icon={TrendingUp} defaultOpen={true}
-            badge={`${(comparisonSummary.overExecutedCups?.length || 0) + (comparisonSummary.underExecutedCups?.length || 0)} CUPS`}
-            badgeColor="bg-amber-100 text-amber-700">
-            <div className="pt-3">
-              <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
-            </div>
-          </CollapsibleSection>
-
-          {/* ── Matriz de descuentos ── */}
-          <CollapsibleSection title="Matriz de Descuentos y Ajustes" icon={FileText}>
-            <div className="pt-3">
-              <DiscountMatrix
-                data={comparisonSummary.matrizDescuentos}
-                executionDataByMonth={executionDataByMonth}
-                pgpData={pgpData}
-                onAdjustmentsChange={setAdjustedData}
-                storageKey={`audit-${selectedPrestador?.NIT}`}
-                selectedPrestador={selectedPrestador}
-                initialAuditData={initialAuditData}
-                uniqueUserCount={uniqueUserCount}
-                jsonPrestadorCode={jsonPrestadorCode}
-              />
-            </div>
-          </CollapsibleSection>
-
-          {/* ── Informes ── */}
-          <CollapsibleSection title="Informe de Gestión Anual (PDF)" icon={FileText}>
-            <div className="pt-3"><InformePGP data={reportData} comparisonSummary={comparisonSummary} /></div>
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Certificado de Ejecución (DI-MT-SD-F-14)" icon={FileText}>
-            <div className="pt-3">
-              <CertificadoTrimestral
-                comparisonSummary={comparisonSummary}
-                pgpData={reportData}
-                selectedPrestador={selectedPrestador}
-                executionDataByMonth={executionDataByMonth}
-              />
-            </div>
-          </CollapsibleSection>
-
-        </div>
-      )}
-
-      {!showComparison && !loading && (
-        <Alert className="bg-muted/50 rounded-xl border-dashed">
-          <Info className="h-4 w-4" />
-          <AlertTitle>Listo para analizar</AlertTitle>
-          <AlertDescription>Carga los archivos JSON arriba y selecciona un prestador para iniciar la auditoría.</AlertDescription>
-        </Alert>
-      )}
+  // ── The selector dropdown (reused in multiple places) ──
+  const selectorEl = (
+    <div className="flex items-center gap-3">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="min-w-[280px] justify-between">
+            {selectedPrestador ? selectedPrestador.PRESTADOR : "Seleccionar un Prestador"}
+            <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+          {prestadores.map((p, i) => (
+            <DropdownMenuItem key={i} onSelect={() => handleSelectPrestador(p)}>
+              {p.PRESTADOR}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {loading && <Loader2 className="animate-spin h-5 w-5 text-primary" />}
     </div>
   );
+
+  // ── datos module: selector only ──
+  if (!activeModule || activeModule === "datos") {
+    return (
+      <div className="max-w-2xl">
+        <div className="rounded-xl border border-border bg-card shadow-sm p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-sm text-foreground mb-1">Paso 2 — Nota Técnica PGP</h2>
+            <p className="text-xs text-muted-foreground">Selecciona el prestador para cargar la Nota Técnica y activar los módulos de análisis.</p>
+          </div>
+          {selectorEl}
+          {selectedPrestador && !loading && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span><strong>{selectedPrestador.PRESTADOR}</strong> cargado. Usa el menú lateral para analizar.</span>
+            </div>
+          )}
+          {!selectedPrestador && !loading && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>Selecciona un prestador para activar los módulos de análisis en el panel izquierdo.</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── no data yet: show empty state for analysis modules ──
+  if (!showComparison) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold text-sm text-foreground">Sin datos para analizar</p>
+          <p className="text-xs text-muted-foreground mt-1">Carga un archivo JSON y selecciona un prestador desde <strong>Carga de Datos</strong>.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── compact header bar for analysis modules ──
+  const analysisHeader = (
+    <div className="flex items-center justify-between mb-6 pb-4 border-b border-border">
+      <div className="flex items-center gap-2">
+        <Building className="h-4 w-4 text-muted-foreground" />
+        <span className="font-semibold text-sm text-foreground">{selectedPrestador?.PRESTADOR}</span>
+        <span className="text-xs text-muted-foreground">· NIT {selectedPrestador?.NIT}</span>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>{comparisonSummary!.monthlyFinancials.length} mes{comparisonSummary!.monthlyFinancials.length !== 1 ? "es" : ""} analizados</span>
+      </div>
+    </div>
+  );
+
+  // ── inicio (dashboard) ──
+  if (activeModule === "inicio") {
+    const totalJsonExec = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
+    const totalNTExec = comparisonSummary!.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0);
+    const pctCoverage = ((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1);
+    return (
+      <div className="space-y-6">
+        {analysisHeader}
+        {/* KPI row */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard accent="blue" title="Cobertura Poblacional" value={`${pctCoverage}%`} icon={Users}
+            footer={`${uniqueUserCount.toLocaleString('es-CO')} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
+          <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(totalJsonExec)} icon={Wallet}
+            footer="Costo total en archivos JSON" />
+          <StatCard accent="purple" title="Ejecución NT" value={formatCurrency(totalNTExec)} icon={FileText}
+            footer="Doble clic para Excel" onDoubleClick={handleDownloadExecutionDetail} />
+          {globalSummary && (
+            <StatCard accent="amber" title="Valor NT (período)" value={formatCurrency(globalSummary.totalPeriodo)} icon={Landmark}
+              footer={`Banda: ${formatCurrency(globalSummary.costoMinimoPeriodo)} – ${formatCurrency(globalSummary.costoMaximoPeriodo)}`} />
+          )}
+        </div>
+        {/* CUPS status cards */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard accent="red" title="CUPS Sobre-ejecutados" value={comparisonSummary!.overExecutedCups.length} icon={TrendingUp} footer="Frecuencia >110% de lo esperado" />
+          <StatCard accent="amber" title="CUPS Sub-ejecutados" value={comparisonSummary!.underExecutedCups.length} icon={TrendingDown} footer="Frecuencia <90% de lo esperado" />
+          <StatCard accent="default" title="Tecnologías no ejecutadas" value={comparisonSummary!.missingCups.length} icon={AlertTriangle} footer="CUPS en NT sin ejecución" />
+          <StatCard accent="default" title="CUPS / Tec. Inesperadas" value={comparisonSummary!.unexpectedCups.length} icon={Search} footer="No estaban en la NT" />
+        </div>
+        {/* Mini financial matrix */}
+        <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+          <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── financiero ──
+  if (activeModule === "financiero") {
+    const totalJsonExec = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
+    const totalNTExec = comparisonSummary!.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0);
+    const subUsers = regimenTotals?.subsidiadoUsers || 0;
+    const conUsers = regimenTotals?.contributivoUsers || 0;
+    const totalUsers = subUsers + conUsers;
+    const subProp = totalUsers > 0 ? subUsers / totalUsers : 0.5;
+    const conProp = 1 - subProp;
+    const useJsonValues = totalJsonExec > 0;
+    const baseTotal = useJsonValues ? totalJsonExec : totalNTExec;
+    const subVal = useJsonValues ? (regimenTotals?.subsidiado || baseTotal * subProp) : baseTotal * subProp;
+    const conVal = useJsonValues ? (regimenTotals?.contributivo || baseTotal * conProp) : baseTotal * conProp;
+
+    return (
+      <div className="space-y-6">
+        {analysisHeader}
+        {/* NT band cards */}
+        {globalSummary && (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
+            <StatCard accent="amber" title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado del período" />
+            <StatCard accent="green" title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado del período" />
+          </div>
+        )}
+        {/* Regime breakdown */}
+        {(totalUsers > 0 || subVal > 0) && (
+          <div className="rounded-xl border border-border bg-card shadow-sm p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Ejecución Real por Régimen</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Subsidiado</p>
+                <p className="text-2xl font-bold text-blue-900 mt-1">{formatCurrency(subVal)}</p>
+                {subUsers > 0 && <p className="text-xs text-blue-600 mt-1">{subUsers.toLocaleString('es-CO')} usuarios ({(subProp * 100).toFixed(1)}%)</p>}
+              </div>
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Contributivo</p>
+                <p className="text-2xl font-bold text-orange-900 mt-1">{formatCurrency(conVal)}</p>
+                {conUsers > 0 && <p className="text-xs text-orange-600 mt-1">{conUsers.toLocaleString('es-CO')} usuarios ({(conProp * 100).toFixed(1)}%)</p>}
+              </div>
+            </div>
+            {Object.keys(regimenTotals?.byMonth || {}).length > 0 && (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Mes</TableHead>
+                  <TableHead className="text-right text-blue-700">Subsidiado</TableHead>
+                  <TableHead className="text-right text-orange-700">Contributivo</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {Object.entries(regimenTotals?.byMonth || {}).map(([mes, vals]) => {
+                    const mTotal = comparisonSummary?.monthlyFinancials.find(m => m.month === mes)?.totalValorEjecutado || 0;
+                    const mSubVal = useJsonValues ? vals.subsidiado : mTotal * subProp;
+                    const mConVal = useJsonValues ? vals.contributivo : mTotal * conProp;
+                    return (
+                      <TableRow key={mes}>
+                        <TableCell className="font-medium">{mes}</TableCell>
+                        <TableCell className="text-right text-blue-800 font-semibold">{formatCurrency(mSubVal)}</TableCell>
+                        <TableCell className="text-right text-orange-800 font-semibold">{formatCurrency(mConVal)}</TableCell>
+                        <TableCell className="text-right font-bold">{formatCurrency(mSubVal + mConVal)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell>TOTAL</TableCell>
+                    <TableCell className="text-right text-blue-900">{formatCurrency(subVal)}</TableCell>
+                    <TableCell className="text-right text-orange-900">{formatCurrency(conVal)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(subVal + conVal)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
+        {/* Financial matrix */}
+        <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+          <h3 className="font-semibold text-sm mb-4">Matriz Financiera Mensual</h3>
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── cups ──
+  if (activeModule === "cups") {
+    return (
+      <div className="space-y-4">
+        {analysisHeader}
+        <InformeDesviaciones comparisonSummary={comparisonSummary!} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
+      </div>
+    );
+  }
+
+  // ── ajustes ──
+  if (activeModule === "ajustes") {
+    return (
+      <div className="space-y-4">
+        {analysisHeader}
+        <DiscountMatrix
+          data={comparisonSummary!.matrizDescuentos}
+          executionDataByMonth={executionDataByMonth}
+          pgpData={pgpData}
+          onAdjustmentsChange={setAdjustedData}
+          storageKey={`audit-${selectedPrestador?.NIT}`}
+          selectedPrestador={selectedPrestador}
+          initialAuditData={initialAuditData}
+          uniqueUserCount={uniqueUserCount}
+          jsonPrestadorCode={jsonPrestadorCode}
+        />
+      </div>
+    );
+  }
+
+  // ── informes ──
+  if (activeModule === "informes") {
+    return (
+      <div className="space-y-6">
+        {analysisHeader}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+            <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
+            <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
+          </div>
+          <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+            <h3 className="font-semibold text-sm mb-4">Certificado de Ejecución (DI-MT-SD-F-14)</h3>
+            <CertificadoTrimestral
+              comparisonSummary={comparisonSummary!}
+              pgpData={reportData}
+              selectedPrestador={selectedPrestador}
+              executionDataByMonth={executionDataByMonth}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // fallback
+  return null;
 });
 
 PgPsearchForm.displayName = 'PgPsearchForm';
