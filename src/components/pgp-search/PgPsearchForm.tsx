@@ -529,7 +529,7 @@ const PgPsearchForm = forwardRef<
             )}
 
             <FinancialMatrix monthlyFinancials={comparisonSummary.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
-            <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} />
+            <InformeDesviaciones comparisonSummary={comparisonSummary} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
             <DiscountMatrix
               data={comparisonSummary.matrizDescuentos}
               executionDataByMonth={executionDataByMonth}

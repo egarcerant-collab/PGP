@@ -23,6 +23,64 @@ import StatCard from '../shared/StatCard';
 import { getNumericValue } from '../app/JsonAnalyzerPage';
 import { cn } from '@/lib/utils';
 
+/** Descarga CUPS Inesperadas con encabezados de revisión + columnas para NT */
+const handleDownloadInesperadasXls = (data: any[], numMeses: number, prestadorWeb: string) => {
+    // ── Hoja 1: Revisión (con los encabezados solicitados) ──
+    const revision = data.map((row: any) => {
+        const costoMedio = row.realFrequency > 0 ? row.totalValue / row.realFrequency : 0;
+        return {
+            'cup': row.cup,
+            'description': row.description || '',
+            'realFrequency': row.realFrequency,
+            'totalValue': row.totalValue,
+            'serviceType': row.serviceType || '',
+            'INCLUIR (NT) SI O NO': '',
+            'CUPS CORRECTO': row.cup,
+            'DESCRIPCION': row.description || '',
+            'COSTO MEDIO EVENTO': costoMedio.toFixed(2).replace('.', ','),
+        };
+    });
+
+    // ── Hoja 2: Listo para pegar en NT Sheet (1 fila vacía + 4 cols) ──
+    const meses = numMeses || 1;
+    const paraNT = [
+        // fila vacía de separación
+        { 'CUPS': '', 'DESCRIPCION CUPS': '', 'VALOR UNITARIO': '', 'COSTO EVENTO MES': '' },
+        ...data.map((row: any) => {
+            const valorUnitario = row.realFrequency > 0 ? row.totalValue / row.realFrequency : 0;
+            const costoEventoMes = row.totalValue / meses;
+            return {
+                'CUPS': row.cup,
+                'DESCRIPCION CUPS': row.description || '',
+                'VALOR UNITARIO': valorUnitario.toFixed(2).replace('.', ','),
+                'COSTO EVENTO MES': costoEventoMes.toFixed(2).replace('.', ','),
+            };
+        }),
+    ];
+
+    // Generar CSV con ambas secciones separadas
+    const toCSV = (rows: object[]) => {
+        if (!rows.length) return '';
+        const headers = Object.keys(rows[0]);
+        const lines = [headers.join('\t'), ...rows.map(r => Object.values(r).join('\t'))];
+        return lines.join('\n');
+    };
+
+    const combined =
+        '=== REVISION CUPS INESPERADAS ===\n' + toCSV(revision) +
+        '\n\n=== PEGAR EN NT SHEET (URL: ' + prestadorWeb + ') ===\n' + toCSV(paraNT);
+
+    const blob = new Blob(['\uFEFF' + combined], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'CUPS_Inesperadas_Para_NT.xls');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
 const handleDownloadXls = (data: any[], filename: string) => {
     const dataToExport = JSON.parse(JSON.stringify(data));
 
@@ -333,10 +391,11 @@ interface InformeDesviacionesProps {
     comparisonSummary: ComparisonSummary | null;
     pgpData: any[];
     executionDataByMonth: ExecutionDataByMonth;
+    selectedPrestador?: { WEB?: string; PRESTADOR?: string } | null;
 }
 
 
-export default function InformeDesviaciones({ comparisonSummary, pgpData, executionDataByMonth }: InformeDesviacionesProps) {
+export default function InformeDesviaciones({ comparisonSummary, pgpData, executionDataByMonth, selectedPrestador }: InformeDesviacionesProps) {
     const [selectedCup, setSelectedCup] = useState<DeviatedCupInfo | null>(null);
     const [isCupModalOpen, setIsCupModalOpen] = useState(false);
     const [lookedUpCupInfo, setLookedUpCupInfo] = useState<CupDescription | null>(null);
@@ -630,6 +689,35 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         valueLabel="Valor Ejecutado"
                         color="purple"
                     />
+
+                    {/* Botón exportar CUPS Inesperadas para NT */}
+                    {comparisonSummary.unexpectedCups.length > 0 && (
+                        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="space-y-0.5">
+                                <p className="text-sm font-semibold text-purple-800">
+                                    Exportar CUPS Inesperadas para actualizar la Nota Técnica
+                                </p>
+                                <p className="text-xs text-purple-600">
+                                    Genera un archivo con los encabezados de revisión + sección lista para pegar en el Google Sheet de NT
+                                    {selectedPrestador?.WEB && (
+                                        <> — Sheet: <a href={selectedPrestador.WEB} target="_blank" rel="noreferrer" className="underline font-medium">ver hoja NT</a></>
+                                    )}
+                                </p>
+                            </div>
+                            <Button
+                                size="sm"
+                                className="bg-purple-700 hover:bg-purple-800 text-white shrink-0"
+                                onClick={() => handleDownloadInesperadasXls(
+                                    comparisonSummary.unexpectedCups,
+                                    executionDataByMonth.size,
+                                    selectedPrestador?.WEB || ''
+                                )}
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                Descargar para NT (.xls)
+                            </Button>
+                        </div>
+                    )}
 
                     {/* ── Tarjeta: Valor total ejecutado consolidado ── */}
                     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-4">
