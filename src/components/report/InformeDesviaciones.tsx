@@ -698,10 +698,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     Exportar CUPS Inesperadas para actualizar la Nota Técnica
                                 </p>
                                 <p className="text-xs text-purple-600">
-                                    Genera un archivo con los encabezados de revisión + sección lista para pegar en el Google Sheet de NT
-                                    {selectedPrestador?.WEB && (
-                                        <> — Sheet: <a href={selectedPrestador.WEB} target="_blank" rel="noreferrer" className="underline font-medium">ver hoja NT</a></>
-                                    )}
+                                    Genera un archivo con los encabezados de revisión listo para cargar en el módulo <strong>Validador NT</strong>.
                                 </p>
                             </div>
                             <Button

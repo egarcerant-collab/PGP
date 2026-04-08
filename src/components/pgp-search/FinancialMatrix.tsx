@@ -12,6 +12,7 @@ export interface MonthlyFinancialSummary {
     totalValorEsperado: number;
     totalValorEjecutado: number;
     percentage: number;
+    totalActividades: number; // suma de Cantidad_Ejecutada de todos los CUPS del mes
 }
 
 interface FinancialMatrixProps {

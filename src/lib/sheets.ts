@@ -9,8 +9,47 @@ export interface PrestadorInfo {
   WEB: string;
   POBLACION?: number;
   CONTRATO?: string;
+  CIUDAD?: string;
+  DEPARTAMENTO?: string;
+  'FECHA INICIO DE CONTRATO'?: string;
+  'FECHA FIN DE CONTRATO'?: string;
+  MESES?: string;
+  'FRANJA DE RIESGO INFERIOR (90%)'?: string;
+  'VALOR CONTRATO'?: string;
+  'FRANJA DE RIESGO SUPERIOR (110%)'?: string;
   [key: string]: any;
 }
+
+/** Convierte un campo tipo "$1,234,567.89" en número */
+export function parseCurrencyField(value?: string): number {
+  if (!value) return 0;
+  return parseFloat(String(value).replace(/[$,\s\n\r"]/g, '')) || 0;
+}
+
+// Mapa ciudad → departamento para Colombia (prestadores activos)
+export const CIUDAD_DEPARTAMENTO: Record<string, string> = {
+  'RIOHACHA': 'LA GUAJIRA',
+  'URIBIA': 'LA GUAJIRA',
+  'MANAURE': 'LA GUAJIRA',
+  'MAICAO': 'LA GUAJIRA',
+  'ALBANIA': 'LA GUAJIRA',
+  'VALLEDUPAR': 'CESAR',
+  'AGUACHICA': 'CESAR',
+  'BARRANQUILLA': 'ATLÁNTICO',
+  'CARTAGENA': 'BOLÍVAR',
+  'BOGOTÁ': 'CUNDINAMARCA',
+  'BOGOTA': 'CUNDINAMARCA',
+  'MEDELLÍN': 'ANTIOQUIA',
+  'MEDELLIN': 'ANTIOQUIA',
+  'CALI': 'VALLE DEL CAUCA',
+  'SANTA MARTA': 'MAGDALENA',
+  'MONTERÍA': 'CÓRDOBA',
+  'MONTERIA': 'CÓRDOBA',
+  'SINCELEJO': 'SUCRE',
+  'BUCARAMANGA': 'SANTANDER',
+  'CÚCUTA': 'NORTE DE SANTANDER',
+  'CUCUTA': 'NORTE DE SANTANDER',
+};
 
 const normalizeValue = (value: unknown): string => {
     return String(value ?? "").trim();
