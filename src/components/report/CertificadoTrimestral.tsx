@@ -93,11 +93,14 @@ function drawBarChart(
 }
 
 /**
- * Gráfica de barras apiladas: base (azul) + inesperadas (naranja).
- * `extraPerBar` = valorCupsInesperadas dividido entre el número de meses.
+ * Gráfica de barras apiladas: base (color primario) + inesperadas (naranja).
+ * `extra` = total inesperadas (se divide entre meses).
+ * `isCurrency` = true → etiqueta con "$M/k", false → número entero
+ * `baseColor` → color hex del segmento base
  */
 function drawStackedBarChart(
-  labels: string[], base: number[], extra: number, W = 490, H = 175
+  labels: string[], base: number[], extra: number,
+  W = 490, H = 175, isCurrency = true, baseColor = '#1d4ed8'
 ): string {
   if (typeof window === 'undefined') return '';
   const SCALE = 3;
@@ -135,9 +138,9 @@ function drawStackedBarChart(
     ctx.fillStyle = 'rgba(0,0,0,0.06)';
     ctx.fillRect(x + 2, extraY + 2, bW, totalH);
 
-    // Segmento base (azul)
+    // Segmento base
     const grad = ctx.createLinearGradient(x, baseY, x, baseY + baseH);
-    grad.addColorStop(0, '#1d4ed8'); grad.addColorStop(1, '#1d4ed8aa');
+    grad.addColorStop(0, baseColor); grad.addColorStop(1, baseColor + 'aa');
     ctx.fillStyle = grad; ctx.fillRect(x, baseY, bW, baseH);
 
     // Segmento inesperadas (naranja) — solo si hay extra
@@ -151,14 +154,16 @@ function drawStackedBarChart(
     }
 
     // Borde superior
-    ctx.strokeStyle = extraPerBar > 0 ? '#f97316' : '#1d4ed8';
+    ctx.strokeStyle = extraPerBar > 0 ? '#f97316' : baseColor;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, extraY); ctx.lineTo(x + bW, extraY); ctx.stroke();
 
     // Etiqueta total (encima)
     const total = base[i] + extraPerBar;
-    const v = total >= 1_000_000 ? `$${(total / 1_000_000).toFixed(2)}M`
-      : total >= 1_000 ? `$${(total / 1_000).toFixed(0)}k` : String(Math.round(total));
+    const v = isCurrency
+      ? (total >= 1_000_000 ? `$${(total / 1_000_000).toFixed(2)}M`
+        : total >= 1_000 ? `$${(total / 1_000).toFixed(0)}k` : String(Math.round(total)))
+      : (total >= 1_000 ? `${(total / 1_000).toFixed(1)}k` : String(Math.round(total)));
     ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
     ctx.fillText(v, x + bW / 2, extraY - 5);
 
@@ -171,13 +176,13 @@ function drawStackedBarChart(
 
   // Leyenda en la parte inferior
   const legY = H - 10;
-  ctx.fillStyle = '#1d4ed8'; ctx.fillRect(padL, legY - 7, 10, 7);
+  ctx.fillStyle = baseColor; ctx.fillRect(padL, legY - 7, 10, 7);
   ctx.fillStyle = '#374151'; ctx.font = '6.5px Arial'; ctx.textAlign = 'left';
-  ctx.fillText('Ejecución CUPS', padL + 13, legY - 1);
+  ctx.fillText(isCurrency ? 'Ejecución CUPS (valor)' : 'Actividades CUPS', padL + 13, legY - 1);
   if (extraPerBar > 0) {
-    ctx.fillStyle = '#f97316'; ctx.fillRect(padL + 100, legY - 7, 10, 7);
+    ctx.fillStyle = '#f97316'; ctx.fillRect(padL + 130, legY - 7, 10, 7);
     ctx.fillStyle = '#374151';
-    ctx.fillText('CUPS / Tec. Inesperadas', padL + 113, legY - 1);
+    ctx.fillText(isCurrency ? 'CUPS / Tec. Inesperadas (valor)' : 'Actividades Inesperadas', padL + 143, legY - 1);
   }
 
   return canvas.toDataURL('image/png', 1.0);
@@ -364,7 +369,10 @@ export default function CertificadoTrimestral({
       const chart1 = valorCupsInesperadas > 0
         ? drawStackedBarChart(labels, mesData.map(m => m.value), valorCupsInesperadas)
         : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
-      const chart2 = drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
+      // Chart 2: apilado (conteo normal + actividades inesperadas) si hay cantidad
+      const chart2 = cantInespNum > 0
+        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 175, false, '#15803d')
+        : drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
       const detalleValor = mesData.map((m, i) => {
@@ -518,8 +526,13 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
-          // ══ GRÁFICA 2 (CUPS) ══
-          { text: 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
+          // ══ GRÁFICA 2 (CUPS conteo, apilado si hay inesperadas) ══
+          {
+            text: cantInespNum > 0
+              ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS'
+              : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE',
+            style: 'chartLabel',
+          },
           chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 4] } : {},
 
           // ══ NARRATIVA 3 (debajo de gráfica 2) ══
@@ -902,36 +915,28 @@ export default function CertificadoTrimestral({
           <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
         </div>
 
-        {/* CUPS / Tecnologías Inesperadas — valor (cargado) + cantidad (manual) */}
-        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-2">
+        {/* CUPS / Tecnologías Inesperadas — resumen cargado (readonly) */}
+        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-1">
           <p className="text-xs font-semibold text-orange-800 flex items-center gap-1">
-            🟠 CUPS / Tecnologías Inesperadas
+            🟠 CUPS / Tecnologías Inesperadas <span className="font-normal text-orange-600">(cargado desde módulo CUPS / Tecnologías)</span>
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-xs text-orange-700">Valor total (cargado desde módulo CUPS)</Label>
-              <div className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-mono ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
-                {valorCupsInesperadas > 0
-                  ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)
-                  : 'Sin valor guardado — ve al módulo CUPS / Tecnologías'}
-              </div>
-              {valorCupsInesperadas > 0 && (
-                <p className="text-[10px] text-orange-600">Se grafica en naranja y se suma al total ejecutado.</p>
-              )}
+          <div className="grid gap-2 sm:grid-cols-2 text-xs">
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
+              <span className="text-orange-400">$</span>
+              {valorCupsInesperadas > 0
+                ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)
+                : 'Sin valor — guarda en módulo CUPS / Tecnologías'}
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-orange-700">Cantidad de CUPS inesperados (Nº de códigos)</Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Ej: 12"
-                value={cantidadCupsInesperadas}
-                onChange={e => handleSaveCantidad(e.target.value)}
-                className="border-orange-300 focus:ring-orange-400 text-xs"
-              />
-              <p className="text-[10px] text-orange-600">Se incluye en la narrativa del PDF.</p>
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${parseInt(cantidadCupsInesperadas) > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
+              <span className="text-orange-400">#</span>
+              {parseInt(cantidadCupsInesperadas) > 0
+                ? `${parseInt(cantidadCupsInesperadas).toLocaleString('es-CO')} actividades inesperadas`
+                : 'Sin cantidad — ingresa en módulo CUPS / Tecnologías'}
             </div>
           </div>
+          {(valorCupsInesperadas > 0 || parseInt(cantidadCupsInesperadas) > 0) && (
+            <p className="text-[10px] text-orange-600">El valor se suma al total ejecutado y ambos se grafican en naranja en los gráficos 1 y 2.</p>
+          )}
         </div>
 
         {/* Nota de ejecución financiera */}

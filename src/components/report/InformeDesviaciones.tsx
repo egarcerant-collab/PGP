@@ -407,15 +407,18 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
     const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
     const [valorGuardado, setValorGuardado] = useState(false);
+    const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
     const [showNtModal, setShowNtModal] = useState(false);
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
 
-    // Clave de localStorage basada en el prestador
-    const storageKey = `pgp-cups-inesperadas-manual-${selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default'}`;
+    // Claves de localStorage basadas en el prestador
+    const prestKey   = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    const storageKey = `pgp-cups-inesperadas-manual-${prestKey}`;
+    const cantidadKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
 
-    // Cargar valor guardado al montar o cambiar prestador
+    // Cargar valor y cantidad guardados al montar o cambiar prestador
     useEffect(() => {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
@@ -425,7 +428,9 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
             setValorConsolidadoManual('');
             setValorGuardado(false);
         }
-    }, [storageKey]);
+        const savedCant = localStorage.getItem(cantidadKey);
+        setCantidadCupsInesperadas(savedCant || '');
+    }, [storageKey, cantidadKey]);
 
     const handleGuardarValor = useCallback(() => {
         if (valorConsolidadoManual && Number(valorConsolidadoManual) > 0) {
@@ -438,6 +443,15 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
             toast({ title: 'Valor eliminado', description: 'Se borró el valor guardado para este contrato.' });
         }
     }, [storageKey, valorConsolidadoManual, toast]);
+
+    const handleGuardarCantidad = useCallback((val: string) => {
+        setCantidadCupsInesperadas(val);
+        if (val && Number(val) > 0) {
+            localStorage.setItem(cantidadKey, val);
+        } else {
+            localStorage.removeItem(cantidadKey);
+        }
+    }, [cantidadKey]);
 
     const calculateTotals = (items: DeviatedCupInfo[]) => {
         if (!items) return { ejecutado: 0, desviacion: 0 };
@@ -890,42 +904,63 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 <p className="text-xs text-muted-foreground">Valor calculado desde los meses cargados</p>
                             </div>
 
-                            {/* Col 2: Valor manual + botón guardar */}
-                            <div className="rounded-md bg-background border p-3 space-y-2">
-                                <Label className="text-xs text-muted-foreground font-medium">
-                                    + Valor CUPS / Tecnologías Inesperadas (manual)
-                                </Label>
-                                <div className="flex gap-2">
+                            {/* Col 2: Valor + Cantidad manual */}
+                            <div className="rounded-md bg-background border p-3 space-y-3">
+                                {/* Valor */}
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-medium">
+                                        + Valor CUPS / Tecnologías Inesperadas (manual)
+                                    </Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type="number"
+                                            placeholder="Ej: 45000000"
+                                            value={valorConsolidadoManual}
+                                            onChange={e => { setValorConsolidadoManual(e.target.value); setValorGuardado(false); }}
+                                            className="font-mono flex-1"
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant={valorGuardado ? "default" : "outline"}
+                                            className={valorGuardado ? "bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" : "shrink-0"}
+                                            onClick={handleGuardarValor}
+                                            title="Guardar este valor para el contrato"
+                                        >
+                                            {valorGuardado
+                                                ? <><BookmarkCheck className="h-4 w-4 mr-1" />Guardado</>
+                                                : <><Save className="h-4 w-4 mr-1" />Guardar</>
+                                            }
+                                        </Button>
+                                    </div>
+                                    {comparisonSummary.unexpectedCups.length > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {comparisonSummary.unexpectedCups.length} tec. inesperadas · valor auto: {formatCurrency(totalUnexpectedValue)}
+                                        </p>
+                                    )}
+                                    {valorGuardado && (
+                                        <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                            <BookmarkCheck className="h-3 w-3" /> Valor guardado para este contrato
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Cantidad de actividades inesperadas */}
+                                <div className="space-y-1 border-t pt-2">
+                                    <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                        🔢 Cantidad de actividades / CUPS inesperados
+                                    </Label>
                                     <Input
                                         type="number"
-                                        placeholder="Ej: 45000000"
-                                        value={valorConsolidadoManual}
-                                        onChange={e => { setValorConsolidadoManual(e.target.value); setValorGuardado(false); }}
-                                        className="font-mono flex-1"
+                                        min={0}
+                                        placeholder="Ej: 4663"
+                                        value={cantidadCupsInesperadas}
+                                        onChange={e => handleGuardarCantidad(e.target.value)}
+                                        className="font-mono"
                                     />
-                                    <Button
-                                        size="sm"
-                                        variant={valorGuardado ? "default" : "outline"}
-                                        className={valorGuardado ? "bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" : "shrink-0"}
-                                        onClick={handleGuardarValor}
-                                        title="Guardar este valor para el contrato"
-                                    >
-                                        {valorGuardado
-                                            ? <><BookmarkCheck className="h-4 w-4 mr-1" />Guardado</>
-                                            : <><Save className="h-4 w-4 mr-1" />Guardar</>
-                                        }
-                                    </Button>
-                                </div>
-                                {comparisonSummary.unexpectedCups.length > 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        {comparisonSummary.unexpectedCups.length} tec. inesperadas · valor auto: {formatCurrency(totalUnexpectedValue)}
+                                        Se grafica en Gráfico 2 y se incluye en el PDF del certificado.
                                     </p>
-                                )}
-                                {valorGuardado && (
-                                    <p className="text-xs text-emerald-600 flex items-center gap-1">
-                                        <BookmarkCheck className="h-3 w-3" /> Valor guardado para este contrato
-                                    </p>
-                                )}
+                                </div>
                             </div>
 
                             {/* Col 3: Valor final — siempre visible */}
