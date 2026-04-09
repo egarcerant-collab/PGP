@@ -27,7 +27,7 @@ import { type ExecutionDataByMonth, type ModuleId } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
 import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
-import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
+import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
@@ -247,7 +247,7 @@ const calculateSummaryData = (data: PgpRow[], mesesContrato = 12): SummaryData |
 };
 
 const PgPsearchForm = forwardRef<
-  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void },
+  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string) => Promise<{ numero: string } | { error: string }> },
   PgPsearchFormProps
 >(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
@@ -411,7 +411,31 @@ const PgPsearchForm = forwardRef<
   }, [toast, onPrestadorLoaded]);
 
   useImperativeHandle(ref, () => ({
-    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador)
+    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador),
+    triggerSave: async (password: string): Promise<{ numero: string } | { error: string }> => {
+      if (!selectedPrestador || executionDataByMonth.size === 0) return { error: 'Sin datos' };
+      const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
+      const date = new Date(2024, parseInt(monthKey) - 1, 1);
+      const monthName = date.toLocaleString('es-CO', { month: 'long' });
+      const auditPackage = {
+        adjustedQuantities: adjustedData.adjustedQuantities,
+        comments: adjustedData.comments,
+        selectedRows: adjustedData.selectedRows,
+        executionData: serializeExecutionData(executionDataByMonth),
+        jsonPrestadorCode,
+        uniqueUserCount,
+        pgpData,
+        selectedPrestador,
+      };
+      const res = await fetch('/api/save-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName, password }),
+      });
+      const result = await res.json();
+      if (!res.ok) return { error: result.message || 'Error al guardar' };
+      return { numero: result.numero };
+    }
   }));
 
   useEffect(() => {

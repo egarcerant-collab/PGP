@@ -6,8 +6,10 @@ import { deserializeExecutionData } from "@/components/app/JsonAnalyzerPage";
 import dynamic from "next/dynamic";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
-  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck
+  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import SavedAuditsPage from "@/components/app/SavedAuditsPage";
 import { cn } from "@/lib/utils";
 
@@ -63,7 +65,12 @@ export default function Home() {
   });
   const [selectedPrestadorName, setSelectedPrestadorName] = useState<string | null>(null);
 
-  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void } | null>(null);
+  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string) => Promise<{ numero: string } | { error: string }> } | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [savePw, setSavePw] = useState('');
+  const [savePwError, setSavePwError] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedNumero, setSavedNumero] = useState<string | null>(null);
 
   const hasData = executionData.size > 0;
   // También considera datos completos si se cargó una auditoría guardada con pgpData
@@ -84,6 +91,23 @@ export default function Home() {
     setSelectedPrestadorName(prestadorName);
     setActiveModule("inicio");
   }, []);
+
+  const handleSaveAudit = async () => {
+    if (savePw !== '123456') { setSavePwError(true); return; }
+    setIsSaving(true);
+    try {
+      const result = await pgpSearchRef.current?.triggerSave(savePw);
+      if (!result) { setSavePwError(false); setShowSaveModal(false); return; }
+      if ('error' in result) {
+        setSavePwError(result.error === 'Contraseña incorrecta.');
+      } else {
+        setSavedNumero(result.numero);
+        setShowSaveModal(false);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handlePrestadorLoaded = useCallback((name: string) => {
     setSelectedPrestadorName(name);
@@ -159,13 +183,21 @@ export default function Home() {
         {/* Status footer */}
         <div className="p-3 border-t border-border shrink-0">
           {hasFullData ? (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 space-y-2">
               <div className="flex items-center gap-1.5 text-emerald-700">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span className="text-xs font-semibold">Auditoría activa</span>
               </div>
-              <p className="text-[10px] text-emerald-600 mt-0.5 truncate leading-tight">{selectedPrestadorName}</p>
+              <p className="text-[10px] text-emerald-600 truncate leading-tight">{selectedPrestadorName}</p>
               <p className="text-[10px] text-emerald-500">{executionData.size} mes{executionData.size !== 1 ? "es" : ""} cargado{executionData.size !== 1 ? "s" : ""}</p>
+              {savedNumero && <p className="text-[10px] text-emerald-700 font-bold">Guardada N° {savedNumero}</p>}
+              <button
+                onClick={() => { setShowSaveModal(true); setSavePw(''); setSavePwError(false); }}
+                className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors"
+              >
+                <Save className="h-3 w-3" />
+                Guardar Auditoría
+              </button>
             </div>
           ) : hasData ? (
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
@@ -243,6 +275,38 @@ export default function Home() {
 
         </main>
       </div>
+
+      {/* Modal contraseña guardar auditoría */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+            <h3 className="font-semibold text-base flex items-center gap-2">
+              <Save className="h-4 w-4 text-emerald-600" />
+              Guardar Auditoría
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Guardar <strong>{selectedPrestadorName}</strong> en Supabase.
+            </p>
+            <Input
+              type="password"
+              placeholder="Contraseña"
+              value={savePw}
+              onChange={e => { setSavePw(e.target.value); setSavePwError(false); }}
+              onKeyDown={e => e.key === 'Enter' && handleSaveAudit()}
+              className={savePwError ? 'border-red-500' : ''}
+              autoFocus
+            />
+            {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveAudit} disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
