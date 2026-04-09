@@ -196,6 +196,7 @@ export default function CertificadoTrimestral({
   const [informeNum, setInformeNum] = useState('');
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
   const [responsable, setResponsable] = useState('EDUARDO GARCERANT GONZALEZ');
+  const [supervisorName, setSupervisorName] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
@@ -610,7 +611,7 @@ export default function CertificadoTrimestral({
                       { text: fmt(monthlyNT), ...CS, alignment: 'right' },
                       { text: fmt(adv80), ...CS, alignment: 'right' },
                     ])
-                  : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }]]),
+                  : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT * 0.8), ...CS, alignment: 'right' }]]),
                 [
                   {
                     text: periodType === 'trimestral'
@@ -619,7 +620,7 @@ export default function CertificadoTrimestral({
                     ...CS, bold: true
                   },
                   { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
-                  { text: fmt(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true },
+                  { text: fmt(advanceMonths === 0 ? adv80 : (lastMonthPay > 0 ? lastMonthPay : 0)), ...CS, alignment: 'right', bold: true },
                 ],
                 [
                   { text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true },
@@ -666,7 +667,7 @@ export default function CertificadoTrimestral({
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
                   { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+                  { text: supervisorName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
                 ],
               },
               {
@@ -862,7 +863,7 @@ export default function CertificadoTrimestral({
     } finally {
       setIsSaving(false);
     }
-  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, toast]);
+  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, toast]);
 
   if (!comparisonSummary || !pgpData || months.length === 0) return null;
 
@@ -910,9 +911,15 @@ export default function CertificadoTrimestral({
             <Input value={contrato} onChange={e => setContrato(e.target.value)} placeholder="Ej: 44847_03_PGP" />
           </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Responsable (firma)</Label>
-          <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Responsable (firma derecha)</Label>
+            <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Nombre Supervisor del Contrato</Label>
+            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." />
+          </div>
         </div>
 
         {/* CUPS / Tecnologías Inesperadas — resumen cargado (readonly) */}
