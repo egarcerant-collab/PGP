@@ -677,7 +677,7 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-6">
         {analysisHeader}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
             <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
