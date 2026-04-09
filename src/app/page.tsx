@@ -66,18 +66,21 @@ export default function Home() {
   const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void } | null>(null);
 
   const hasData = executionData.size > 0;
-  const hasFullData = hasData && !!selectedPrestadorName;
+  // También considera datos completos si se cargó una auditoría guardada con pgpData
+  const hasFullData = (hasData || !!savedAuditData?.pgpData) && !!selectedPrestadorName;
 
   const handleAuditLoad = useCallback((auditPackage: SavedAuditData, prestadorName: string) => {
     setSavedAuditData(auditPackage);
-    if (auditPackage.executionData) {
-      setExecutionData(deserializeExecutionData(auditPackage.executionData));
-      if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
-      if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
+    if (auditPackage.executionData && Object.keys(auditPackage.executionData).length > 0) {
+      try {
+        const deserialized = deserializeExecutionData(auditPackage.executionData);
+        setExecutionData(deserialized);
+      } catch (e) {
+        console.warn('No se pudo deserializar executionData:', e);
+      }
     }
-    if (!auditPackage.pgpData && pgpSearchRef.current?.handleSelectPrestador) {
-      pgpSearchRef.current.handleSelectPrestador({ PRESTADOR: prestadorName, WEB: "" });
-    }
+    if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
+    if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
     setSelectedPrestadorName(prestadorName);
     setActiveModule("inicio");
   }, []);
