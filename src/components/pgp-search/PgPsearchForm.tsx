@@ -247,7 +247,7 @@ const calculateSummaryData = (data: PgpRow[], mesesContrato = 12): SummaryData |
 };
 
 const PgPsearchForm = forwardRef<
-  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string) => Promise<{ numero: string } | { error: string }> },
+  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> },
   PgPsearchFormProps
 >(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
@@ -412,16 +412,26 @@ const PgPsearchForm = forwardRef<
 
   useImperativeHandle(ref, () => ({
     handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador),
-    triggerSave: async (password: string): Promise<{ numero: string } | { error: string }> => {
+    triggerSave: async (password: string, months: string[]): Promise<{ numero: string } | { error: string }> => {
       if (!selectedPrestador || executionDataByMonth.size === 0) return { error: 'Sin datos' };
-      const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
-      const date = new Date(2024, parseInt(monthKey) - 1, 1);
-      const monthName = date.toLocaleString('es-CO', { month: 'long' });
+      const selectedKeys = months.length > 0 ? months : Array.from(executionDataByMonth.keys());
+
+      // Filtrar solo los meses seleccionados
+      const filteredMap = new Map(
+        [...executionDataByMonth.entries()].filter(([k]) => selectedKeys.includes(k))
+      );
+
+      // Construir label del período
+      const monthLabel = selectedKeys
+        .sort((a, b) => parseInt(a) - parseInt(b))
+        .map(k => new Date(2024, parseInt(k) - 1, 1).toLocaleString('es-CO', { month: 'long' }))
+        .join('-');
+
       const auditPackage = {
         adjustedQuantities: adjustedData.adjustedQuantities,
         comments: adjustedData.comments,
         selectedRows: adjustedData.selectedRows,
-        executionData: serializeExecutionData(executionDataByMonth),
+        executionData: serializeExecutionData(filteredMap),
         jsonPrestadorCode,
         uniqueUserCount,
         pgpData,
@@ -430,7 +440,7 @@ const PgPsearchForm = forwardRef<
       const res = await fetch('/api/save-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName, password }),
+        body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthLabel, password }),
       });
       const result = await res.json();
       if (!res.ok) return { error: result.message || 'Error al guardar' };

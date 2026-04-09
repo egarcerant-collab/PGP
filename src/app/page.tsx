@@ -65,12 +65,13 @@ export default function Home() {
   });
   const [selectedPrestadorName, setSelectedPrestadorName] = useState<string | null>(null);
 
-  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string) => Promise<{ numero: string } | { error: string }> } | null>(null);
+  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> } | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savePw, setSavePw] = useState('');
   const [savePwError, setSavePwError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNumero, setSavedNumero] = useState<string | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
 
   const hasData = executionData.size > 0;
   // También considera datos completos si se cargó una auditoría guardada con pgpData
@@ -92,11 +93,24 @@ export default function Home() {
     setActiveModule("inicio");
   }, []);
 
+  const monthName = (key: string) => {
+    const n = parseInt(key);
+    if (isNaN(n)) return key;
+    return new Date(2024, n - 1, 1).toLocaleString('es-CO', { month: 'long' }).toUpperCase();
+  };
+
+  const toggleMonth = (key: string) => {
+    setSelectedMonths(prev =>
+      prev.includes(key) ? prev.filter(m => m !== key) : prev.length < 3 ? [...prev, key] : prev
+    );
+  };
+
   const handleSaveAudit = async () => {
     if (savePw !== '123456') { setSavePwError(true); return; }
+    if (selectedMonths.length === 0) return;
     setIsSaving(true);
     try {
-      const result = await pgpSearchRef.current?.triggerSave(savePw);
+      const result = await pgpSearchRef.current?.triggerSave(savePw, selectedMonths);
       if (!result) { setSavePwError(false); setShowSaveModal(false); return; }
       if ('error' in result) {
         setSavePwError(result.error === 'Contraseña incorrecta.');
@@ -192,7 +206,7 @@ export default function Home() {
               <p className="text-[10px] text-emerald-500">{executionData.size} mes{executionData.size !== 1 ? "es" : ""} cargado{executionData.size !== 1 ? "s" : ""}</p>
               {savedNumero && <p className="text-[10px] text-emerald-700 font-bold">Guardada N° {savedNumero}</p>}
               <button
-                onClick={() => { setShowSaveModal(true); setSavePw(''); setSavePwError(false); }}
+                onClick={() => { setShowSaveModal(true); setSavePw(''); setSavePwError(false); setSelectedMonths(Array.from(executionData.keys()).slice(0,3)); }}
                 className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors"
               >
                 <Save className="h-3 w-3" />
@@ -279,14 +293,34 @@ export default function Home() {
       {/* Modal contraseña guardar auditoría */}
       {showSaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-88 space-y-4" style={{width: '360px'}}>
             <h3 className="font-semibold text-base flex items-center gap-2">
               <Save className="h-4 w-4 text-emerald-600" />
               Guardar Auditoría
             </h3>
             <p className="text-sm text-muted-foreground">
-              Guardar <strong>{selectedPrestadorName}</strong> en Supabase.
+              <strong>{selectedPrestadorName}</strong> — selecciona hasta 3 meses.
             </p>
+
+            {/* Selección de meses */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Meses a incluir</p>
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from(executionData.keys()).map(key => {
+                  const checked = selectedMonths.includes(key);
+                  const disabled = !checked && selectedMonths.length >= 3;
+                  return (
+                    <label key={key} className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors ${checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold' : disabled ? 'opacity-40 cursor-not-allowed border-border' : 'border-border hover:bg-muted'}`}>
+                      <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleMonth(key)} className="accent-emerald-600" />
+                      {monthName(key)}
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedMonths.length === 0 && <p className="text-xs text-amber-600">Selecciona al menos un mes.</p>}
+              {selectedMonths.length === 3 && <p className="text-xs text-emerald-600">Máximo 3 meses seleccionados.</p>}
+            </div>
+
             <Input
               type="password"
               placeholder="Contraseña"
@@ -299,9 +333,9 @@ export default function Home() {
             {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveAudit} disabled={isSaving}>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveAudit} disabled={isSaving || selectedMonths.length === 0}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Guardar
+                Guardar {selectedMonths.length > 0 && `(${selectedMonths.length} mes${selectedMonths.length > 1 ? 'es' : ''})`}
               </Button>
             </div>
           </div>
