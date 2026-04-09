@@ -1,51 +1,46 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
-const REGISTRO_PATH = path.join(process.cwd(), 'public', 'informes', 'registro.json');
-
-interface InformeRecord {
-  numero: string;       // "001", "002"...
-  prestador: string;
-  nit: string;
-  contrato: string;
-  municipio: string;
-  departamento: string;
-  periodo: string;      // "ENERO-FEBRERO-MARZO"
-  tipoPeriodo: string;  // "TRIMESTRAL", "BIMENSUAL", "MENSUAL"
-  fecha: string;        // ISO date
-  ntPeriodo: number;
-  totalEjecutado: number;
-  descontar: number;
-  reconocer: number;
-  valorFinal: number;
-  totalAnticipos: number;
-  responsable: string;
-}
-
-interface Registro {
-  lastNumber: number;
-  informes: InformeRecord[];
-}
-
-async function ensureDir() {
-  await fs.mkdir(path.join(process.cwd(), 'public', 'informes'), { recursive: true });
-}
-
-async function leerRegistro(): Promise<Registro> {
-  try {
-    const raw = await fs.readFile(REGISTRO_PATH, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return { lastNumber: 0, informes: [] };
-  }
-}
+const supabase = createClient(
+  'https://fvrgfqxohacipmnmqyef.supabase.co',
+  'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
+);
 
 // GET /api/informes  — lista todos los informes guardados
 export async function GET() {
   try {
-    const registro = await leerRegistro();
-    return NextResponse.json(registro);
+    const { data, error } = await supabase
+      .from('informes')
+      .select('*')
+      .order('numero', { ascending: false });
+
+    if (error) throw error;
+
+    const lastNumber = data.length > 0
+      ? Math.max(...data.map(r => parseInt(r.numero, 10) || 0))
+      : 0;
+
+    // Mapear snake_case → camelCase para el componente
+    const informes = data.map(r => ({
+      numero: r.numero,
+      prestador: r.prestador,
+      nit: r.nit,
+      contrato: r.contrato,
+      municipio: r.municipio,
+      departamento: r.departamento,
+      periodo: r.periodo,
+      tipoPeriodo: r.tipo_periodo,
+      fecha: r.fecha,
+      ntPeriodo: r.nt_periodo,
+      totalEjecutado: r.total_ejecutado,
+      descontar: r.descontar,
+      reconocer: r.reconocer,
+      valorFinal: r.valor_final,
+      totalAnticipos: r.total_anticipos,
+      responsable: r.responsable,
+    }));
+
+    return NextResponse.json({ lastNumber, informes });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
   }
@@ -55,13 +50,23 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    await ensureDir();
 
-    const registro = await leerRegistro();
-    const nuevoNumero = registro.lastNumber + 1;
-    const numeroFormateado = String(nuevoNumero).padStart(3, '0'); // "001", "002"...
+    // Obtener el siguiente número
+    const { data: existing, error: fetchError } = await supabase
+      .from('informes')
+      .select('numero')
+      .order('numero', { ascending: false })
+      .limit(1);
 
-    const nuevoInforme: InformeRecord = {
+    if (fetchError) throw fetchError;
+
+    const lastNumber = existing && existing.length > 0
+      ? parseInt(existing[0].numero, 10) || 0
+      : 0;
+    const nuevoNumero = lastNumber + 1;
+    const numeroFormateado = String(nuevoNumero).padStart(3, '0');
+
+    const nuevoInforme = {
       numero: numeroFormateado,
       prestador: body.prestador || '',
       nit: body.nit || '',
@@ -69,23 +74,26 @@ export async function POST(request: Request) {
       municipio: body.municipio || '',
       departamento: body.departamento || '',
       periodo: body.periodo || '',
-      tipoPeriodo: body.tipoPeriodo || '',
+      tipo_periodo: body.tipoPeriodo || '',
       fecha: new Date().toISOString().slice(0, 10),
-      ntPeriodo: body.ntPeriodo || 0,
-      totalEjecutado: body.totalEjecutado || 0,
+      nt_periodo: body.ntPeriodo || 0,
+      total_ejecutado: body.totalEjecutado || 0,
       descontar: body.descontar || 0,
       reconocer: body.reconocer || 0,
-      valorFinal: body.valorFinal || 0,
-      totalAnticipos: body.totalAnticipos || 0,
+      valor_final: body.valorFinal || 0,
+      total_anticipos: body.totalAnticipos || 0,
       responsable: body.responsable || '',
     };
 
-    registro.lastNumber = nuevoNumero;
-    registro.informes.unshift(nuevoInforme); // más recientes primero
+    const { data, error } = await supabase
+      .from('informes')
+      .insert([nuevoInforme])
+      .select()
+      .single();
 
-    await fs.writeFile(REGISTRO_PATH, JSON.stringify(registro, null, 2), 'utf-8');
+    if (error) throw error;
 
-    return NextResponse.json({ success: true, numero: numeroFormateado, informe: nuevoInforme });
+    return NextResponse.json({ success: true, numero: numeroFormateado, informe: data });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
   }
@@ -98,9 +106,12 @@ export async function DELETE(request: Request) {
     const numero = searchParams.get('numero');
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
 
-    const registro = await leerRegistro();
-    registro.informes = registro.informes.filter(i => i.numero !== numero);
-    await fs.writeFile(REGISTRO_PATH, JSON.stringify(registro, null, 2), 'utf-8');
+    const { error } = await supabase
+      .from('informes')
+      .delete()
+      .eq('numero', numero);
+
+    if (error) throw error;
 
     return NextResponse.json({ success: true });
   } catch (e: any) {
