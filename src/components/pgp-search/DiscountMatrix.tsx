@@ -97,6 +97,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [savePw, setSavePw] = useState('');
+    const [savePwError, setSavePwError] = useState(false);
+    const [savedNumero, setSavedNumero] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialAuditData) {
@@ -126,13 +130,24 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         return data.filter(row => row.Tipo_Servicio === activeFilter);
     }, [data, activeFilter]);
 
-    const handleSaveState = async () => {
+    const handleSaveState = () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
             toast({ title: "No se puede guardar", description: "Faltan datos de ejecución.", variant: "destructive" });
             return;
         }
+        setSavePw('');
+        setSavePwError(false);
+        setShowSaveModal(true);
+    };
+
+    const handleSaveConfirm = async () => {
+        if (savePw !== '123456') {
+            setSavePwError(true);
+            return;
+        }
+        setShowSaveModal(false);
         setIsSaving(true);
-        
+
         const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
         const date = new Date(2024, parseInt(monthKey) - 1, 1);
         const monthName = date.toLocaleString('es-CO', { month: 'long' });
@@ -147,7 +162,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             pgpData: pgpData,
             selectedPrestador: selectedPrestador
         };
-        
+
         try {
             const response = await fetch('/api/save-audit', {
                 method: 'POST',
@@ -155,17 +170,21 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 body: JSON.stringify({
                     auditData: auditPackage,
                     prestadorName: selectedPrestador.PRESTADOR,
-                    month: monthName
+                    month: monthName,
+                    password: savePw
                 })
             });
-
+            const result = await response.json();
             if (response.ok) {
-                toast({ title: "Guardado Exitoso", description: `Auditoría guardada en la carpeta de ${monthName}.` });
+                setSavedNumero(result.numero);
+                toast({ title: `✅ Auditoría N° ${result.numero} guardada`, description: `${selectedPrestador.PRESTADOR} — ${monthName}` });
+            } else if (response.status === 401) {
+                toast({ title: "Contraseña incorrecta", variant: "destructive" });
             } else {
-                toast({ title: "Aviso de Servidor", description: "No se pudo guardar en el servidor. Verifique permisos.", variant: "destructive" });
+                toast({ title: "Error al guardar", description: result.message, variant: "destructive" });
             }
-        } catch (error: any) {
-            toast({ title: "Error de Red", description: "No se pudo conectar con el servidor.", variant: "destructive" });
+        } catch {
+            toast({ title: "Error de red", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
@@ -388,12 +407,44 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 </CardContent>
             </Card>
 
-            <CommentModal 
-                open={isCommentModalOpen} 
-                onOpenChange={setIsCommentModalOpen} 
-                initialComment={currentCupForComment ? comments[currentCupForComment] || '' : ''} 
-                onSave={(c) => currentCupForComment && setComments(prev => ({...prev, [currentCupForComment]: c}))} 
+            <CommentModal
+                open={isCommentModalOpen}
+                onOpenChange={setIsCommentModalOpen}
+                initialComment={currentCupForComment ? comments[currentCupForComment] || '' : ''}
+                onSave={(c) => currentCupForComment && setComments(prev => ({...prev, [currentCupForComment]: c}))}
             />
+
+            {/* Modal contraseña para guardar auditoría */}
+            {showSaveModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+                        <h3 className="font-semibold text-base flex items-center gap-2">
+                            <Save className="h-4 w-4 text-green-600" />
+                            Guardar Auditoría en Supabase
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                            Ingresa la contraseña para guardar <strong>{selectedPrestador?.PRESTADOR}</strong>.
+                        </p>
+                        <Input
+                            type="password"
+                            placeholder="Contraseña"
+                            value={savePw}
+                            onChange={e => { setSavePw(e.target.value); setSavePwError(false); }}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveConfirm()}
+                            className={savePwError ? 'border-red-500' : ''}
+                            autoFocus
+                        />
+                        {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+                        {savedNumero && <p className="text-xs text-green-600 font-semibold">Última guardada: N° {savedNumero}</p>}
+                        <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSaveConfirm}>
+                                Guardar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
