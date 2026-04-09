@@ -130,6 +130,9 @@ export default function CertificadoTrimestral({
   const [showHistorial, setShowHistorial] = useState(false);
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [deletingNum, setDeletingNum] = useState<string | null>(null);
+  const [pwInput, setPwInput] = useState('');
+  const [pwError, setPwError] = useState(false);
   const { toast } = useToast();
 
   // Carga siguiente número disponible al montar
@@ -151,6 +154,30 @@ export default function CertificadoTrimestral({
       setHistorial(d.informes || []);
     } finally {
       setLoadingHistorial(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (pwInput !== '123456') {
+      setPwError(true);
+      return;
+    }
+    if (!deletingNum) return;
+    try {
+      await fetch(`/api/informes?numero=${deletingNum}`, { method: 'DELETE' });
+      toast({ title: `Informe N° ${deletingNum} eliminado` });
+      setHistorial(prev => prev.filter(i => i.numero !== deletingNum));
+      // Recalcular siguiente número
+      const r = await fetch('/api/informes');
+      const d = await r.json();
+      const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
+      setInformeNum(next);
+    } catch {
+      toast({ title: 'Error al eliminar', variant: 'destructive' });
+    } finally {
+      setDeletingNum(null);
+      setPwInput('');
+      setPwError(false);
     }
   };
 
@@ -759,6 +786,7 @@ export default function CertificadoTrimestral({
                       <th className="px-3 py-2 text-left font-semibold">Tipo</th>
                       <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
                       <th className="px-3 py-2 text-left font-semibold">Fecha</th>
+                      <th className="px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -772,12 +800,47 @@ export default function CertificadoTrimestral({
                           {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
                         </td>
                         <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
+                        <td className="px-3 py-1.5">
+                          <button
+                            onClick={() => { setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }}
+                            className="text-red-400 hover:text-red-600 transition-colors"
+                            title="Eliminar informe"
+                          >🗑️</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal contraseña para eliminar */}
+        {deletingNum && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+              <h3 className="font-semibold text-base">🔒 Eliminar Informe N° {deletingNum}</h3>
+              <p className="text-sm text-muted-foreground">Ingresa la contraseña para confirmar la eliminación.</p>
+              <Input
+                type="password"
+                placeholder="Contraseña"
+                value={pwInput}
+                onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+                onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+                className={pwError ? 'border-red-500' : ''}
+                autoFocus
+              />
+              {pwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setDeletingNum(null); setPwInput(''); setPwError(false); }}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleDeleteConfirm}>
+                  Eliminar
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
