@@ -5,7 +5,7 @@
       "name": "Next.js Dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "port": 3001
     },
     {
       "name": "Genkit Dev",
