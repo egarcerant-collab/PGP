@@ -44,18 +44,16 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
 const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n));
 
-/** Dibuja una gráfica de barras nítida (2× resolución) y devuelve base64 PNG */
+/** Dibuja una gráfica de barras simple y devuelve base64 PNG */
 function drawBarChart(
   labels: string[], values: number[], color: string, W = 490, H = 175
 ): string {
   if (typeof window === 'undefined') return '';
-  const SCALE = 3; // 3× pixel density → completamente nítida en PDF
+  const SCALE = 3;
   const canvas = document.createElement('canvas');
   canvas.width = W * SCALE; canvas.height = H * SCALE;
   const ctx = canvas.getContext('2d')!;
   ctx.scale(SCALE, SCALE);
-
-  // Fondo blanco
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
   const maxVal = Math.max(...values, 1);
@@ -64,7 +62,6 @@ function drawBarChart(
   const cW = W - padL - padR, cH = H - padTop - padBot;
   const gap = 10, bW = Math.max(12, (cW - gap * (n + 1)) / n);
 
-  // Líneas de referencia horizontales
   for (let g = 0; g <= 4; g++) {
     const gy = padTop + (cH / 4) * g;
     ctx.strokeStyle = g === 4 ? '#9ca3af' : '#e5e7eb';
@@ -76,42 +73,112 @@ function drawBarChart(
     const x = padL + gap + i * (bW + gap);
     const bH = Math.max(2, (values[i] / maxVal) * cH);
     const y = padTop + cH - bH;
-
-    // Sombra suave
     ctx.fillStyle = 'rgba(0,0,0,0.07)';
     ctx.fillRect(x + 2, y + 2, bW, bH);
-
-    // Barra con gradiente vertical
     const grad = ctx.createLinearGradient(x, y, x, y + bH);
-    grad.addColorStop(0, color);
-    grad.addColorStop(1, color + 'aa');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, y, bW, bH);
-
-    // Borde superior de la barra
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
+    grad.addColorStop(0, color); grad.addColorStop(1, color + 'aa');
+    ctx.fillStyle = grad; ctx.fillRect(x, y, bW, bH);
+    ctx.strokeStyle = color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bW, y); ctx.stroke();
-
-    // Etiqueta de valor (encima de la barra)
-    const v = values[i] >= 1_000_000
-      ? `$${(values[i] / 1_000_000).toFixed(2)}M`
-      : values[i] >= 1_000
-      ? `$${(values[i] / 1_000).toFixed(0)}k`
-      : String(Math.round(values[i]));
-    ctx.fillStyle = '#111827';
-    ctx.font = 'bold 7.5px Arial';
-    ctx.textAlign = 'center';
+    const v = values[i] >= 1_000_000 ? `$${(values[i] / 1_000_000).toFixed(2)}M`
+      : values[i] >= 1_000 ? `$${(values[i] / 1_000).toFixed(0)}k` : String(Math.round(values[i]));
+    ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
     ctx.fillText(v, x + bW / 2, y - 5);
-
-    // Etiqueta del mes (debajo)
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 8px Arial';
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 8px Arial';
     ctx.fillText(label.substring(0, 3).toUpperCase(), x + bW / 2, padTop + cH + 14);
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '6.5px Arial';
+    ctx.fillStyle = '#6b7280'; ctx.font = '6.5px Arial';
     ctx.fillText(label.substring(0, 7), x + bW / 2, padTop + cH + 24);
   });
+  return canvas.toDataURL('image/png', 1.0);
+}
+
+/**
+ * Gráfica de barras apiladas: base (azul) + inesperadas (naranja).
+ * `extraPerBar` = valorCupsInesperadas dividido entre el número de meses.
+ */
+function drawStackedBarChart(
+  labels: string[], base: number[], extra: number, W = 490, H = 175
+): string {
+  if (typeof window === 'undefined') return '';
+  const SCALE = 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * SCALE; canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
+  const extraPerBar = base.length > 0 ? extra / base.length : 0;
+  const totals = base.map(v => v + extraPerBar);
+  const maxVal = Math.max(...totals, 1);
+  const n = labels.length;
+  const padL = 8, padR = 8, padTop = 28, padBot = 46;
+  const cW = W - padL - padR, cH = H - padTop - padBot;
+  const gap = 10, bW = Math.max(12, (cW - gap * (n + 1)) / n);
+
+  // Líneas de referencia
+  for (let g = 0; g <= 4; g++) {
+    const gy = padTop + (cH / 4) * g;
+    ctx.strokeStyle = g === 4 ? '#9ca3af' : '#e5e7eb';
+    ctx.lineWidth = g === 4 ? 0.8 : 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+  }
+
+  labels.forEach((label, i) => {
+    const x = padL + gap + i * (bW + gap);
+    const baseH  = Math.max(2, (base[i] / maxVal) * cH);
+    const extraH = Math.max(0, (extraPerBar / maxVal) * cH);
+    const totalH = baseH + extraH;
+    const baseY  = padTop + cH - baseH;
+    const extraY = baseY - extraH;
+
+    // Sombra
+    ctx.fillStyle = 'rgba(0,0,0,0.06)';
+    ctx.fillRect(x + 2, extraY + 2, bW, totalH);
+
+    // Segmento base (azul)
+    const grad = ctx.createLinearGradient(x, baseY, x, baseY + baseH);
+    grad.addColorStop(0, '#1d4ed8'); grad.addColorStop(1, '#1d4ed8aa');
+    ctx.fillStyle = grad; ctx.fillRect(x, baseY, bW, baseH);
+
+    // Segmento inesperadas (naranja) — solo si hay extra
+    if (extraPerBar > 0) {
+      const gradE = ctx.createLinearGradient(x, extraY, x, extraY + extraH);
+      gradE.addColorStop(0, '#f97316'); gradE.addColorStop(1, '#f97316cc');
+      ctx.fillStyle = gradE; ctx.fillRect(x, extraY, bW, extraH);
+      // línea separadora
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x + bW, baseY); ctx.stroke();
+    }
+
+    // Borde superior
+    ctx.strokeStyle = extraPerBar > 0 ? '#f97316' : '#1d4ed8';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, extraY); ctx.lineTo(x + bW, extraY); ctx.stroke();
+
+    // Etiqueta total (encima)
+    const total = base[i] + extraPerBar;
+    const v = total >= 1_000_000 ? `$${(total / 1_000_000).toFixed(2)}M`
+      : total >= 1_000 ? `$${(total / 1_000).toFixed(0)}k` : String(Math.round(total));
+    ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(v, x + bW / 2, extraY - 5);
+
+    // Mes
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 8px Arial';
+    ctx.fillText(label.substring(0, 3).toUpperCase(), x + bW / 2, padTop + cH + 14);
+    ctx.fillStyle = '#6b7280'; ctx.font = '6.5px Arial';
+    ctx.fillText(label.substring(0, 7), x + bW / 2, padTop + cH + 24);
+  });
+
+  // Leyenda en la parte inferior
+  const legY = H - 10;
+  ctx.fillStyle = '#1d4ed8'; ctx.fillRect(padL, legY - 7, 10, 7);
+  ctx.fillStyle = '#374151'; ctx.font = '6.5px Arial'; ctx.textAlign = 'left';
+  ctx.fillText('Ejecución CUPS', padL + 13, legY - 1);
+  if (extraPerBar > 0) {
+    ctx.fillStyle = '#f97316'; ctx.fillRect(padL + 100, legY - 7, 10, 7);
+    ctx.fillStyle = '#374151';
+    ctx.fillText('CUPS / Tec. Inesperadas', padL + 113, legY - 1);
+  }
 
   return canvas.toDataURL('image/png', 1.0);
 }
@@ -136,18 +203,25 @@ export default function CertificadoTrimestral({
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
   const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
+  const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
   const { toast } = useToast();
 
-  // Carga el valor de CUPS Inesperadas guardado desde el módulo CUPS
+  // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
   useEffect(() => {
-    const key = `pgp-cups-inesperadas-manual-${selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default'}`;
-    const saved = localStorage.getItem(key);
-    if (saved && !isNaN(Number(saved)) && Number(saved) > 0) {
-      setValorCupsInesperadas(Number(saved));
-    } else {
-      setValorCupsInesperadas(0);
-    }
+    const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    const valKey  = `pgp-cups-inesperadas-manual-${prestKey}`;
+    const cantKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
+    const savedVal  = localStorage.getItem(valKey);
+    const savedCant = localStorage.getItem(cantKey);
+    setValorCupsInesperadas(savedVal && !isNaN(Number(savedVal)) && Number(savedVal) > 0 ? Number(savedVal) : 0);
+    setCantidadCupsInesperadas(savedCant || '');
   }, [selectedPrestador]);
+
+  const handleSaveCantidad = (val: string) => {
+    setCantidadCupsInesperadas(val);
+    const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    localStorage.setItem(`pgp-cups-inesperadas-cantidad-${prestKey}`, val);
+  };
 
   // Carga siguiente número disponible al montar
   useEffect(() => {
@@ -285,7 +359,11 @@ export default function CertificadoTrimestral({
 
       // ── Gráficas ──
       const labels = mesData.map(m => m.name);
-      const chart1 = drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
+      const cantInespNum = parseInt(cantidadCupsInesperadas) || 0;
+      // Chart 1: apilado (base + inesperadas) si hay valor de inesperadas
+      const chart1 = valorCupsInesperadas > 0
+        ? drawStackedBarChart(labels, mesData.map(m => m.value), valorCupsInesperadas)
+        : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
       const chart2 = drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
@@ -420,13 +498,18 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
-          // ══ GRÁFICA 1 (valor) ══
-          { text: 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR', style: 'chartLabel' },
+          // ══ GRÁFICA 1 (valor, apilado si hay inesperadas) ══
+          {
+            text: valorCupsInesperadas > 0
+              ? 'GRÁFICO 1. CONSOLIDADO DE EJECUCIÓN EN VALOR POR CUPS — INCLUYE CUPS / TECNOLOGÍAS INESPERADAS'
+              : 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR',
+            style: 'chartLabel',
+          },
           chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 4] } : {},
 
           // ══ NARRATIVA 2 (entre gráficas) ══
           {
-            text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.`,
+            text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valorCupsInesperadas > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtN(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmt(valorCupsInesperadas)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`,
             style: 'p',
           },
           {
@@ -819,17 +902,37 @@ export default function CertificadoTrimestral({
           <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
         </div>
 
-        {/* Banner CUPS Inesperadas */}
-        {valorCupsInesperadas > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-            <span className="text-blue-500">💡</span>
-            <span>
-              <span className="font-semibold">CUPS / Tecnologías Inesperadas incluidas:</span>{' '}
-              {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)}
-              {' '}— este valor se suma a la ejecución para el cálculo del certificado.
-            </span>
+        {/* CUPS / Tecnologías Inesperadas — valor (cargado) + cantidad (manual) */}
+        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-2">
+          <p className="text-xs font-semibold text-orange-800 flex items-center gap-1">
+            🟠 CUPS / Tecnologías Inesperadas
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-xs text-orange-700">Valor total (cargado desde módulo CUPS)</Label>
+              <div className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-mono ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
+                {valorCupsInesperadas > 0
+                  ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)
+                  : 'Sin valor guardado — ve al módulo CUPS / Tecnologías'}
+              </div>
+              {valorCupsInesperadas > 0 && (
+                <p className="text-[10px] text-orange-600">Se grafica en naranja y se suma al total ejecutado.</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-orange-700">Cantidad de CUPS inesperados (Nº de códigos)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Ej: 12"
+                value={cantidadCupsInesperadas}
+                onChange={e => handleSaveCantidad(e.target.value)}
+                className="border-orange-300 focus:ring-orange-400 text-xs"
+              />
+              <p className="text-[10px] text-orange-600">Se incluye en la narrativa del PDF.</p>
+            </div>
           </div>
-        )}
+        </div>
 
         {/* Nota de ejecución financiera */}
         <div className="space-y-1">
