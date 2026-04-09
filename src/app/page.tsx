@@ -6,7 +6,7 @@ import { deserializeExecutionData } from "@/components/app/JsonAnalyzerPage";
 import dynamic from "next/dynamic";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
-  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search
+  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck
 } from "lucide-react";
 import SavedAuditsPage from "@/components/app/SavedAuditsPage";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ export type CupCountInfo = {
 };
 export type CupCountsMap = Map<string, CupCountInfo>;
 export type ExecutionDataByMonth = Map<string, MonthlyExecutionData>;
-export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial";
+export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador";
 
 interface NavItem {
   id: ModuleId;
@@ -43,6 +43,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { id: "datos",      label: "Carga de Datos",          icon: FileJson,        group: "general" },
+  { id: "validador",  label: "Validador NT",             icon: ShieldCheck,     group: "general" },
   { id: "historial",  label: "Historial",                icon: Archive,         group: "general" },
   { id: "inicio",     label: "Dashboard",                icon: LayoutDashboard, group: "analisis", requiresData: true },
   { id: "financiero", label: "Análisis Financiero",      icon: TrendingUp,      group: "analisis", requiresData: true },

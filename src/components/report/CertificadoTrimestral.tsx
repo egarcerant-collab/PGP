@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,7 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
+import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 if ((pdfFonts as any).pdfMake && pdfMake.vfs) {
@@ -43,32 +44,76 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
 const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n));
 
-/** Dibuja una gráfica de barras y devuelve base64 PNG */
+/** Dibuja una gráfica de barras nítida (2× resolución) y devuelve base64 PNG */
 function drawBarChart(
-  labels: string[], values: number[], color: string, W = 490, H = 160
+  labels: string[], values: number[], color: string, W = 490, H = 175
 ): string {
   if (typeof window === 'undefined') return '';
+  const SCALE = 3; // 3× pixel density → completamente nítida en PDF
   const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
+  canvas.width = W * SCALE; canvas.height = H * SCALE;
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCALE, SCALE);
+
+  // Fondo blanco
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
   const maxVal = Math.max(...values, 1);
   const n = labels.length;
-  const padL = 5, padR = 5, padTop = 8, padBot = 30;
+  const padL = 8, padR = 8, padTop = 24, padBot = 34;
   const cW = W - padL - padR, cH = H - padTop - padBot;
-  const gap = 16, bW = (cW - gap * (n + 1)) / n;
+  const gap = 10, bW = Math.max(12, (cW - gap * (n + 1)) / n);
+
+  // Líneas de referencia horizontales
+  for (let g = 0; g <= 4; g++) {
+    const gy = padTop + (cH / 4) * g;
+    ctx.strokeStyle = g === 4 ? '#9ca3af' : '#e5e7eb';
+    ctx.lineWidth = g === 4 ? 0.8 : 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+  }
+
   labels.forEach((label, i) => {
     const x = padL + gap + i * (bW + gap);
-    const bH = (values[i] / maxVal) * cH;
+    const bH = Math.max(2, (values[i] / maxVal) * cH);
     const y = padTop + cH - bH;
-    ctx.fillStyle = color; ctx.fillRect(x, y, bW, bH);
-    ctx.fillStyle = '#1e3a5f'; ctx.font = 'bold 8px Arial'; ctx.textAlign = 'center';
-    const v = values[i] >= 1_000_000 ? `$${(values[i] / 1_000_000).toFixed(1)}M` : `$${(values[i]/1000).toFixed(0)}k`;
-    ctx.fillText(v, x + bW / 2, y - 2);
-    ctx.fillStyle = '#333'; ctx.font = '8px Arial';
-    ctx.fillText(label.substring(0, 3), x + bW / 2, padTop + cH + 14);
+
+    // Sombra suave
+    ctx.fillStyle = 'rgba(0,0,0,0.07)';
+    ctx.fillRect(x + 2, y + 2, bW, bH);
+
+    // Barra con gradiente vertical
+    const grad = ctx.createLinearGradient(x, y, x, y + bH);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, color + 'aa');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, bW, bH);
+
+    // Borde superior de la barra
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bW, y); ctx.stroke();
+
+    // Etiqueta de valor (encima de la barra)
+    const v = values[i] >= 1_000_000
+      ? `$${(values[i] / 1_000_000).toFixed(2)}M`
+      : values[i] >= 1_000
+      ? `$${(values[i] / 1_000).toFixed(0)}k`
+      : String(Math.round(values[i]));
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 7.5px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(v, x + bW / 2, y - 5);
+
+    // Etiqueta del mes (debajo)
+    ctx.fillStyle = '#374151';
+    ctx.font = 'bold 8px Arial';
+    ctx.fillText(label.substring(0, 3).toUpperCase(), x + bW / 2, padTop + cH + 14);
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '6.5px Arial';
+    ctx.fillText(label.substring(0, 7), x + bW / 2, padTop + cH + 24);
   });
-  return canvas.toDataURL('image/png');
+
+  return canvas.toDataURL('image/png', 1.0);
 }
 
 export default function CertificadoTrimestral({
@@ -80,7 +125,61 @@ export default function CertificadoTrimestral({
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
   const [responsable, setResponsable] = useState('EDUARDO GARCERANT GONZALEZ');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedNum, setSavedNum] = useState<string | null>(null);
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [historial, setHistorial] = useState<any[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [deletingNum, setDeletingNum] = useState<string | null>(null);
+  const [pwInput, setPwInput] = useState('');
+  const [pwError, setPwError] = useState(false);
   const { toast } = useToast();
+
+  // Carga siguiente número disponible al montar
+  useEffect(() => {
+    fetch('/api/informes')
+      .then(r => r.json())
+      .then(d => {
+        const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
+        setInformeNum(next);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadHistorial = async () => {
+    setLoadingHistorial(true);
+    try {
+      const r = await fetch('/api/informes');
+      const d = await r.json();
+      setHistorial(d.informes || []);
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (pwInput !== '123456') {
+      setPwError(true);
+      return;
+    }
+    if (!deletingNum) return;
+    try {
+      await fetch(`/api/informes?numero=${deletingNum}`, { method: 'DELETE' });
+      toast({ title: `Informe N° ${deletingNum} eliminado` });
+      setHistorial(prev => prev.filter(i => i.numero !== deletingNum));
+      // Recalcular siguiente número
+      const r = await fetch('/api/informes');
+      const d = await r.json();
+      const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
+      setInformeNum(next);
+    } catch {
+      toast({ title: 'Error al eliminar', variant: 'destructive' });
+    } finally {
+      setDeletingNum(null);
+      setPwInput('');
+      setPwError(false);
+    }
+  };
 
   const months = useMemo(() => comparisonSummary?.monthlyFinancials || [], [comparisonSummary]);
   const periodSize = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
@@ -107,29 +206,65 @@ export default function CertificadoTrimestral({
     setIsGenerating(true);
     toast({ title: 'Generando certificado...', description: 'Construyendo el documento.' });
     try {
-      const monthlyNT = pgpData.notaTecnica.valor3m / 3;
       const n = selectedGroup.months.length;
+
+      // ── Datos del Sheet de prestadores ──
+      // VALOR CONTRATO, FRANJA INFERIOR y FRANJA SUPERIOR son valores MENSUALES
+      // (UPC × población del periodo). MESES indica duración del contrato (12, 11…)
+      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
+      const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
+      const fechaInicio          = String(selectedPrestador['FECHA INICIO DE CONTRATO'] || '01/01/2025').trim();
+      const fechaFin             = String(selectedPrestador['FECHA FIN DE CONTRATO']   || '31/12/2025').trim();
+
+      // NT mensual: usa Sheet si existe; si no, usa el valor calculado desde la NT
+      // pgpData.notaTecnica.valor3m = suma de 'costo evento mes' = valor mensual
+      const monthlyNT = valorContratoMensual > 0
+        ? valorContratoMensual
+        : pgpData.notaTecnica.valor3m; // ya es mensual
+
       const ntPeriodo = monthlyNT * n;
-      const minPeriodo = ntPeriodo * 0.9;
-      const maxPeriodo = ntPeriodo * 1.1;
+
+      // Franjas del periodo = franja mensual × número de meses del periodo
+      const minPeriodo = franjaInf90Mensual > 0
+        ? franjaInf90Mensual * n
+        : ntPeriodo * 0.9;
+      const maxPeriodo = franjaSup110Mensual > 0
+        ? franjaSup110Mensual * n
+        : ntPeriodo * 1.1;
+
       const adv80 = monthlyNT * 0.8;
-      const advanceMonths = n > 1 ? n - 1 : 0;
+
+      // Para TRIMESTRAL: los meses cargados son anticipos (80% c/u),
+      // el pago de liquidación ocurre en el mes de cierre del trimestre
+      // Para BIMENSUAL o MENSUAL: sólo el primer mes es anticipo
+      const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
+      const ntPeriodoFull = monthlyNT * expectedMonths;          // NT del periodo completo
+      const advanceMonths = periodType === 'trimestral' ? n      // todos los meses cargados son anticipo
+                          : periodType === 'bimensual'  ? Math.max(0, n - 1)
+                          : 0;
       const totalAdv = adv80 * advanceMonths;
-      const lastMonthPay = ntPeriodo - totalAdv;
+      const lastMonthPay = ntPeriodoFull - totalAdv;            // saldo de liquidación
 
-      const mesData = selectedGroup.months.map(m => {
-        const ex = executionDataByMonth.get(m.month);
-        return {
-          name: MONTH_ES[m.month] || m.month.toUpperCase(),
-          value: m.totalValorEjecutado,
-          cups: ex?.uniqueCupCount ?? ex?.totalCups ?? 0,
-        };
-      });
+      // ── Actividades por mes: suma de Cantidad_Ejecutada de todos los CUPS ──
+      // Viene de comparisonSummary.monthlyFinancials.totalActividades (suma de Cant. Validada)
+      const mesData = selectedGroup.months.map(m => ({
+        name: MONTH_ES[m.month] || m.month.toUpperCase(),
+        value: m.totalValorEjecutado,
+        cups: m.totalActividades ?? 0, // total de actividades ejecutadas ese mes
+      }));
 
-      const empresa = selectedPrestador.PRESTADOR || '';
-      const nit = selectedPrestador.NIT || '';
-      const municipio = (selectedPrestador as Record<string, string>)['MUNICIPIO'] || 'RIOHACHA';
-      const depto = (selectedPrestador as Record<string, string>)['DEPARTAMENTO'] || 'LA GUAJIRA';
+      const empresa = String(selectedPrestador.PRESTADOR || '').trim();
+      const nit = String(selectedPrestador.NIT || '').trim();
+      const ciudadRaw = String(selectedPrestador.CIUDAD || (selectedPrestador as Record<string, string>)['MUNICIPIO'] || 'RIOHACHA').trim().toUpperCase();
+      const municipio = ciudadRaw;
+      // DEPARTAMENTO: usa el Sheet si existe, si no deriva de la ciudad
+      const depto = String(
+        selectedPrestador.DEPARTAMENTO ||
+        (selectedPrestador as Record<string, string>)['DEPARTAMENTO'] ||
+        CIUDAD_DEPARTAMENTO[ciudadRaw] ||
+        'LA GUAJIRA'
+      ).trim().toUpperCase();
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRE' : periodType === 'bimensual' ? 'BIMESTRE' : 'MES';
       const contratoNum = contrato || selectedPrestador.CONTRATO || 'N/A';
       const periodo = selectedGroup.label;
@@ -148,6 +283,11 @@ export default function CertificadoTrimestral({
 
       const totalEjecutado = mesData.reduce((a, m) => a + m.value, 0);
       const totalCups = mesData.reduce((a, m) => a + m.cups, 0);
+
+      // ── Cálculo DESCONTAR / RECONOCER según ejecución real vs banda 90-110% ──
+      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
+      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
       const detalleCups = mesData.map((m, i) => {
@@ -220,7 +360,7 @@ export default function CertificadoTrimestral({
                   { text: 'Nº CONTRATO', ...HS },
                   { text: contratoNum, ...CS },
                   { text: 'VIGENCIA', ...HS },
-                  { text: '01/01/2025-01/12/2025', ...CS },
+                  { text: `${fechaInicio} - ${fechaFin}`, ...CS },
                 ],
                 [
                   { text: 'PUNTOS A TRATAR:', ...HS },
@@ -294,7 +434,7 @@ export default function CertificadoTrimestral({
           // ══════════════════════
           { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle', pageBreak: 'before' },
 
-          // Tabla financiera
+          // Tabla financiera — TABLA 1
           {
             table: {
               widths: ['*', 100, 100],
@@ -306,18 +446,18 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   { text: `% MINIMO PERMITIDO 90%   ${fmt(minPeriodo)}`, ...CS },
-                  { text: '- $', ...CS, alignment: 'right' },
-                  { text: '- $', ...CS, alignment: 'right' },
+                  { text: '$ -', ...CS, alignment: 'right' },
+                  { text: '$ -', ...CS, alignment: 'right' },
                 ],
                 [
-                  { text: `VALOR DE ${n} MES${n > 1 ? 'ES' : ''}   ${fmt(ntPeriodo)}`, ...CS, bold: true },
-                  { text: fmt(0), ...CS, alignment: 'right' },
-                  { text: fmt(0), ...CS, alignment: 'right' },
+                  { text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmt(ntPeriodoFull)}`, ...CS, bold: true },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right' },
+                  { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right' },
                 ],
                 [
                   { text: `% MAXIMO PERMITIDO 110%   ${fmt(maxPeriodo)}`, ...CS },
-                  { text: '- $', ...CS, alignment: 'right' },
-                  { text: '- $', ...CS, alignment: 'right' },
+                  { text: '$ -', ...CS, alignment: 'right' },
+                  { text: '$ -', ...CS, alignment: 'right' },
                 ],
               ],
             },
@@ -341,7 +481,7 @@ export default function CertificadoTrimestral({
                   { text: fmt(monthlyNT * advanceMonths), ...CS, alignment: 'right' },
                   { text: fmt(totalAdv), ...CS, alignment: 'right', bold: true },
                 ],
-                // advance months rows
+                // Filas de anticipo: todos los meses cargados (trimestral = todos son anticipos)
                 ...(advanceMonths > 0
                   ? mesData.slice(0, advanceMonths).map(m => [
                       { text: m.name, ...CS },
@@ -350,17 +490,22 @@ export default function CertificadoTrimestral({
                     ])
                   : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }]]),
                 [
-                  { text: `TOTAL VALOR A PAGAR EN EL ${n > 1 ? 'ÚLTIMO' : ''} MES`, ...CS, bold: true },
-                  { text: fmt(ntPeriodo), ...CS, alignment: 'right', bold: true },
+                  {
+                    text: periodType === 'trimestral'
+                      ? `TOTAL VALOR A PAGAR EN EL MES DE LIQUIDACIÓN (3er MES)`
+                      : `TOTAL VALOR A PAGAR EN EL ÚLTIMO MES`,
+                    ...CS, bold: true
+                  },
+                  { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
                   { text: fmt(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true },
                 ],
                 [
-                  { text: 'TOTAL', ...CS, bold: true },
+                  { text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true },
                   { text: '', ...CS },
-                  { text: fmt(ntPeriodo), ...CS, alignment: 'right', bold: true },
+                  { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
                 ],
                 [
-                  { text: 'TOTAL ANTICIPOS', ...CS, bold: true },
+                  { text: 'TOTAL ANTICIPOS PAGADOS', ...CS, bold: true },
                   { text: '', ...CS },
                   { text: fmt(totalAdv), ...CS, alignment: 'right', bold: true },
                 ],
@@ -370,87 +515,123 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 12],
           },
 
-          // Firma
+          // Firma — sección antes de la narrativa
           { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 6] },
           {
             columns: [
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-                  { text: 'REPRESENTANTE LEGAL DE', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: empresa, alignment: 'center', fontSize: 7 },
+                  { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: empresa, alignment: 'center', fontSize: 7, italics: true },
+                  { text: `NIT: ${nit}`, alignment: 'center', fontSize: 6.5, color: '#555555' },
                 ],
               },
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-                  { text: 'REPRESENTANTE LEGAL DE', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7 },
+                  { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+                  { text: 'NIT: 813.001.862-0', alignment: 'center', fontSize: 6.5, color: '#555555' },
                 ],
               },
             ],
-            margin: [0, 0, 0, 16],
+            margin: [0, 0, 0, 14],
           },
           {
             columns: [
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-                  { text: 'SUPERVISOR DEL CONTRATO DUSAKAWI EPSI', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
                 ],
               },
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
                   { text: responsable, bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' },
                 ],
               },
             ],
-            margin: [0, 0, 0, 16],
+            margin: [0, 0, 0, 10],
           },
 
           // Nota legal
           {
             text: 'Nota: El valor total programado por concepto de prestación de servicios en salud se encuentra sujeto a los descuentos tributarios que apliquen conforme a la normatividad vigente (retenciones en la fuente, IVA u otros tributos según corresponda). El valor neto a pagar se reflejará una vez efectuadas las deducciones respectivas.',
-            fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 8],
+            fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6],
+            color: '#555555',
           },
 
-          // Narrativa página 2 (larga)
+          // ══════════════════════ PÁGINA 3 ══════════════════════
+          // Narrativa página 3 — ejecución financiera
+          { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
           {
-            text: `Durante el período contractual, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados, garantizando los estándares requeridos en la prestación de servicios de salud. Durante los últimos ${n} meses, se ha contabilizado un total de ${fmt(ntPeriodo)} en relación con la ejecución del contrato correspondiente al periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes. Asimismo, se ha puesto especial atención a la calidad, oportunidad y pertinencia de los servicios prestados por la IPS, en tanto estos constituyen el núcleo del objeto contractual y el eje de nuestra razón de ser.`,
+            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutado)} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
             style: 'p',
           },
           {
-            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(ntPeriodo)} ha sido calculado, registrado y conciliado mes a mes, de la siguiente manera: ${mesData.map(m => `en el mes identificado como ${m.name} se registró un valor de ${fmt(m.value)}`).join('; ')}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. Del mismo modo, se ha reconocido el esfuerzo institucional, la transparencia en la relación contractual y la documentación íntegra del proceso, lo cual ha permitido fortalecer la trazabilidad, la equidad y la rendición de cuentas durante cada uno de los meses de ejecución de actividades.`,
+            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(totalEjecutado)} ha sido calculado, registrado y conciliado mes a mes: ${mesData.map(m => `en ${m.name} se registró un valor ejecutado de ${fmt(m.value)} correspondiente a ${fmtN(m.cups)} actividades en salud`).join('; ')}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmt(minPeriodo)} y un máximo del 110% equivalente a ${fmt(maxPeriodo)}.`,
             style: 'p',
           },
           {
-            text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago equivalente al 80% del valor estipulado durante los meses de ' + mesData.slice(0, advanceMonths).map(m => m.name + ' (equivalente a ' + fmt(adv80) + ')').join(' y de ') + `. Para el último mes, se proyectó el pago correspondiente al saldo del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmt(lastMonthPay > 0 ? lastMonthPay : 0)}. A este valor se adiciona el 20% pendiente correspondiente al primer y segundo meses de ejecución, con el fin de alcanzar un acumulado de ${fmt(totalAdv)}.` : '.'} En función de lo previsto contractualmente, se considerará un valor a descontar de ${fmt(0)}, en su defecto, un valor a reconocer de ${fmt(0)}, resultando en un total ejecutado del ${periodoLabel.toLowerCase()} por ${fmt(ntPeriodo)}.`,
-            style: 'p',
-          },
-          {
-            text: `Finalmente, el total reconocido, por un valor de ${fmt(ntPeriodo)}, ha sido determinado teniendo en cuenta tanto los valores efectivamente ejecutados como los descuentos aplicados, las retenciones legales, los ajustes derivados de eventuales incidencias y otros reconocimientos pertinentes. Este proceso asegura una administración financiera eficaz, una compensación adecuada para todas las partes involucradas y refuerza el compromiso con la calidad, la legalidad, la transparencia institucional y la responsabilidad operativa del contratista y de la entidad contratante. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando así que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia.`,
+            text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0
+              ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' +
+                mesData.slice(0, advanceMonths).map(m => `${m.name} (equivalente a ${fmt(adv80)})`).join(' y ') +
+                `. Para el mes de ${mesData[mesData.length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmt(lastMonthPay > 0 ? lastMonthPay : 0)}, completando así el acumulado de anticipos de ${fmt(totalAdv)}.`
+              : '.'} En función de lo previsto contractualmente, se considera un valor a ${descontar > 0 ? `descontar de ${fmt(descontar)} por ejecución inferior al 90%` : 'descontar de $0,00'} y un valor a ${reconocer > 0 ? `reconocer de ${fmt(reconocer)} por ejecución superior al 110%` : 'reconocer de $0,00'}, resultando en un valor estimado final del ${periodoLabel.toLowerCase()} de ${fmt(valorFinal)}.`,
             style: 'p',
           },
 
-          // Totales finales (igual al original)
+          // Tabla resumen final con totales
           {
             table: {
-              widths: ['*', 'auto', 'auto'],
+              widths: ['*', 90, 90, 90],
               body: [
-                [{ text: '', fontSize: 7 }, { text: fmt(0), fontSize: 7, alignment: 'right' }, { text: fmt(0), fontSize: 7, alignment: 'right' }],
-                [{ text: '', fontSize: 7 }, { text: fmt(0), fontSize: 7, alignment: 'right' }, { text: fmt(ntPeriodo), fontSize: 7, alignment: 'right', bold: true }],
+                [
+                  { text: 'CONCEPTO', ...TS2, alignment: 'left' },
+                  { text: 'DESCONTAR', ...TS2, alignment: 'right' },
+                  { text: 'RECONOCER', ...TS2, alignment: 'right' },
+                  { text: 'VALOR ESTIMADO', ...TS2, alignment: 'right', fillColor: '#bbf7d0' },
+                ],
+                [
+                  { text: `Valor NT del ${periodoLabel} (${periodo})`, ...CS },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' },
+                  { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' },
+                  { text: fmt(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' },
+                ],
+                [
+                  { text: 'Total anticipos pagados (80% mensual)', ...CS },
+                  { text: '', ...CS },
+                  { text: fmt(totalAdv), ...CS, alignment: 'right' },
+                  { text: fmt(totalAdv), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' },
+                ],
+                [
+                  { text: `Saldo a pagar en el mes de cierre (${mesData[mesData.length - 1]?.name || ''})`, ...CS, bold: true },
+                  { text: '', ...CS },
+                  { text: '', ...CS },
+                  { text: fmt(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true, fillColor: '#dcfce7' },
+                ],
               ],
             },
-            layout: 'noBorders',
-            margin: [0, 4, 0, 0],
+            layout: 'lightHorizontalLines',
+            margin: [0, 4, 0, 8],
           },
 
-          // Narrativa CUPS página 2
+          // Párrafo de cierre
           {
-            text: `La ejecución de los códigos CUPS, representados en el gráfico, constituye un elemento clave para el análisis técnico y financiero de las notas asociadas a los contratos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos agrupan los procedimientos y tratamientos reportados durante el período de análisis, y su correcta aplicación permite asegurar la coherencia entre la facturación, la trazabilidad administrativa y la ejecución presupuestal de los servicios contratados. Cada valor consignado corresponde a la sumatoria de actividades registradas mensualmente, de acuerdo con los soportes técnicos y administrativos validados en el marco del proceso contractual. ${mesData.map(m => `En el mes de ${m.name}, se documentó un total de ${fmtN(m.cups)} CUPS, con un consolidado financiero equivalente a ${fmt(m.value)}`).join('. ')}. El consolidado del ${periodoLabel.toLowerCase()} evidencia la ejecución técnica y financiera de los códigos CUPS con un total de ${fmtN(totalCups)} actividades y ${fmt(totalEjecutado)} en valores ejecutados.`,
+            text: `Finalmente, el total reconocido por valor de ${fmt(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`,
             style: 'p',
-            margin: [0, 4, 0, 0],
+            margin: [0, 0, 0, 6],
+          },
+
+          // Narrativa CUPS — consolidado trimestral
+          {
+            text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutado)} en valores ejecutados, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
+            style: 'p',
+            margin: [0, 0, 0, 0],
           },
         ],
       };
@@ -464,6 +645,60 @@ export default function CertificadoTrimestral({
       setIsGenerating(false);
     }
   };
+
+  // Guarda el informe en el registro del servidor
+  const handleSave = useCallback(async () => {
+    if (!selectedPrestador || !comparisonSummary) return;
+    setIsSaving(true);
+    try {
+      const selectedGroup = periodGroups[selectedPeriodIndex] ?? periodGroups[0];
+      const n = selectedGroup?.months.length || 0;
+      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
+      const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
+      const ntPeriodoFull = monthlyNT * expectedMonths;
+      const totalEjecutado = selectedGroup?.months.reduce((s, m) => s + m.totalValorEjecutado, 0) || 0;
+      const minPeriodo = ntPeriodoFull * 0.9;
+      const maxPeriodo = ntPeriodoFull * 1.1;
+      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
+      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      const valorFinal = ntPeriodoFull - descontar + reconocer;
+      const advanceMonths = periodType === 'trimestral' ? n : Math.max(0, n - 1);
+      const totalAdv = monthlyNT * 0.8 * advanceMonths;
+      const ciudadRaw = String(selectedPrestador.CIUDAD || 'RIOHACHA').toUpperCase();
+
+      const res = await fetch('/api/informes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prestador: selectedPrestador.PRESTADOR,
+          nit: selectedPrestador.NIT,
+          contrato: contrato || selectedPrestador.CONTRATO || '',
+          municipio: ciudadRaw,
+          departamento: String(selectedPrestador.DEPARTAMENTO || CIUDAD_DEPARTAMENTO[ciudadRaw] || '').toUpperCase(),
+          periodo: selectedGroup?.label || '',
+          tipoPeriodo: periodType.toUpperCase(),
+          ntPeriodo: ntPeriodoFull,
+          totalEjecutado,
+          descontar,
+          reconocer,
+          valorFinal,
+          totalAnticipos: totalAdv,
+          responsable,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedNum(data.numero);
+        setInformeNum(String(parseInt(data.numero) + 1).padStart(3, '0'));
+        toast({ title: `✓ Informe N° ${data.numero} guardado`, description: `${selectedPrestador.PRESTADOR} · ${selectedGroup?.label}` });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, toast]);
 
   if (!comparisonSummary || !pgpData || months.length === 0) return null;
 
@@ -515,10 +750,99 @@ export default function CertificadoTrimestral({
           <Label className="text-xs">Responsable (firma)</Label>
           <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
         </div>
-        <Button onClick={handleGenerate} disabled={isGenerating} className="w-full">
-          {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
-          Generar Certificado PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleGenerate} disabled={isGenerating} className="flex-1">
+            {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
+            Generar PDF
+          </Button>
+          <Button variant="outline" onClick={handleSave} disabled={isSaving} className="flex-1 border-green-400 text-green-700 hover:bg-green-50">
+            {isSaving ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">💾</span>}
+            {savedNum ? `Guardado N° ${savedNum}` : 'Guardar en Registro'}
+          </Button>
+          <Button variant="ghost" size="icon" title="Ver historial de informes"
+            onClick={() => { setShowHistorial(v => !v); if (!showHistorial) loadHistorial(); }}>
+            📋
+          </Button>
+        </div>
+
+        {/* Historial de informes */}
+        {showHistorial && (
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm">📂 Registro de Informes</h4>
+              {loadingHistorial && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {historial.length === 0 && !loadingHistorial && (
+              <p className="text-xs text-muted-foreground">No hay informes guardados aún.</p>
+            )}
+            {historial.length > 0 && (
+              <div className="overflow-auto max-h-64 rounded-lg border border-border bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">N°</th>
+                      <th className="px-3 py-2 text-left font-semibold">Prestador</th>
+                      <th className="px-3 py-2 text-left font-semibold">Período</th>
+                      <th className="px-3 py-2 text-left font-semibold">Tipo</th>
+                      <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
+                      <th className="px-3 py-2 text-left font-semibold">Fecha</th>
+                      <th className="px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historial.map((inf: any) => (
+                      <tr key={inf.numero} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
+                        <td className="px-3 py-1.5 max-w-[160px] truncate" title={inf.prestador}>{inf.prestador}</td>
+                        <td className="px-3 py-1.5">{inf.periodo}</td>
+                        <td className="px-3 py-1.5">{inf.tipoPeriodo}</td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-green-700">
+                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
+                        <td className="px-3 py-1.5">
+                          <button
+                            onClick={() => { setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }}
+                            className="text-red-400 hover:text-red-600 transition-colors"
+                            title="Eliminar informe"
+                          >🗑️</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal contraseña para eliminar */}
+        {deletingNum && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+              <h3 className="font-semibold text-base">🔒 Eliminar Informe N° {deletingNum}</h3>
+              <p className="text-sm text-muted-foreground">Ingresa la contraseña para confirmar la eliminación.</p>
+              <Input
+                type="password"
+                placeholder="Contraseña"
+                value={pwInput}
+                onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+                onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+                className={pwError ? 'border-red-500' : ''}
+                autoFocus
+              />
+              {pwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setDeletingNum(null); setPwInput(''); setPwError(false); }}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleDeleteConfirm}>
+                  Eliminar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

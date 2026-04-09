@@ -33,6 +33,7 @@ import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import InformePGP from '../report/InformePGP';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
+import NotaTecnicaValidator from './NotaTecnicaValidator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export type Prestador = PrestadorInfo;
@@ -153,12 +154,13 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   const unexpectedCups: UnexpectedCupInfo[] = [];
   const matrizDescuentos: DiscountMatrixRow[] = [];
 
-  const monthlyFinancialsMap = new Map<string, { expected: number; executed: number }>();
+  const monthlyFinancialsMap = new Map<string, { expected: number; executed: number; activities: number }>();
 
   matrizRows.forEach(row => {
-    const current = monthlyFinancialsMap.get(row.Mes) || { expected: 0, executed: 0 };
+    const current = monthlyFinancialsMap.get(row.Mes) || { expected: 0, executed: 0, activities: 0 };
     current.expected += row.Valor_Esperado;
     current.executed += row.Valor_Ejecutado;
+    current.activities += row.Cantidad_Ejecutada;
     monthlyFinancialsMap.set(row.Mes, current);
 
     const commonInfo: DeviatedCupInfo = {
@@ -217,7 +219,8 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     month,
     totalValorEsperado: data.expected,
     totalValorEjecutado: data.executed,
-    percentage: data.expected > 0 ? (data.executed / data.expected) * 100 : 0
+    percentage: data.expected > 0 ? (data.executed / data.expected) * 100 : 0,
+    totalActividades: data.activities,
   }));
 
   return {
@@ -366,7 +369,34 @@ const PgPsearchForm = forwardRef<
     setLoading(true);
     try {
       const data = await fetchSheetData<PgpRow>(prestador.WEB);
-      setPgpData(data);
+
+      // Auto-cargar CUPS adicionales guardados para este prestador
+      const prestadorId = normalizeDigits(prestador.NIT || prestador.PRESTADOR);
+      try {
+        const res = await fetch(`/api/cups-adicionales?prestadorId=${encodeURIComponent(prestadorId)}`);
+        const extra = await res.json();
+        if (extra.rows?.length) {
+          const existingCups = new Set(data.map((r: PgpRow) => {
+            const cup = r['cups'] || r['CUPS'] || r['cup'] || '';
+            return String(cup).trim().toUpperCase();
+          }));
+          const onlyNew = extra.rows.filter((r: PgpRow) => {
+            const cup = String(r.cups || r.CUPS || '').trim().toUpperCase();
+            return cup && !existingCups.has(cup);
+          });
+          if (onlyNew.length) {
+            toast({ title: `${onlyNew.length} CUPS adicionales cargadas`, description: `Se fusionaron automáticamente con la NT de ${prestador.PRESTADOR}.` });
+            setPgpData([...data, ...onlyNew]);
+          } else {
+            setPgpData(data);
+          }
+        } else {
+          setPgpData(data);
+        }
+      } catch {
+        setPgpData(data);
+      }
+
       setSelectedPrestador(prestador);
       setIsDataLoaded(true);
       onPrestadorLoaded?.(prestador.PRESTADOR);
@@ -448,6 +478,18 @@ const PgPsearchForm = forwardRef<
           )}
         </div>
       </div>
+    );
+  }
+
+  // ── validador NT ── (accesible sin datos de ejecución)
+  if (activeModule === "validador") {
+    return (
+      <NotaTecnicaValidator
+        pgpData={pgpData}
+        onUpdateNt={setPgpData}
+        prestadorName={selectedPrestador?.PRESTADOR}
+        prestadorId={normalizeDigits(selectedPrestador?.NIT || selectedPrestador?.PRESTADOR || '')}
+      />
     );
   }
 
@@ -635,7 +677,7 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-6">
         {analysisHeader}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
             <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
