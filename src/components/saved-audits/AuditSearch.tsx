@@ -23,7 +23,7 @@ interface AuditSearchProps {
 export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [audits, setAudits] = useState<AuditRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isContinuing, setIsContinuing] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [pwInput, setPwInput] = useState('');
@@ -45,17 +45,53 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
 
     useEffect(() => { fetchAudits(); }, [fetchAudits]);
 
+    const toggleSelect = (id: number, prestador: string) => {
+        setSelectedIds(prev => {
+            if (prev.includes(id)) return prev.filter(x => x !== id);
+            // Validar mismo prestador
+            if (prev.length > 0) {
+                const firstPrestador = audits.find(a => a.id === prev[0])?.prestador;
+                if (firstPrestador?.toLowerCase() !== prestador.toLowerCase()) {
+                    toast({ title: "Mismo prestador", description: "Solo puedes combinar auditorías del mismo prestador.", variant: "destructive" });
+                    return prev;
+                }
+            }
+            if (prev.length >= 3) {
+                toast({ title: "Máximo 3", description: "Solo puedes cargar hasta 3 auditorías a la vez.", variant: "destructive" });
+                return prev;
+            }
+            return [...prev, id];
+        });
+    };
+
     const handleLoad = async () => {
-        if (!selectedId) return;
-        const audit = audits.find(a => a.id === selectedId);
-        if (!audit) return;
+        if (selectedIds.length === 0) return;
         setIsContinuing(true);
         try {
-            const res = await fetch(`/api/load-audit?id=${selectedId}`);
-            if (!res.ok) throw new Error('Error al cargar la auditoría.');
-            const { auditData, prestador, mes } = await res.json();
-            onAuditLoad(auditData, prestador, mes);
-            toast({ title: "Auditoría restaurada", description: `${prestador} — ${mes}` });
+            // Cargar todas las auditorías seleccionadas en paralelo
+            const results = await Promise.all(
+                selectedIds.map(id => fetch(`/api/load-audit?id=${id}`).then(r => r.json()))
+            );
+
+            // Tomar datos base de la primera
+            const base = results[0];
+            const merged: SavedAuditData = { ...base.auditData };
+
+            // Combinar executionData de todas
+            if (results.length > 1) {
+                const allExecData: Record<string, any> = { ...(base.auditData.executionData || {}) };
+                for (let i = 1; i < results.length; i++) {
+                    const other = results[i].auditData?.executionData || {};
+                    Object.assign(allExecData, other);
+                }
+                merged.executionData = allExecData;
+            }
+
+            const prestadorName = base.prestador;
+            const allMonths = results.map(r => r.mes).join(' + ');
+
+            onAuditLoad(merged, prestadorName, allMonths);
+            toast({ title: "Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
@@ -70,13 +106,15 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             if (!res.ok) throw new Error('Error al eliminar.');
             toast({ title: "Auditoría eliminada" });
             setAudits(prev => prev.filter(a => a.id !== deletingId));
-            if (selectedId === deletingId) setSelectedId(null);
+            setSelectedIds(prev => prev.filter(x => x !== deletingId));
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
             setDeletingId(null); setPwInput(''); setPwError(false);
         }
     };
+
+    const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
 
     return (
         <div className="space-y-4">
@@ -86,61 +124,96 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 </div>
             ) : audits.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                    No hay auditorías guardadas. Usa <strong>"Guardar Auditoría"</strong> en el módulo <strong>Descuentos y Ajustes</strong>.
+                    No hay auditorías guardadas. Usa <strong>"Guardar Auditoría"</strong> en el sidebar.
                 </div>
             ) : (
-                <div className="rounded-lg border border-border overflow-auto max-h-96">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted sticky top-0">
-                            <tr>
-                                <th className="px-4 py-2 text-left font-semibold">N°</th>
-                                <th className="px-4 py-2 text-left font-semibold">Prestador</th>
-                                <th className="px-4 py-2 text-left font-semibold">NIT</th>
-                                <th className="px-4 py-2 text-left font-semibold">Mes</th>
-                                <th className="px-4 py-2 text-left font-semibold">Fecha</th>
-                                <th className="px-4 py-2"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {audits.map(a => (
-                                <tr
-                                    key={a.id}
-                                    onClick={() => setSelectedId(a.id)}
-                                    className={`border-t border-border cursor-pointer transition-colors ${selectedId === a.id ? 'bg-primary/10 font-semibold' : 'hover:bg-muted/40'}`}
-                                >
-                                    <td className="px-4 py-2 font-mono text-primary font-bold">{a.numero}</td>
-                                    <td className="px-4 py-2 max-w-[200px] truncate">{a.prestador?.toUpperCase()}</td>
-                                    <td className="px-4 py-2 text-muted-foreground text-xs">{a.nit}</td>
-                                    <td className="px-4 py-2 capitalize">{a.month}</td>
-                                    <td className="px-4 py-2 text-muted-foreground text-xs">{a.fecha}</td>
-                                    <td className="px-4 py-2">
-                                        <button
-                                            onClick={e => { e.stopPropagation(); setDeletingId(a.id); setPwInput(''); setPwError(false); }}
-                                            className="text-red-400 hover:text-red-600 transition-colors"
-                                            title="Eliminar auditoría"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
-                                    </td>
+                <>
+                    <p className="text-xs text-muted-foreground">
+                        Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas al cargar.
+                    </p>
+                    <div className="rounded-lg border border-border overflow-auto max-h-96">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted sticky top-0">
+                                <tr>
+                                    <th className="px-3 py-2 w-8"></th>
+                                    <th className="px-4 py-2 text-left font-semibold">N°</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Prestador</th>
+                                    <th className="px-4 py-2 text-left font-semibold">NIT</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Mes</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                    <th className="px-4 py-2"></th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {audits.map(a => {
+                                    const checked = selectedIds.includes(a.id);
+                                    const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
+                                    const disabled = !checked && selectedIds.length >= 3;
+                                    const differentPrestador = !checked && firstPrestador && firstPrestador.toLowerCase() !== a.prestador.toLowerCase();
+                                    return (
+                                        <tr
+                                            key={a.id}
+                                            onClick={() => !disabled && toggleSelect(a.id, a.prestador)}
+                                            className={`border-t border-border transition-colors ${
+                                                checked
+                                                    ? 'bg-emerald-50 border-emerald-200'
+                                                    : disabled || differentPrestador
+                                                    ? 'opacity-40 cursor-not-allowed'
+                                                    : 'cursor-pointer hover:bg-muted/40'
+                                            }`}
+                                        >
+                                            <td className="px-3 py-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => !disabled && toggleSelect(a.id, a.prestador)}
+                                                    className="accent-emerald-600 h-4 w-4"
+                                                    disabled={disabled || !!differentPrestador}
+                                                />
+                                            </td>
+                                            <td className="px-4 py-2 font-mono text-primary font-bold">{a.numero}</td>
+                                            <td className="px-4 py-2 max-w-[180px] truncate">{a.prestador?.toUpperCase()}</td>
+                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.nit}</td>
+                                            <td className="px-4 py-2 capitalize">{a.month}</td>
+                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.fecha}</td>
+                                            <td className="px-4 py-2">
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); setDeletingId(a.id); setPwInput(''); setPwError(false); }}
+                                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                                    title="Eliminar auditoría"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
 
             <div className="flex items-center gap-3 flex-wrap">
-                <Button onClick={handleLoad} disabled={!selectedId || isContinuing} className="bg-primary hover:bg-primary/90">
+                <Button
+                    onClick={handleLoad}
+                    disabled={selectedIds.length === 0 || isContinuing}
+                    className="bg-primary hover:bg-primary/90"
+                >
                     {isContinuing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                    {selectedId ? 'Cargar Auditoría Seleccionada' : 'Selecciona una fila'}
+                    {selectedIds.length === 0
+                        ? 'Selecciona una auditoría'
+                        : selectedIds.length === 1
+                        ? 'Cargar Auditoría'
+                        : `Combinar ${selectedIds.length} auditorías`}
                 </Button>
                 <Button variant="outline" size="icon" onClick={fetchAudits} title="Refrescar lista">
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </Button>
-                {selectedId && (
+                {selectedAudits.length > 0 && (
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <FolderOpen className="h-3 w-3" />
-                        {audits.find(a => a.id === selectedId)?.prestador?.toUpperCase()} — {audits.find(a => a.id === selectedId)?.month}
+                        {selectedAudits[0].prestador?.toUpperCase()} — {selectedAudits.map(a => a.month).join(' + ')}
                     </span>
                 )}
             </div>
