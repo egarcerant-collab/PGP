@@ -1,12 +1,12 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Papa from 'papaparse';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign, Send, CheckCircle2, ShieldCheck } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign, Send, CheckCircle2, ShieldCheck, Save, BookmarkCheck } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -406,10 +406,38 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [modalContent, setModalContent] = useState<{ title: React.ReactNode, data: any[], type: string, totals: {ejecutado: number, desviacion: number} } | null>(null);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
     const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
+    const [valorGuardado, setValorGuardado] = useState(false);
     const [showNtModal, setShowNtModal] = useState(false);
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
+
+    // Clave de localStorage basada en el prestador
+    const storageKey = `pgp-cups-inesperadas-manual-${selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default'}`;
+
+    // Cargar valor guardado al montar o cambiar prestador
+    useEffect(() => {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            setValorConsolidadoManual(saved);
+            setValorGuardado(true);
+        } else {
+            setValorConsolidadoManual('');
+            setValorGuardado(false);
+        }
+    }, [storageKey]);
+
+    const handleGuardarValor = useCallback(() => {
+        if (valorConsolidadoManual && Number(valorConsolidadoManual) > 0) {
+            localStorage.setItem(storageKey, valorConsolidadoManual);
+            setValorGuardado(true);
+            toast({ title: '✅ Valor guardado', description: `Se guardó $${Number(valorConsolidadoManual).toLocaleString('es-CO')} como valor de CUPS Inesperadas para este contrato.` });
+        } else {
+            localStorage.removeItem(storageKey);
+            setValorGuardado(false);
+            toast({ title: 'Valor eliminado', description: 'Se borró el valor guardado para este contrato.' });
+        }
+    }, [storageKey, valorConsolidadoManual, toast]);
 
     const calculateTotals = (items: DeviatedCupInfo[]) => {
         if (!items) return { ejecutado: 0, desviacion: 0 };
@@ -857,42 +885,65 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         <div className="grid gap-3 sm:grid-cols-3">
                             {/* Col 1: NT ejecutado */}
                             <div className="rounded-md bg-background border p-3 space-y-1">
-                                <p className="text-xs text-muted-foreground">Ejecución Nota Técnica</p>
+                                <p className="text-xs text-muted-foreground font-medium">Ejecución Nota Técnica</p>
                                 <p className="text-lg font-bold text-foreground">{formatCurrency(totalNTEjecutado)}</p>
                                 <p className="text-xs text-muted-foreground">Valor calculado desde los meses cargados</p>
                             </div>
 
-                            {/* Col 2: Valor manual */}
+                            {/* Col 2: Valor manual + botón guardar */}
                             <div className="rounded-md bg-background border p-3 space-y-2">
-                                <Label className="text-xs text-muted-foreground">
+                                <Label className="text-xs text-muted-foreground font-medium">
                                     + Valor CUPS / Tecnologías Inesperadas (manual)
                                 </Label>
-                                <Input
-                                    type="number"
-                                    placeholder="Ej: 45000000"
-                                    value={valorConsolidadoManual}
-                                    onChange={e => setValorConsolidadoManual(e.target.value)}
-                                    className="font-mono"
-                                />
-                                {valorManual > 0 && (
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="number"
+                                        placeholder="Ej: 45000000"
+                                        value={valorConsolidadoManual}
+                                        onChange={e => { setValorConsolidadoManual(e.target.value); setValorGuardado(false); }}
+                                        className="font-mono flex-1"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        variant={valorGuardado ? "default" : "outline"}
+                                        className={valorGuardado ? "bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" : "shrink-0"}
+                                        onClick={handleGuardarValor}
+                                        title="Guardar este valor para el contrato"
+                                    >
+                                        {valorGuardado
+                                            ? <><BookmarkCheck className="h-4 w-4 mr-1" />Guardado</>
+                                            : <><Save className="h-4 w-4 mr-1" />Guardar</>
+                                        }
+                                    </Button>
+                                </div>
+                                {comparisonSummary.unexpectedCups.length > 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        {comparisonSummary.unexpectedCups.length} tecnologías inesperadas detectadas
-                                        (auto: {formatCurrency(totalUnexpectedValue)})
+                                        {comparisonSummary.unexpectedCups.length} tec. inesperadas · valor auto: {formatCurrency(totalUnexpectedValue)}
+                                    </p>
+                                )}
+                                {valorGuardado && (
+                                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                        <BookmarkCheck className="h-3 w-3" /> Valor guardado para este contrato
                                     </p>
                                 )}
                             </div>
 
-                            {/* Col 3: Valor final */}
-                            <div className={`rounded-md border-2 p-3 space-y-1 ${valorManual > 0 ? 'border-primary bg-primary/10' : 'border-dashed border-muted-foreground/30 bg-background'}`}>
+                            {/* Col 3: Valor final — siempre visible */}
+                            <div className={`rounded-md border-2 p-3 space-y-1 ${
+                                valorManual > 0
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border bg-muted/30'
+                            }`}>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">= Valor Final de Ejecución</p>
-                                <p className={`text-xl font-bold ${valorManual > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-                                    {valorManual > 0 ? formatCurrency(valorFinalEjecucion) : '—'}
+                                <p className={`text-xl font-bold ${valorManual > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                    {formatCurrency(valorFinalEjecucion)}
                                 </p>
-                                {valorManual > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                        NT {formatCurrency(totalNTEjecutado)} + Inesperadas {formatCurrency(valorManual)}
-                                    </p>
-                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    {valorManual > 0
+                                        ? <>NT {formatCurrency(totalNTEjecutado)} + Inesperadas {formatCurrency(valorManual)}</>
+                                        : <>Solo ejecución NT (sin valor inesperadas)</>
+                                    }
+                                </p>
                             </div>
                         </div>
 
