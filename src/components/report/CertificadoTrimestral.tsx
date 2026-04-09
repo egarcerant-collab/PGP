@@ -133,7 +133,21 @@ export default function CertificadoTrimestral({
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [notaAdicional, setNotaAdicional] = useState('');
+  const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
+  const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
   const { toast } = useToast();
+
+  // Carga el valor de CUPS Inesperadas guardado desde el módulo CUPS
+  useEffect(() => {
+    const key = `pgp-cups-inesperadas-manual-${selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default'}`;
+    const saved = localStorage.getItem(key);
+    if (saved && !isNaN(Number(saved)) && Number(saved) > 0) {
+      setValorCupsInesperadas(Number(saved));
+    } else {
+      setValorCupsInesperadas(0);
+    }
+  }, [selectedPrestador]);
 
   // Carga siguiente número disponible al montar
   useEffect(() => {
@@ -283,10 +297,12 @@ export default function CertificadoTrimestral({
 
       const totalEjecutado = mesData.reduce((a, m) => a + m.value, 0);
       const totalCups = mesData.reduce((a, m) => a + m.cups, 0);
+      // Suma CUPS / Tecnologías Inesperadas al total ejecutado para el cálculo de bandas
+      const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
 
       // ── Cálculo DESCONTAR / RECONOCER según ejecución real vs banda 90-110% ──
-      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
-      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
@@ -414,7 +430,7 @@ export default function CertificadoTrimestral({
             style: 'p',
           },
           {
-            text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmt(totalEjecutado)}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`,
+            text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`,
             style: 'p',
             margin: [0, 0, 0, 4],
           },
@@ -458,6 +474,16 @@ export default function CertificadoTrimestral({
                   { text: `% MAXIMO PERMITIDO 110%   ${fmt(maxPeriodo)}`, ...CS },
                   { text: '$ -', ...CS, alignment: 'right' },
                   { text: '$ -', ...CS, alignment: 'right' },
+                ],
+                ...(valorCupsInesperadas > 0 ? [[
+                  { text: `CUPS / Tecnologías Inesperadas   ${fmt(valorCupsInesperadas)}`, ...CS, color: '#1d4ed8', bold: true },
+                  { text: fmt(0), ...CS, alignment: 'right' },
+                  { text: fmt(valorCupsInesperadas), ...CS, alignment: 'right', color: '#1d4ed8', bold: true },
+                ]] : []),
+                [
+                  { text: `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`, ...CS, bold: true, fillColor: '#f0fdf4' },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
+                  { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
                 ],
               ],
             },
@@ -558,6 +584,48 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 10],
           },
 
+          // ── Nota de ejecución financiera ──
+          ...(notaEjecucionFinanciera.trim() ? [
+            {
+              text: 'NOTA DE EJECUCIÓN FINANCIERA:',
+              bold: true, fontSize: 7.5, margin: [0, 8, 0, 2],
+            },
+            {
+              table: {
+                widths: ['*'],
+                body: [[{
+                  text: notaEjecucionFinanciera.trim(),
+                  fontSize: 7.5, alignment: 'justify',
+                  margin: [4, 4, 4, 4],
+                }]],
+              },
+              layout: { hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' },
+              fillColor: '#eff6ff',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
+          // ── Notas adicionales ──
+          ...(notaAdicional.trim() ? [
+            {
+              text: 'OBSERVACIONES ADICIONALES:',
+              bold: true, fontSize: 7.5, margin: [0, 4, 0, 2],
+            },
+            {
+              table: {
+                widths: ['*'],
+                body: [[{
+                  text: notaAdicional.trim(),
+                  fontSize: 7.5, alignment: 'justify',
+                  margin: [4, 4, 4, 4],
+                }]],
+              },
+              layout: { hLineColor: () => '#d1fae5', vLineColor: () => '#d1fae5' },
+              fillColor: '#f0fdf4',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
           // Nota legal
           {
             text: 'Nota: El valor total programado por concepto de prestación de servicios en salud se encuentra sujeto a los descuentos tributarios que apliquen conforme a la normatividad vigente (retenciones en la fuente, IVA u otros tributos según corresponda). El valor neto a pagar se reflejará una vez efectuadas las deducciones respectivas.',
@@ -569,11 +637,11 @@ export default function CertificadoTrimestral({
           // Narrativa página 3 — ejecución financiera
           { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
           {
-            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutado)} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
+            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
             style: 'p',
           },
           {
-            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(totalEjecutado)} ha sido calculado, registrado y conciliado mes a mes: ${mesData.map(m => `en ${m.name} se registró un valor ejecutado de ${fmt(m.value)} correspondiente a ${fmtN(m.cups)} actividades en salud`).join('; ')}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmt(minPeriodo)} y un máximo del 110% equivalente a ${fmt(maxPeriodo)}.`,
+            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mesData.map(m => `en ${m.name} se registró un valor ejecutado de ${fmt(m.value)} correspondiente a ${fmtN(m.cups)} actividades en salud`).join('; ')}${valorCupsInesperadas > 0 ? `; adicionalmente se incluye un valor de ${fmt(valorCupsInesperadas)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmt(minPeriodo)} y un máximo del 110% equivalente a ${fmt(maxPeriodo)}.`,
             style: 'p',
           },
           {
@@ -629,7 +697,7 @@ export default function CertificadoTrimestral({
 
           // Narrativa CUPS — consolidado trimestral
           {
-            text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutado)} en valores ejecutados, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
+            text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutadoFinal)} en valores ejecutados${valorCupsInesperadas > 0 ? ` (de los cuales ${fmt(valorCupsInesperadas)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
             style: 'p',
             margin: [0, 0, 0, 0],
           },
@@ -750,6 +818,45 @@ export default function CertificadoTrimestral({
           <Label className="text-xs">Responsable (firma)</Label>
           <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
         </div>
+
+        {/* Banner CUPS Inesperadas */}
+        {valorCupsInesperadas > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <span className="text-blue-500">💡</span>
+            <span>
+              <span className="font-semibold">CUPS / Tecnologías Inesperadas incluidas:</span>{' '}
+              {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)}
+              {' '}— este valor se suma a la ejecución para el cálculo del certificado.
+            </span>
+          </div>
+        )}
+
+        {/* Nota de ejecución financiera */}
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1">
+            <span>📊</span> Nota de ejecución financiera
+          </Label>
+          <textarea
+            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            placeholder="Ej: La ejecución del período refleja un incremento del 12% respecto al trimestre anterior..."
+            value={notaEjecucionFinanciera}
+            onChange={e => setNotaEjecucionFinanciera(e.target.value)}
+          />
+        </div>
+
+        {/* Notas adicionales */}
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1">
+            <span>⚙️</span> Notas adicionales
+          </Label>
+          <textarea
+            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            placeholder="Ej: Favorabilidad alta..."
+            value={notaAdicional}
+            onChange={e => setNotaAdicional(e.target.value)}
+          />
+        </div>
+
         <div className="flex gap-2">
           <Button onClick={handleGenerate} disabled={isGenerating} className="flex-1">
             {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
