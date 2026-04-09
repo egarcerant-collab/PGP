@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -125,7 +125,34 @@ export default function CertificadoTrimestral({
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
   const [responsable, setResponsable] = useState('EDUARDO GARCERANT GONZALEZ');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedNum, setSavedNum] = useState<string | null>(null);
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [historial, setHistorial] = useState<any[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
   const { toast } = useToast();
+
+  // Carga siguiente número disponible al montar
+  useEffect(() => {
+    fetch('/api/informes')
+      .then(r => r.json())
+      .then(d => {
+        const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
+        setInformeNum(next);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadHistorial = async () => {
+    setLoadingHistorial(true);
+    try {
+      const r = await fetch('/api/informes');
+      const d = await r.json();
+      setHistorial(d.informes || []);
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
 
   const months = useMemo(() => comparisonSummary?.monthlyFinancials || [], [comparisonSummary]);
   const periodSize = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
@@ -180,9 +207,17 @@ export default function CertificadoTrimestral({
         : ntPeriodo * 1.1;
 
       const adv80 = monthlyNT * 0.8;
-      const advanceMonths = n > 1 ? n - 1 : 0;
+
+      // Para TRIMESTRAL: los meses cargados son anticipos (80% c/u),
+      // el pago de liquidación ocurre en el mes de cierre del trimestre
+      // Para BIMENSUAL o MENSUAL: sólo el primer mes es anticipo
+      const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
+      const ntPeriodoFull = monthlyNT * expectedMonths;          // NT del periodo completo
+      const advanceMonths = periodType === 'trimestral' ? n      // todos los meses cargados son anticipo
+                          : periodType === 'bimensual'  ? Math.max(0, n - 1)
+                          : 0;
       const totalAdv = adv80 * advanceMonths;
-      const lastMonthPay = ntPeriodo - totalAdv;
+      const lastMonthPay = ntPeriodoFull - totalAdv;            // saldo de liquidación
 
       // ── Actividades por mes: suma de Cantidad_Ejecutada de todos los CUPS ──
       // Viene de comparisonSummary.monthlyFinancials.totalActividades (suma de Cant. Validada)
@@ -372,7 +407,7 @@ export default function CertificadoTrimestral({
           // ══════════════════════
           { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle', pageBreak: 'before' },
 
-          // Tabla financiera
+          // Tabla financiera — TABLA 1
           {
             table: {
               widths: ['*', 100, 100],
@@ -388,7 +423,7 @@ export default function CertificadoTrimestral({
                   { text: '$ -', ...CS, alignment: 'right' },
                 ],
                 [
-                  { text: `VALOR DE ${n} MES${n > 1 ? 'ES' : ''}   ${fmt(ntPeriodo)}`, ...CS, bold: true },
+                  { text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmt(ntPeriodoFull)}`, ...CS, bold: true },
                   { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right' },
                 ],
@@ -419,7 +454,7 @@ export default function CertificadoTrimestral({
                   { text: fmt(monthlyNT * advanceMonths), ...CS, alignment: 'right' },
                   { text: fmt(totalAdv), ...CS, alignment: 'right', bold: true },
                 ],
-                // advance months rows
+                // Filas de anticipo: todos los meses cargados (trimestral = todos son anticipos)
                 ...(advanceMonths > 0
                   ? mesData.slice(0, advanceMonths).map(m => [
                       { text: m.name, ...CS },
@@ -428,17 +463,22 @@ export default function CertificadoTrimestral({
                     ])
                   : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }]]),
                 [
-                  { text: `TOTAL VALOR A PAGAR EN EL ${n > 1 ? 'ÚLTIMO' : ''} MES`, ...CS, bold: true },
-                  { text: fmt(ntPeriodo), ...CS, alignment: 'right', bold: true },
+                  {
+                    text: periodType === 'trimestral'
+                      ? `TOTAL VALOR A PAGAR EN EL MES DE LIQUIDACIÓN (3er MES)`
+                      : `TOTAL VALOR A PAGAR EN EL ÚLTIMO MES`,
+                    ...CS, bold: true
+                  },
+                  { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
                   { text: fmt(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true },
                 ],
                 [
-                  { text: 'TOTAL', ...CS, bold: true },
+                  { text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true },
                   { text: '', ...CS },
-                  { text: fmt(ntPeriodo), ...CS, alignment: 'right', bold: true },
+                  { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
                 ],
                 [
-                  { text: 'TOTAL ANTICIPOS', ...CS, bold: true },
+                  { text: 'TOTAL ANTICIPOS PAGADOS', ...CS, bold: true },
                   { text: '', ...CS },
                   { text: fmt(totalAdv), ...CS, alignment: 'right', bold: true },
                 ],
@@ -579,6 +619,60 @@ export default function CertificadoTrimestral({
     }
   };
 
+  // Guarda el informe en el registro del servidor
+  const handleSave = useCallback(async () => {
+    if (!selectedPrestador || !comparisonSummary) return;
+    setIsSaving(true);
+    try {
+      const selectedGroup = periodGroups[selectedPeriodIndex] ?? periodGroups[0];
+      const n = selectedGroup?.months.length || 0;
+      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
+      const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
+      const ntPeriodoFull = monthlyNT * expectedMonths;
+      const totalEjecutado = selectedGroup?.months.reduce((s, m) => s + m.totalValorEjecutado, 0) || 0;
+      const minPeriodo = ntPeriodoFull * 0.9;
+      const maxPeriodo = ntPeriodoFull * 1.1;
+      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
+      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      const valorFinal = ntPeriodoFull - descontar + reconocer;
+      const advanceMonths = periodType === 'trimestral' ? n : Math.max(0, n - 1);
+      const totalAdv = monthlyNT * 0.8 * advanceMonths;
+      const ciudadRaw = String(selectedPrestador.CIUDAD || 'RIOHACHA').toUpperCase();
+
+      const res = await fetch('/api/informes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prestador: selectedPrestador.PRESTADOR,
+          nit: selectedPrestador.NIT,
+          contrato: contrato || selectedPrestador.CONTRATO || '',
+          municipio: ciudadRaw,
+          departamento: String(selectedPrestador.DEPARTAMENTO || CIUDAD_DEPARTAMENTO[ciudadRaw] || '').toUpperCase(),
+          periodo: selectedGroup?.label || '',
+          tipoPeriodo: periodType.toUpperCase(),
+          ntPeriodo: ntPeriodoFull,
+          totalEjecutado,
+          descontar,
+          reconocer,
+          valorFinal,
+          totalAnticipos: totalAdv,
+          responsable,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedNum(data.numero);
+        setInformeNum(String(parseInt(data.numero) + 1).padStart(3, '0'));
+        toast({ title: `✓ Informe N° ${data.numero} guardado`, description: `${selectedPrestador.PRESTADOR} · ${selectedGroup?.label}` });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, toast]);
+
   if (!comparisonSummary || !pgpData || months.length === 0) return null;
 
   return (
@@ -629,10 +723,63 @@ export default function CertificadoTrimestral({
           <Label className="text-xs">Responsable (firma)</Label>
           <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
         </div>
-        <Button onClick={handleGenerate} disabled={isGenerating} className="w-full">
-          {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
-          Generar Certificado PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleGenerate} disabled={isGenerating} className="flex-1">
+            {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
+            Generar PDF
+          </Button>
+          <Button variant="outline" onClick={handleSave} disabled={isSaving} className="flex-1 border-green-400 text-green-700 hover:bg-green-50">
+            {isSaving ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">💾</span>}
+            {savedNum ? `Guardado N° ${savedNum}` : 'Guardar en Registro'}
+          </Button>
+          <Button variant="ghost" size="icon" title="Ver historial de informes"
+            onClick={() => { setShowHistorial(v => !v); if (!showHistorial) loadHistorial(); }}>
+            📋
+          </Button>
+        </div>
+
+        {/* Historial de informes */}
+        {showHistorial && (
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm">📂 Registro de Informes</h4>
+              {loadingHistorial && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {historial.length === 0 && !loadingHistorial && (
+              <p className="text-xs text-muted-foreground">No hay informes guardados aún.</p>
+            )}
+            {historial.length > 0 && (
+              <div className="overflow-auto max-h-64 rounded-lg border border-border bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">N°</th>
+                      <th className="px-3 py-2 text-left font-semibold">Prestador</th>
+                      <th className="px-3 py-2 text-left font-semibold">Período</th>
+                      <th className="px-3 py-2 text-left font-semibold">Tipo</th>
+                      <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
+                      <th className="px-3 py-2 text-left font-semibold">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historial.map((inf: any) => (
+                      <tr key={inf.numero} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
+                        <td className="px-3 py-1.5 max-w-[160px] truncate" title={inf.prestador}>{inf.prestador}</td>
+                        <td className="px-3 py-1.5">{inf.periodo}</td>
+                        <td className="px-3 py-1.5">{inf.tipoPeriodo}</td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-green-700">
+                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
