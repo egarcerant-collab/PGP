@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { MonthlyExecutionData, SavedAuditData, RegimenTotals } from "@/components/app/JsonAnalyzerPage";
 import { deserializeExecutionData } from "@/components/app/JsonAnalyzerPage";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
-  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck
+  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
+  Users, LogOut,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import SavedAuditsPage from "@/components/app/SavedAuditsPage";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +57,10 @@ const NAV: NavItem[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string; email: string } | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const [activeModule, setActiveModule] = useState<ModuleId>("datos");
   const [executionData, setExecutionData] = useState<ExecutionDataByMonth>(new Map());
   const [jsonPrestadorCode, setJsonPrestadorCode] = useState<string | null>(null);
@@ -63,24 +71,88 @@ export default function Home() {
   });
   const [selectedPrestadorName, setSelectedPrestadorName] = useState<string | null>(null);
 
-  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void } | null>(null);
+  const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> } | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [savePw, setSavePw] = useState('');
+  const [savePwError, setSavePwError] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedNumero, setSavedNumero] = useState<string | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.profile) {
+          setCurrentUser({
+            nombre: data.profile.nombre,
+            rol: data.profile.rol,
+            email: data.profile.email,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.push('/login');
+      router.refresh();
+    }
+  };
 
   const hasData = executionData.size > 0;
-  const hasFullData = hasData && !!selectedPrestadorName;
+  // También considera datos completos si se cargó una auditoría guardada con pgpData
+  const hasFullData = (hasData || !!savedAuditData?.pgpData) && !!selectedPrestadorName;
 
   const handleAuditLoad = useCallback((auditPackage: SavedAuditData, prestadorName: string) => {
     setSavedAuditData(auditPackage);
-    if (auditPackage.executionData) {
-      setExecutionData(deserializeExecutionData(auditPackage.executionData));
-      if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
-      if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
+    if (auditPackage.executionData && Object.keys(auditPackage.executionData).length > 0) {
+      try {
+        const deserialized = deserializeExecutionData(auditPackage.executionData);
+        setExecutionData(deserialized);
+      } catch (e) {
+        console.warn('No se pudo deserializar executionData:', e);
+      }
     }
-    if (!auditPackage.pgpData && pgpSearchRef.current?.handleSelectPrestador) {
-      pgpSearchRef.current.handleSelectPrestador({ PRESTADOR: prestadorName, WEB: "" });
-    }
+    if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
+    if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
     setSelectedPrestadorName(prestadorName);
     setActiveModule("inicio");
   }, []);
+
+  const monthName = (key: string) => {
+    const n = parseInt(key);
+    if (isNaN(n)) return key;
+    return new Date(2024, n - 1, 1).toLocaleString('es-CO', { month: 'long' }).toUpperCase();
+  };
+
+  const toggleMonth = (key: string) => {
+    setSelectedMonths(prev =>
+      prev.includes(key) ? prev.filter(m => m !== key) : prev.length < 3 ? [...prev, key] : prev
+    );
+  };
+
+  const handleSaveAudit = async () => {
+    if (savePw !== '123456') { setSavePwError(true); return; }
+    if (selectedMonths.length === 0) return;
+    setIsSaving(true);
+    try {
+      const result = await pgpSearchRef.current?.triggerSave(savePw, selectedMonths);
+      if (!result) { setSavePwError(false); setShowSaveModal(false); return; }
+      if ('error' in result) {
+        setSavePwError(result.error === 'Contraseña incorrecta.');
+      } else {
+        setSavedNumero(result.numero);
+        setShowSaveModal(false);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handlePrestadorLoaded = useCallback((name: string) => {
     setSelectedPrestadorName(name);
@@ -153,16 +225,65 @@ export default function Home() {
           </div>
         </nav>
 
+        {/* User footer */}
+        {currentUser && (
+          <div className="px-3 pb-1 pt-2 border-t border-border shrink-0 space-y-1">
+            {/* Admin link */}
+            {currentUser.rol === 'superadmin' && (
+              <button
+                onClick={() => router.push('/admin')}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Users className="h-3.5 w-3.5 shrink-0" />
+                <span>Gestión de usuarios</span>
+              </button>
+            )}
+            {/* User info row */}
+            <div className="flex items-center gap-2 px-1 py-1">
+              <div className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary uppercase shrink-0">
+                {currentUser.nombre.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate leading-tight">{currentUser.nombre}</p>
+                <span className={cn(
+                  "inline-block text-[9px] font-semibold rounded px-1 py-0.5 leading-none mt-0.5",
+                  currentUser.rol === 'superadmin' ? 'bg-red-100 text-red-700' :
+                  currentUser.rol === 'auditor' ? 'bg-blue-100 text-blue-700' :
+                  'bg-slate-100 text-slate-600'
+                )}>
+                  {currentUser.rol === 'superadmin' ? 'Super Admin' : currentUser.rol === 'auditor' ? 'Auditor' : 'Viewer'}
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Cerrar sesión"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+              >
+                {loggingOut ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Status footer */}
         <div className="p-3 border-t border-border shrink-0">
           {hasFullData ? (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 space-y-2">
               <div className="flex items-center gap-1.5 text-emerald-700">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span className="text-xs font-semibold">Auditoría activa</span>
               </div>
-              <p className="text-[10px] text-emerald-600 mt-0.5 truncate leading-tight">{selectedPrestadorName}</p>
+              <p className="text-[10px] text-emerald-600 truncate leading-tight">{selectedPrestadorName}</p>
               <p className="text-[10px] text-emerald-500">{executionData.size} mes{executionData.size !== 1 ? "es" : ""} cargado{executionData.size !== 1 ? "s" : ""}</p>
+              {savedNumero && <p className="text-[10px] text-emerald-700 font-bold">Guardada N° {savedNumero}</p>}
+              <button
+                onClick={() => { setShowSaveModal(true); setSavePw(''); setSavePwError(false); setSelectedMonths(Array.from(executionData.keys()).slice(0,3)); }}
+                className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors"
+              >
+                <Save className="h-3 w-3" />
+                Guardar Auditoría
+              </button>
             </div>
           ) : hasData ? (
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
@@ -240,6 +361,58 @@ export default function Home() {
 
         </main>
       </div>
+
+      {/* Modal contraseña guardar auditoría */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-88 space-y-4" style={{width: '360px'}}>
+            <h3 className="font-semibold text-base flex items-center gap-2">
+              <Save className="h-4 w-4 text-emerald-600" />
+              Guardar Auditoría
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              <strong>{selectedPrestadorName}</strong> — selecciona hasta 3 meses.
+            </p>
+
+            {/* Selección de meses */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Meses a incluir</p>
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from(executionData.keys()).map(key => {
+                  const checked = selectedMonths.includes(key);
+                  const disabled = !checked && selectedMonths.length >= 3;
+                  return (
+                    <label key={key} className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors ${checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold' : disabled ? 'opacity-40 cursor-not-allowed border-border' : 'border-border hover:bg-muted'}`}>
+                      <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleMonth(key)} className="accent-emerald-600" />
+                      {monthName(key)}
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedMonths.length === 0 && <p className="text-xs text-amber-600">Selecciona al menos un mes.</p>}
+              {selectedMonths.length === 3 && <p className="text-xs text-emerald-600">Máximo 3 meses seleccionados.</p>}
+            </div>
+
+            <Input
+              type="password"
+              placeholder="Contraseña"
+              value={savePw}
+              onChange={e => { setSavePw(e.target.value); setSavePwError(false); }}
+              onKeyDown={e => e.key === 'Enter' && handleSaveAudit()}
+              className={savePwError ? 'border-red-500' : ''}
+              autoFocus
+            />
+            {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveAudit} disabled={isSaving || selectedMonths.length === 0}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Guardar {selectedMonths.length > 0 && `(${selectedMonths.length} mes${selectedMonths.length > 1 ? 'es' : ''})`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
