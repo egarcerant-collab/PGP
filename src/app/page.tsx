@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { MonthlyExecutionData, SavedAuditData, RegimenTotals } from "@/components/app/JsonAnalyzerPage";
 import { deserializeExecutionData } from "@/components/app/JsonAnalyzerPage";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
-  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save
+  Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
+  Users, LogOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,10 @@ const NAV: NavItem[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string; email: string } | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const [activeModule, setActiveModule] = useState<ModuleId>("datos");
   const [executionData, setExecutionData] = useState<ExecutionDataByMonth>(new Map());
   const [jsonPrestadorCode, setJsonPrestadorCode] = useState<string | null>(null);
@@ -72,6 +78,31 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedNumero, setSavedNumero] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.profile) {
+          setCurrentUser({
+            nombre: data.profile.nombre,
+            rol: data.profile.rol,
+            email: data.profile.email,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.push('/login');
+      router.refresh();
+    }
+  };
 
   const hasData = executionData.size > 0;
   // También considera datos completos si se cargó una auditoría guardada con pgpData
@@ -193,6 +224,47 @@ export default function Home() {
             </div>
           </div>
         </nav>
+
+        {/* User footer */}
+        {currentUser && (
+          <div className="px-3 pb-1 pt-2 border-t border-border shrink-0 space-y-1">
+            {/* Admin link */}
+            {currentUser.rol === 'superadmin' && (
+              <button
+                onClick={() => router.push('/admin')}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Users className="h-3.5 w-3.5 shrink-0" />
+                <span>Gestión de usuarios</span>
+              </button>
+            )}
+            {/* User info row */}
+            <div className="flex items-center gap-2 px-1 py-1">
+              <div className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary uppercase shrink-0">
+                {currentUser.nombre.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate leading-tight">{currentUser.nombre}</p>
+                <span className={cn(
+                  "inline-block text-[9px] font-semibold rounded px-1 py-0.5 leading-none mt-0.5",
+                  currentUser.rol === 'superadmin' ? 'bg-red-100 text-red-700' :
+                  currentUser.rol === 'auditor' ? 'bg-blue-100 text-blue-700' :
+                  'bg-slate-100 text-slate-600'
+                )}>
+                  {currentUser.rol === 'superadmin' ? 'Super Admin' : currentUser.rol === 'auditor' ? 'Auditor' : 'Viewer'}
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Cerrar sesión"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+              >
+                {loggingOut ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Status footer */}
         <div className="p-3 border-t border-border shrink-0">
