@@ -132,46 +132,48 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
 
       const serviceType = monthCupData?.type || guessServiceTypeByCup(cup);
 
-      // DESCRIPCION: Inteligencia para Medicamentos/Otros (desde JSON) vs Consultas/Proc (desde Sheet)
-      let descripcion = findColumnValue(pgpRow, [
-          'descripcion',
-          'descripcion cups',
-          'descripcion id resolucion',
-          'nombre',
-          'servicio',
-          'actividad',
-          'prestacion',
-          'tecnologia',
-          'descripción',
-          'descripcion de la tecnologia',
-          'nombre cups',
-          'nombre del servicio',
-          'detalle',
-          'concepto',
-      ]);
+      // REGLA: Medicamentos/Otros → JSON (nomTecnologiaSalud); Consultas/Procedimientos → Sheet; fallback cruzado
+      let descripcion: string | undefined;
 
-      // Para cualquier tipo de servicio, usar jsonDescription si no se encontró en el sheet
-      if (!descripcion && monthCupData?.jsonDescription) {
-          descripcion = monthCupData.jsonDescription;
-      }
-      // Para Medicamento u Otro Servicio, priorizar el nombre del JSON
-      if ((serviceType === "Medicamento" || serviceType === "Otro Servicio") && monthCupData?.jsonDescription) {
-          descripcion = monthCupData.jsonDescription;
-      }
-      // Fallback inteligente: buscar cualquier columna de texto del PGP que parezca descripción
-      if (!descripcion && pgpRow) {
-          const EXCLUIDAS = ['cups','cup','cup/cum','codigo','código','id','nit','valor','costo','frecuencia',
-              'cantidad','evento','mes','año','año','periodo','contrato','municipio','departamento'];
-          const keys = Object.keys(pgpRow);
-          for (const key of keys) {
-              const keyLow = key.toLowerCase().trim();
-              const isExcluida = EXCLUIDAS.some(e => keyLow.includes(e));
-              if (isExcluida) continue;
-              const val = pgpRow[key];
-              if (val && typeof val === 'string' && val.trim().length > 4 && isNaN(Number(val))) {
-                  descripcion = val.trim();
-                  break;
+      if (serviceType === "Medicamento" || serviceType === "Otro Servicio") {
+          // 1. JSON primero
+          descripcion = monthCupData?.jsonDescription;
+          // 2. Sheet como fallback
+          if (!descripcion) descripcion = findColumnValue(pgpRow, [
+              'descripcion','nombre','nombre cups','actividad','concepto','detalle','tecnologia','prestacion','servicio'
+          ]);
+      } else {
+          // Consultas / Procedimientos: Sheet primero
+          descripcion = pgpRow ? findColumnValue(pgpRow, [
+              'descripcion','descripcion cups','descripcion id resolucion','descripcion de la tecnologia',
+              'nombre','nombre cups','nombre del servicio','actividad','prestacion','tecnologia',
+              'descripción','detalle','concepto','servicio'
+          ]) : undefined;
+          // Fallback inteligente: escanear TODAS las columnas del Sheet buscando texto largo
+          if (!descripcion && pgpRow) {
+              // Columnas a ignorar (solo palabras clave muy específicas, no 'id')
+              const IGNORAR = ['cups','cup/cum','nit','valor','costo','frecuencia','cantidad','vr ',
+                  'evento','contrato','municipio','departamento','fecha','periodo','mes ','año'];
+              const keys = Object.keys(pgpRow);
+              // Preferir columnas cuyo nombre sugiera descripción
+              const sorted = [...keys].sort((a, b) => {
+                  const aDesc = /desc|nomb|activ|prest|tecnol|servic|detall|concept/i.test(a) ? -1 : 1;
+                  const bDesc = /desc|nomb|activ|prest|tecnol|servic|detall|concept/i.test(b) ? -1 : 1;
+                  return aDesc - bDesc;
+              });
+              for (const key of sorted) {
+                  const keyLow = key.toLowerCase().trim();
+                  if (IGNORAR.some(e => keyLow.includes(e))) continue;
+                  const val = pgpRow[key];
+                  if (val && typeof val === 'string' && val.trim().length > 5 && isNaN(Number(val.trim()))) {
+                      descripcion = val.trim();
+                      break;
+                  }
               }
+          }
+          // Último recurso: JSON si existe
+          if (!descripcion && monthCupData?.jsonDescription) {
+              descripcion = monthCupData.jsonDescription;
           }
       }
 
