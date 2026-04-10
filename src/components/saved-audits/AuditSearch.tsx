@@ -162,21 +162,20 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     return (
                                         <tr
                                             key={`${a.id}-${idx}`}
-                                            onClick={() => !disabled && toggleSelect(a.id, a.prestador)}
                                             className={`border-t border-border transition-colors ${
                                                 checked
                                                     ? 'bg-emerald-50 border-emerald-200'
                                                     : disabled || differentPrestador
                                                     ? 'opacity-40 cursor-not-allowed'
-                                                    : 'cursor-pointer hover:bg-muted/40'
+                                                    : 'hover:bg-muted/40'
                                             }`}
                                         >
                                             <td className="px-3 py-2">
                                                 <input
                                                     type="checkbox"
                                                     checked={checked}
-                                                    onChange={() => !disabled && toggleSelect(a.id, a.prestador)}
-                                                    className="accent-emerald-600 h-4 w-4"
+                                                    onChange={() => !disabled && !differentPrestador && toggleSelect(a.id, a.prestador)}
+                                                    className="accent-emerald-600 h-4 w-4 cursor-pointer"
                                                     disabled={disabled || !!differentPrestador}
                                                 />
                                             </td>
