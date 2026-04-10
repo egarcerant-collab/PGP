@@ -13,11 +13,7 @@ const PASSWORD = '123456';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { auditData, prestadorName, month, password } = body;
-
-    if (password !== PASSWORD) {
-      return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
-    }
+    const { auditData, prestadorName, month } = body;
 
     if (!auditData || !prestadorName || !month) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
