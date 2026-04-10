@@ -752,22 +752,22 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         color="green"
                     />
                     <DeviatedCupsCard
-                        title="CUPS / Tecnologías no ejecutadas"
+                        title="CUPS / Tecnologías Sub-ejecutadas"
                         icon={TrendingDown}
                         data={comparisonSummary.underExecutedCups}
                         badgeVariant="default"
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS / Tecnologías no ejecutadas", comparisonSummary.underExecutedCups, underExecutionTotals)}
+                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS / Tecnologías Sub-ejecutadas", comparisonSummary.underExecutedCups, underExecutionTotals)}
                         totalValue={underExecutionTotals.desviacion}
                         valueLabel="Valor Desviación"
                         color="blue"
                     />
                      <DiscrepancyCard
-                        title="CUPS / Tecnologías no ejecutadas"
+                        title="CUPS / Tecnologías No Ejecutadas"
                         icon={AlertTriangle}
                         data={comparisonSummary.missingCups}
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías no ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
+                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías No Ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
                         color="black"
                     />
                      <DiscrepancyCard
@@ -951,7 +951,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 {underExecutionTotals.desviacion < 0 && (
                                     <div className="space-y-1 border-t pt-2">
                                         <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                            🔴 Descontar CUPS no ejecutadas
+                                            🔴 Descontar CUPS sub-ejecutadas
                                         </Label>
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
