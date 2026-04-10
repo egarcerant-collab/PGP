@@ -14,6 +14,8 @@ interface AuditRecord {
     prestador: string;
     nit: string;
     fecha: string;
+    source?: string;
+    fsPath?: string;
 }
 
 interface AuditSearchProps {
@@ -71,7 +73,13 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         try {
             // Cargar todas las auditorías seleccionadas en paralelo
             const results = await Promise.all(
-                selectedIds.map(id => fetch(`/api/load-audit?id=${id}`).then(r => r.json()))
+                selectedIds.map(id => {
+                    const audit = audits.find(a => a.id === id);
+                    const url = audit?.fsPath
+                        ? `/api/load-audit?fsPath=${encodeURIComponent(audit.fsPath)}`
+                        : `/api/load-audit?id=${id}`;
+                    return fetch(url).then(r => r.json());
+                })
             );
 
             // Tomar datos base de la primera
@@ -110,7 +118,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 setAudits([]);
                 setSelectedIds([]);
             } else {
-                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}`, { method: 'DELETE' });
+                const audit = audits.find(a => a.id === deletingId);
+                const fsPath = audit?.fsPath ? `&fsPath=${encodeURIComponent(audit.fsPath)}` : '';
+                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}${fsPath}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Error al eliminar.');
                 toast({ title: "Auditoría eliminada" });
                 setAudits(prev => prev.filter(a => a.id !== deletingId));

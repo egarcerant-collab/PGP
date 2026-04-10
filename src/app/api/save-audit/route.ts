@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs/promises';
+import path from 'path';
 
 const supabase = createClient(
   'https://fvrgfqxohacipmnmqyef.supabase.co',
@@ -11,11 +13,7 @@ const PASSWORD = '123456';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { auditData, prestadorName, month, password } = body;
-
-    if (password !== PASSWORD) {
-      return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
-    }
+    const { auditData, prestadorName, month } = body;
 
     if (!auditData || !prestadorName || !month) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
@@ -68,11 +66,35 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
 
     if (id === 'ALL') {
-      const { error } = await supabase.from('auditorias').delete().neq('id', 0);
-      if (error) throw error;
+      // Borrar de Supabase
+      await supabase.from('auditorias').delete().neq('id', 0);
+      // Borrar del filesystem
+      try {
+        const reportsDir = path.join(process.cwd(), 'public', 'informes');
+        const monthDirs = await fs.readdir(reportsDir, { withFileTypes: true });
+        for (const monthDir of monthDirs) {
+          if (monthDir.isDirectory()) {
+            const monthPath = path.join(reportsDir, monthDir.name);
+            const files = await fs.readdir(monthPath);
+            for (const file of files) {
+              if (file.endsWith('.json')) {
+                await fs.unlink(path.join(monthPath, file)).catch(() => {});
+              }
+            }
+          }
+        }
+      } catch {}
     } else {
-      const { error } = await supabase.from('auditorias').delete().eq('id', id);
-      if (error) throw error;
+      const fsPath = searchParams.get('fsPath');
+      if (fsPath) {
+        // Es un registro del filesystem
+        const filePath = path.join(process.cwd(), 'public', fsPath);
+        await fs.unlink(filePath);
+      } else {
+        // Es un registro de Supabase
+        const { error } = await supabase.from('auditorias').delete().eq('id', id);
+        if (error) throw error;
+      }
     }
 
     return NextResponse.json({ success: true });
