@@ -14,6 +14,8 @@ interface AuditRecord {
     prestador: string;
     nit: string;
     fecha: string;
+    source?: string;
+    fsPath?: string;
 }
 
 interface AuditSearchProps {
@@ -110,7 +112,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 setAudits([]);
                 setSelectedIds([]);
             } else {
-                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}`, { method: 'DELETE' });
+                const audit = audits.find(a => a.id === deletingId);
+                const fsPath = audit?.fsPath ? `&fsPath=${encodeURIComponent(audit.fsPath)}` : '';
+                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}${fsPath}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Error al eliminar.');
                 toast({ title: "Auditoría eliminada" });
                 setAudits(prev => prev.filter(a => a.id !== deletingId));
