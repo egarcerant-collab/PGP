@@ -1,12 +1,12 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Papa from 'papaparse';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign, Send, CheckCircle2, ShieldCheck, Save, BookmarkCheck } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,8 @@ import { findColumnValue } from '@/lib/matriz-helpers';
 import StatCard from '../shared/StatCard';
 import { getNumericValue } from '../app/JsonAnalyzerPage';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import type { NtUpdateRow } from '@/app/api/update-nt-sheet/route';
 
 /** Descarga CUPS Inesperadas con encabezados de revisión + columnas para NT */
 const handleDownloadInesperadasXls = (data: any[], numMeses: number, prestadorWeb: string) => {
@@ -404,6 +406,54 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [modalContent, setModalContent] = useState<{ title: React.ReactNode, data: any[], type: string, totals: {ejecutado: number, desviacion: number} } | null>(null);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
     const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
+    const [valorGuardado, setValorGuardado] = useState(false);
+    const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
+    const [descontarNoEjecutadas, setDescontarNoEjecutadas] = useState(false);
+    const [descontarFaltantes, setDescontarFaltantes] = useState(false);
+    const [showNtModal, setShowNtModal] = useState(false);
+    const [ntSending, setNtSending] = useState(false);
+    const [ntSentOk, setNtSentOk] = useState(false);
+    const { toast } = useToast();
+
+    // Claves de localStorage basadas en el prestador
+    const prestKey   = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    const storageKey = `pgp-cups-inesperadas-manual-${prestKey}`;
+    const cantidadKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
+
+    // Cargar valor y cantidad guardados al montar o cambiar prestador
+    useEffect(() => {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            setValorConsolidadoManual(saved);
+            setValorGuardado(true);
+        } else {
+            setValorConsolidadoManual('');
+            setValorGuardado(false);
+        }
+        const savedCant = localStorage.getItem(cantidadKey);
+        setCantidadCupsInesperadas(savedCant || '');
+    }, [storageKey, cantidadKey]);
+
+    const handleGuardarValor = useCallback(() => {
+        if (valorConsolidadoManual && Number(valorConsolidadoManual) > 0) {
+            localStorage.setItem(storageKey, valorConsolidadoManual);
+            setValorGuardado(true);
+            toast({ title: '✅ Valor guardado', description: `Se guardó $${Number(valorConsolidadoManual).toLocaleString('es-CO')} como valor de CUPS Inesperadas para este contrato.` });
+        } else {
+            localStorage.removeItem(storageKey);
+            setValorGuardado(false);
+            toast({ title: 'Valor eliminado', description: 'Se borró el valor guardado para este contrato.' });
+        }
+    }, [storageKey, valorConsolidadoManual, toast]);
+
+    const handleGuardarCantidad = useCallback((val: string) => {
+        setCantidadCupsInesperadas(val);
+        if (val && Number(val) > 0) {
+            localStorage.setItem(cantidadKey, val);
+        } else {
+            localStorage.removeItem(cantidadKey);
+        }
+    }, [cantidadKey]);
 
     const calculateTotals = (items: DeviatedCupInfo[]) => {
         if (!items) return { ejecutado: 0, desviacion: 0 };
@@ -417,6 +467,11 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     
     const overExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.overExecutedCups || []), [comparisonSummary]);
     const underExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.underExecutedCups || []), [comparisonSummary]);
+    const missingCupsTotals = useMemo(() => calculateTotals(comparisonSummary?.missingCups || []), [comparisonSummary]);
+    // Valor NT de CUPS faltantes = valor absoluto de la sumatoria de deviationValue (siempre negativo para faltantes)
+    const valorFaltantesNT = useMemo(() =>
+        Math.abs(missingCupsTotals.desviacion),
+    [missingCupsTotals]);
     const normalExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.normalExecutionCups || []), [comparisonSummary]);
 
     const totalUnexpectedValue = useMemo(() =>
@@ -432,7 +487,10 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     [comparisonSummary]);
 
     const valorManual = isNaN(Number(valorConsolidadoManual)) ? 0 : Number(valorConsolidadoManual);
-    const valorFinalEjecucion = totalNTEjecutado + valorManual;
+    // Valor absoluto de desviación de CUPS no ejecutadas (ya es negativo en underExecutionTotals)
+    const valorNoEjecutadasDeduccion = descontarNoEjecutadas ? Math.abs(underExecutionTotals.desviacion) : 0;
+    const valorFaltantesDeduccion = descontarFaltantes ? valorFaltantesNT : 0;
+    const valorFinalEjecucion = totalNTEjecutado + valorManual - valorNoEjecutadasDeduccion - valorFaltantesDeduccion;
 
     const min90 = totalEsperado * 0.9;
     const max110 = totalEsperado * 1.1;
@@ -451,6 +509,46 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
             </Card>
         )
     }
+
+    const handleSendToNtSheet = async () => {
+        if (!selectedPrestador?.WEB) {
+            toast({ title: 'Sin URL de Sheet', description: 'El prestador no tiene URL de hoja NT configurada.', variant: 'destructive' });
+            return;
+        }
+        const numMeses = executionDataByMonth.size || 1;
+        const rows: NtUpdateRow[] = comparisonSummary.unexpectedCups.map(row => {
+            const valorUnitario = row.realFrequency > 0 ? row.totalValue / row.realFrequency : 0;
+            const costoEventoMes = row.totalValue / numMeses;
+            return {
+                cup: row.cup,
+                descripcion: row.description || '',
+                valorUnitario: Math.round(valorUnitario),
+                costoEventoMes: Math.round(costoEventoMes),
+            };
+        });
+        setNtSending(true);
+        try {
+            const res = await fetch('/api/update-nt-sheet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    spreadsheetUrl: selectedPrestador.WEB,
+                    prestadorName: selectedPrestador.PRESTADOR || 'IPS',
+                    rows,
+                    numMeses,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error desconocido');
+            setNtSentOk(true);
+            toast({ title: '✅ Nota Técnica actualizada', description: data.message });
+            setTimeout(() => { setShowNtModal(false); setNtSentOk(false); }, 3000);
+        } catch (e: any) {
+            toast({ title: 'Error al actualizar NT', description: e.message, variant: 'destructive' });
+        } finally {
+            setNtSending(false);
+        }
+    };
 
     const handleCupClick = (cupInfo: DeviatedCupInfo) => {
         const details: any[] = [];
@@ -661,22 +759,24 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         color="green"
                     />
                     <DeviatedCupsCard
-                        title="CUPS / Tecnologías no ejecutadas"
+                        title="CUPS / Tecnologías Sub-ejecutadas"
                         icon={TrendingDown}
                         data={comparisonSummary.underExecutedCups}
                         badgeVariant="default"
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS / Tecnologías no ejecutadas", comparisonSummary.underExecutedCups, underExecutionTotals)}
+                        onDoubleClick={() => handleDoubleClick('under-executed', "CUPS / Tecnologías Sub-ejecutadas", comparisonSummary.underExecutedCups, underExecutionTotals)}
                         totalValue={underExecutionTotals.desviacion}
                         valueLabel="Valor Desviación"
                         color="blue"
                     />
                      <DiscrepancyCard
-                        title="CUPS / Tecnologías no ejecutadas"
+                        title="CUPS / Tecnologías No Ejecutadas"
                         icon={AlertTriangle}
                         data={comparisonSummary.missingCups}
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías no ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
+                        onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías No Ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
+                        totalValue={valorFaltantesNT > 0 ? -valorFaltantesNT : undefined}
+                        valueLabel="Valor NT perdido"
                         color="black"
                     />
                      <DiscrepancyCard
@@ -690,30 +790,113 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         color="purple"
                     />
 
-                    {/* Botón exportar CUPS Inesperadas para NT */}
+                    {/* ── Actualizador NT directo ── */}
                     {comparisonSummary.unexpectedCups.length > 0 && (
-                        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 flex items-center justify-between gap-3 flex-wrap">
-                            <div className="space-y-0.5">
-                                <p className="text-sm font-semibold text-purple-800">
-                                    Exportar CUPS Inesperadas para actualizar la Nota Técnica
-                                </p>
-                                <p className="text-xs text-purple-600">
-                                    Genera un archivo con los encabezados de revisión listo para cargar en el módulo <strong>Validador NT</strong>.
-                                </p>
+                        <>
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-sm font-semibold text-indigo-800">
+                                        Actualizar Nota Técnica directamente
+                                    </p>
+                                    <p className="text-xs text-indigo-600">
+                                        Valida y envía las {comparisonSummary.unexpectedCups.length} CUPS / Tecnologías Inesperadas al Google Sheet de NT sin descarga manual
+                                        {selectedPrestador?.WEB && (
+                                            <> — <a href={selectedPrestador.WEB} target="_blank" rel="noreferrer" className="underline font-medium">ver hoja NT</a></>
+                                        )}
+                                    </p>
+                                </div>
                             </div>
                             <Button
                                 size="sm"
-                                className="bg-purple-700 hover:bg-purple-800 text-white shrink-0"
-                                onClick={() => handleDownloadInesperadasXls(
-                                    comparisonSummary.unexpectedCups,
-                                    executionDataByMonth.size,
-                                    selectedPrestador?.WEB || ''
-                                )}
+                                className="bg-indigo-700 hover:bg-indigo-800 text-white shrink-0"
+                                onClick={() => setShowNtModal(true)}
                             >
-                                <Download className="mr-2 h-4 w-4" />
-                                Descargar para NT (.xls)
+                                <Send className="mr-2 h-4 w-4" />
+                                Validar y Enviar a NT
                             </Button>
                         </div>
+
+                        {/* Modal de validación */}
+                        <Dialog open={showNtModal} onOpenChange={o => { if (!ntSending) { setShowNtModal(o); if (!o) setNtSentOk(false); } }}>
+                            <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col gap-4">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                                        Validar y Enviar CUPS Inesperadas a Nota Técnica
+                                    </DialogTitle>
+                                    <p className="text-sm text-muted-foreground">
+                                        Se escribirá en la pestaña <strong>&ldquo;CUPS Inesperadas&rdquo;</strong> del Google Sheet de NT para <strong>{selectedPrestador?.PRESTADOR}</strong>. Si ya existe, será reemplazada.
+                                    </p>
+                                </DialogHeader>
+
+                                {ntSentOk ? (
+                                    <div className="flex flex-col items-center justify-center py-10 gap-3">
+                                        <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+                                        <p className="font-semibold text-emerald-700 text-lg">¡Nota Técnica actualizada!</p>
+                                        <p className="text-sm text-muted-foreground">{comparisonSummary.unexpectedCups.length} CUPS enviados correctamente.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                    <div className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
+                                        <span className="font-semibold">Vista previa — </span>
+                                        {comparisonSummary.unexpectedCups.length} CUPS · {executionDataByMonth.size} mes{executionDataByMonth.size !== 1 ? 'es' : ''} cargado{executionDataByMonth.size !== 1 ? 's' : ''}
+                                    </div>
+                                    <ScrollArea className="flex-1 border rounded-lg min-h-0 max-h-72">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-indigo-50">
+                                                    <TableHead className="text-indigo-800 font-semibold">CUPS</TableHead>
+                                                    <TableHead className="text-indigo-800 font-semibold">Descripción</TableHead>
+                                                    <TableHead className="text-right text-indigo-800 font-semibold">Valor Unitario</TableHead>
+                                                    <TableHead className="text-right text-indigo-800 font-semibold">Costo Evento/Mes</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {comparisonSummary.unexpectedCups.map((row, i) => {
+                                                    const numMeses = executionDataByMonth.size || 1;
+                                                    const vu = row.realFrequency > 0 ? row.totalValue / row.realFrequency : 0;
+                                                    const cem = row.totalValue / numMeses;
+                                                    return (
+                                                        <TableRow key={i}>
+                                                            <TableCell className="font-mono text-xs">{row.cup}</TableCell>
+                                                            <TableCell className="text-xs max-w-[200px] truncate">{row.description || '—'}</TableCell>
+                                                            <TableCell className="text-right text-xs font-semibold">{formatCurrency(vu)}</TableCell>
+                                                            <TableCell className="text-right text-xs font-semibold">{formatCurrency(cem)}</TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </ScrollArea>
+                                    </>
+                                )}
+
+                                <DialogFooter className="gap-2 pt-1">
+                                    {!ntSentOk && (
+                                        <>
+                                        <Button variant="outline" onClick={() => setShowNtModal(false)} disabled={ntSending}>
+                                            Cancelar
+                                        </Button>
+                                        <Button
+                                            className="bg-indigo-700 hover:bg-indigo-800 text-white"
+                                            onClick={handleSendToNtSheet}
+                                            disabled={ntSending}
+                                        >
+                                            {ntSending
+                                                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando...</>
+                                                : <><Send className="mr-2 h-4 w-4" />Enviar a Nota Técnica</>
+                                            }
+                                        </Button>
+                                        </>
+                                    )}
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                        </>
                     )}
 
                     {/* ── Tarjeta: Valor total ejecutado consolidado ── */}
@@ -728,42 +911,134 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         <div className="grid gap-3 sm:grid-cols-3">
                             {/* Col 1: NT ejecutado */}
                             <div className="rounded-md bg-background border p-3 space-y-1">
-                                <p className="text-xs text-muted-foreground">Ejecución Nota Técnica</p>
+                                <p className="text-xs text-muted-foreground font-medium">Ejecución Nota Técnica</p>
                                 <p className="text-lg font-bold text-foreground">{formatCurrency(totalNTEjecutado)}</p>
                                 <p className="text-xs text-muted-foreground">Valor calculado desde los meses cargados</p>
                             </div>
 
-                            {/* Col 2: Valor manual */}
-                            <div className="rounded-md bg-background border p-3 space-y-2">
-                                <Label className="text-xs text-muted-foreground">
-                                    + Valor CUPS / Tecnologías Inesperadas (manual)
-                                </Label>
-                                <Input
-                                    type="number"
-                                    placeholder="Ej: 45000000"
-                                    value={valorConsolidadoManual}
-                                    onChange={e => setValorConsolidadoManual(e.target.value)}
-                                    className="font-mono"
-                                />
-                                {valorManual > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                        {comparisonSummary.unexpectedCups.length} tecnologías inesperadas detectadas
-                                        (auto: {formatCurrency(totalUnexpectedValue)})
-                                    </p>
+                            {/* Col 2: Valor + Cantidad manual */}
+                            <div className="rounded-md bg-background border p-3 space-y-3">
+                                {/* Valor */}
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-medium">
+                                        + Valor CUPS / Tecnologías Inesperadas (manual)
+                                    </Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type="number"
+                                            placeholder="Ej: 45000000"
+                                            value={valorConsolidadoManual}
+                                            onChange={e => { setValorConsolidadoManual(e.target.value); setValorGuardado(false); }}
+                                            className="font-mono flex-1"
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant={valorGuardado ? "default" : "outline"}
+                                            className={valorGuardado ? "bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" : "shrink-0"}
+                                            onClick={handleGuardarValor}
+                                            title="Guardar este valor para el contrato"
+                                        >
+                                            {valorGuardado
+                                                ? <><BookmarkCheck className="h-4 w-4 mr-1" />Guardado</>
+                                                : <><Save className="h-4 w-4 mr-1" />Guardar</>
+                                            }
+                                        </Button>
+                                    </div>
+                                    {comparisonSummary.unexpectedCups.length > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {comparisonSummary.unexpectedCups.length} tec. inesperadas · valor auto: {formatCurrency(totalUnexpectedValue)}
+                                        </p>
+                                    )}
+                                    {valorGuardado && (
+                                        <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                            <BookmarkCheck className="h-3 w-3" /> Valor guardado para este contrato
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Descuento CUPS sub-ejecutadas */}
+                                {underExecutionTotals.desviacion < 0 && (
+                                    <div className="space-y-1 border-t pt-2">
+                                        <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                            🔵 Descontar CUPS sub-ejecutadas
+                                        </Label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={descontarNoEjecutadas}
+                                                onChange={e => setDescontarNoEjecutadas(e.target.checked)}
+                                                className="accent-blue-600 h-4 w-4"
+                                            />
+                                            <span className="text-xs font-mono text-blue-700 font-semibold">
+                                                - {formatCurrency(Math.abs(underExecutionTotals.desviacion))}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">({comparisonSummary.underExecutedCups?.length || 0} CUPS)</span>
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">Resta la desviación de CUPS ejecutadas bajo el mínimo.</p>
+                                    </div>
                                 )}
+
+                                {/* Descuento CUPS no ejecutadas (faltantes) */}
+                                {valorFaltantesNT > 0 && (
+                                    <div className="space-y-1 border-t pt-2">
+                                        <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                            ⚫ Descontar CUPS no ejecutadas
+                                        </Label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={descontarFaltantes}
+                                                onChange={e => setDescontarFaltantes(e.target.checked)}
+                                                className="accent-slate-700 h-4 w-4"
+                                            />
+                                            <span className="text-xs font-mono text-slate-700 font-semibold">
+                                                - {formatCurrency(valorFaltantesNT)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">({comparisonSummary.missingCups?.length || 0} CUPS sin ejecución)</span>
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">Resta el valor NT total de CUPS completamente no ejecutadas.</p>
+                                    </div>
+                                )}
+
+                                {/* Cantidad de actividades inesperadas */}
+                                <div className="space-y-1 border-t pt-2">
+                                    <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                        🔢 Cantidad de actividades / CUPS inesperados
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        placeholder="Ej: 4663"
+                                        value={cantidadCupsInesperadas}
+                                        onChange={e => handleGuardarCantidad(e.target.value)}
+                                        className="font-mono"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Se grafica en Gráfico 2 y se incluye en el PDF del certificado.
+                                    </p>
+                                </div>
                             </div>
 
-                            {/* Col 3: Valor final */}
-                            <div className={`rounded-md border-2 p-3 space-y-1 ${valorManual > 0 ? 'border-primary bg-primary/10' : 'border-dashed border-muted-foreground/30 bg-background'}`}>
+                            {/* Col 3: Valor final — siempre visible */}
+                            <div className={`rounded-md border-2 p-3 space-y-1 ${
+                                (valorManual > 0 || descontarNoEjecutadas)
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border bg-muted/30'
+                            }`}>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">= Valor Final de Ejecución</p>
-                                <p className={`text-xl font-bold ${valorManual > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-                                    {valorManual > 0 ? formatCurrency(valorFinalEjecucion) : '—'}
+                                <p className={`text-xl font-bold ${(valorManual > 0 || descontarNoEjecutadas) ? 'text-primary' : 'text-foreground'}`}>
+                                    {formatCurrency(valorFinalEjecucion)}
                                 </p>
-                                {valorManual > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                        NT {formatCurrency(totalNTEjecutado)} + Inesperadas {formatCurrency(valorManual)}
-                                    </p>
-                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    {(valorManual > 0 || descontarNoEjecutadas)
+                                        ? <>
+                                            NT {formatCurrency(totalNTEjecutado)}
+                                            {valorManual > 0 && <> + Inesperadas {formatCurrency(valorManual)}</>}
+                                            {descontarNoEjecutadas && <> − No ejecutadas {formatCurrency(Math.abs(underExecutionTotals.desviacion))}</>}
+                                          </>
+                                        : <>Solo ejecución NT (sin ajustes)</>
+                                    }
+                                </p>
                             </div>
                         </div>
 

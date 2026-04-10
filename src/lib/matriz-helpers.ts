@@ -85,9 +85,14 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
   const matriz: MatrizRow[] = [];
   
   const pgpCupsMap = new Map<string, PgpRow>();
-  pgpData.forEach(row => {
+  pgpData.forEach((row, i) => {
       const cup = findColumnValue(row, ['cups', 'cup/cum', 'id resolucion 3100', 'código', 'cup', 'codigo']);
       if(cup) pgpCupsMap.set(String(cup).trim().toUpperCase(), row);
+      // Log columnas y valores completos de la primera fila para diagnóstico
+      if (i === 0) {
+        console.log('[NT columnas]', Object.keys(row));
+        console.log('[NT primera fila]', JSON.stringify(row));
+      }
   });
 
   const getMonthName = (monthNumber: string) => {
@@ -132,24 +137,91 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
 
       const serviceType = monthCupData?.type || guessServiceTypeByCup(cup);
 
-      // DESCRIPCION: Inteligencia para Medicamentos/Otros (desde JSON) vs Consultas/Proc (desde Sheet)
-      let descripcion = findColumnValue(pgpRow, [
-          'descripcion',
-          'descripcion cups',
-          'descripcion id resolucion',
-          'nombre',
-          'servicio'
-      ]);
+      // REGLA: Medicamentos/Otros → JSON (nomTecnologiaSalud); Consultas/Procedimientos → Sheet; fallback cruzado
+      let descripcion: string | undefined;
 
-      // Si es Medicamento u Otro Servicio, priorizar el nombre que viene en el JSON si existe
-      if ((serviceType === "Medicamento" || serviceType === "Otro Servicio") && monthCupData?.jsonDescription) {
-          descripcion = monthCupData.jsonDescription;
+      if (serviceType === "Medicamento" || serviceType === "Otro Servicio") {
+          // 1. JSON primero (nomTecnologiaSalud)
+          descripcion = monthCupData?.jsonDescription;
+          // 2. Sheet como fallback
+          if (!descripcion && pgpRow) descripcion = findColumnValue(pgpRow, [
+              'descripcion cups','descripcion id resolucion','descripcion','nombre','actividad','concepto','detalle','tecnologia','prestacion','servicio'
+          ]);
+      } else {
+          // Consultas / Procedimientos: Sheet primero
+          // Orden: columna exacta del NT de PROBIENESTAR → otros nombres conocidos → fallback
+          if (pgpRow) {
+              // Buscar en todas las columnas conocidas, priorizando las más específicas
+              descripcion = findColumnValue(pgpRow, [
+                  'descripcion cups',           // columna exacta (puede estar vacía)
+                  'descripcion id resolucion',  // descripción del grupo Res.3100
+                  'descripcion de la tecnologia',
+                  'descripcion',
+                  'descripción',
+                  'nombre cups',
+                  'nombre del servicio',
+                  'nombre',
+                  'actividad',
+                  'prestacion',
+                  'tecnologia',
+                  'detalle',
+                  'concepto',
+                  'servicio',
+              ]);
+              // Si aún no hay descripción, combinar SUBCATEGORIA + AMBITO como referencia
+              if (!descripcion) {
+                  const sub = findColumnValue(pgpRow, ['subcategoria']);
+                  const amb = findColumnValue(pgpRow, ['ambito']);
+                  if (sub || amb) {
+                      descripcion = [sub, amb].filter(Boolean).join(' · ');
+                  }
+              }
+          }
+          // Fallback inteligente: escanear TODAS las columnas del Sheet buscando texto largo
+          // (NO excluir columnas con 'cups' en el nombre para atrapar "DESCRIPCION CUPS")
+          if (!descripcion && pgpRow) {
+              const IGNORAR_EXACTO = ['cups','nit','valor unitario','costo evento','frecuencia','vr unitario',
+                  'valor minimo','valor maximo','costo evento dia','costo evento mes'];
+              const keys = Object.keys(pgpRow);
+              const sorted = [...keys].sort((a, b) => {
+                  const aDesc = /desc|nomb|activ|prest|tecnol|servic|detall|concept|subcateg/i.test(a) ? -1 : 1;
+                  const bDesc = /desc|nomb|activ|prest|tecnol|servic|detall|concept|subcateg/i.test(b) ? -1 : 1;
+                  return aDesc - bDesc;
+              });
+              for (const key of sorted) {
+                  const keyLow = key.toLowerCase().trim();
+                  // Excluir solo columnas que son claramente numéricas o códigos puros
+                  if (keyLow === 'cups' || keyLow === 'cup' || keyLow.match(/^_\d+$/)) continue;
+                  if (IGNORAR_EXACTO.some(e => keyLow === e)) continue;
+                  const val = pgpRow[key];
+                  if (val && typeof val === 'string' && val.trim().length > 4 && isNaN(Number(val.trim()))) {
+                      descripcion = val.trim();
+                      break;
+                  }
+              }
+          }
+          // Último recurso: JSON
+          if (!descripcion && monthCupData?.jsonDescription) {
+              descripcion = monthCupData.jsonDescription;
+          }
+      }
+
+      // Último recurso absoluto: si no hay nada, mostrar todas las columnas de texto del pgpRow
+      if (!descripcion && pgpRow) {
+        for (const key of Object.keys(pgpRow)) {
+          if (key === 'CUPS' || key === 'cups' || /^_\d+$/.test(key)) continue;
+          const v = pgpRow[key];
+          if (v !== null && v !== undefined && String(v).trim().length > 3 && isNaN(Number(String(v).trim()))) {
+            descripcion = String(v).trim();
+            break;
+          }
+        }
       }
 
       matriz.push({
         Mes: monthName,
         CUPS: cup,
-        Descripcion: descripcion || 'Descripción no encontrada',
+        Descripcion: descripcion || cup,
         Diagnostico_Principal: diagnosticoPrincipal,
         Cantidad_Esperada: cantidadEsperada,
         Cantidad_Ejecutada: cantidadEjecutada,

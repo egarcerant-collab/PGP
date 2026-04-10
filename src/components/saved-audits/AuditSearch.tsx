@@ -1,30 +1,19 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Play, RefreshCw, FolderOpen } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Play, RefreshCw, FolderOpen, Trash2, Eraser } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from '@/lib/utils';
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
-interface AuditFile {
+interface AuditRecord {
+    id: number;
+    numero: string;
     month: string;
     prestador: string;
-    path: string;
-}
-
-interface GroupedAudits {
-    [month: string]: AuditFile[];
+    nit: string;
+    fecha: string;
 }
 
 interface AuditSearchProps {
@@ -32,94 +21,255 @@ interface AuditSearchProps {
 }
 
 export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
-    const [audits, setAudits] = useState<GroupedAudits>({});
+    const [audits, setAudits] = useState<AuditRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedAuditPath, setSelectedAuditPath] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isContinuing, setIsContinuing] = useState(false);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deleteAll, setDeleteAll] = useState(false);
+    const [pwInput, setPwInput] = useState('');
+    const [pwError, setPwError] = useState(false);
     const { toast } = useToast();
 
     const fetchAudits = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await fetch('/api/list-audits');
-            const data: AuditFile[] = await response.json();
-            
-            if (!Array.isArray(data)) throw new Error("Error en el formato de respuesta");
-
-            const grouped = data.reduce((acc, audit) => {
-                const { month } = audit;
-                if (!acc[month]) acc[month] = [];
-                acc[month].push(audit);
-                return acc;
-            }, {} as GroupedAudits);
-
-            setAudits(grouped);
-        } catch (error) {
-            console.error("Error al cargar auditorías del servidor:", error);
-            toast({ title: "Error de Servidor", description: "No se pudieron listar los archivos físicos.", variant: "destructive" });
+            const data = await response.json();
+            if (Array.isArray(data)) setAudits(data);
+        } catch {
+            toast({ title: "Error", description: "No se pudieron cargar las auditorías.", variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
     }, [toast]);
 
-    useEffect(() => {
-        fetchAudits();
-    }, [fetchAudits]);
+    useEffect(() => { fetchAudits(); }, [fetchAudits]);
 
-    const handleContinueAudit = async () => {
-        if (!selectedAuditPath) return;
+    const toggleSelect = (id: number, prestador: string) => {
+        setSelectedIds(prev => {
+            if (prev.includes(id)) return prev.filter(x => x !== id);
+            // Validar mismo prestador
+            if (prev.length > 0) {
+                const firstPrestador = audits.find(a => a.id === prev[0])?.prestador;
+                if (firstPrestador?.toLowerCase() !== prestador.toLowerCase()) {
+                    toast({ title: "Mismo prestador", description: "Solo puedes combinar auditorías del mismo prestador.", variant: "destructive" });
+                    return prev;
+                }
+            }
+            if (prev.length >= 3) {
+                toast({ title: "Máximo 3", description: "Solo puedes cargar hasta 3 auditorías a la vez.", variant: "destructive" });
+                return prev;
+            }
+            return [...prev, id];
+        });
+    };
+
+    const handleLoad = async () => {
+        if (selectedIds.length === 0) return;
         setIsContinuing(true);
         try {
-            const allAudits = Object.values(audits).flat();
-            const auditInfo = allAudits.find(a => a.path === selectedAuditPath);
+            // Cargar todas las auditorías seleccionadas en paralelo
+            const results = await Promise.all(
+                selectedIds.map(id => fetch(`/api/load-audit?id=${id}`).then(r => r.json()))
+            );
 
-            if (!auditInfo) throw new Error("Información de auditoría no encontrada.");
+            // Tomar datos base de la primera
+            const base = results[0];
+            const merged: SavedAuditData = { ...base.auditData };
 
-            const response = await fetch(selectedAuditPath);
-            if (!response.ok) throw new Error("No se pudo descargar el archivo JSON.");
-            
-            const auditData: SavedAuditData = await response.json();
+            // Combinar executionData de todas
+            if (results.length > 1) {
+                const allExecData: Record<string, any> = { ...(base.auditData.executionData || {}) };
+                for (let i = 1; i < results.length; i++) {
+                    const other = results[i].auditData?.executionData || {};
+                    Object.assign(allExecData, other);
+                }
+                merged.executionData = allExecData;
+            }
 
-            onAuditLoad(auditData, auditInfo.prestador, auditInfo.month);
-            toast({ title: "Auditoría Restaurada", description: `Cargada desde ${selectedAuditPath}` });
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
+            const prestadorName = base.prestador;
+            const allMonths = results.map(r => r.mes).join(' + ');
+
+            onAuditLoad(merged, prestadorName, allMonths);
+            toast({ title: "Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
             setIsContinuing(false);
         }
     };
 
+    const handleDeleteConfirm = async () => {
+        if (pwInput !== '123456') { setPwError(true); return; }
+        try {
+            if (deleteAll) {
+                const res = await fetch(`/api/save-audit?id=ALL&password=${pwInput}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Error al eliminar.');
+                toast({ title: "Todas las auditorías eliminadas" });
+                setAudits([]);
+                setSelectedIds([]);
+            } else {
+                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Error al eliminar.');
+                toast({ title: "Auditoría eliminada" });
+                setAudits(prev => prev.filter(a => a.id !== deletingId));
+                setSelectedIds(prev => prev.filter(x => x !== deletingId));
+            }
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" });
+        } finally {
+            setDeletingId(null); setDeleteAll(false); setPwInput(''); setPwError(false);
+        }
+    };
+
+    const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
+
     return (
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-             <Select onValueChange={setSelectedAuditPath} disabled={isLoading || Object.keys(audits).length === 0}>
-                <SelectTrigger className="w-full sm:w-[400px]">
-                    <FolderOpen className="mr-2 h-4 w-4 text-primary" />
-                    <SelectValue placeholder={isLoading ? "Buscando archivos..." : "Escoger auditoría del servidor..."} />
-                </SelectTrigger>
-                <SelectContent>
-                    {Object.keys(audits).length > 0 ? (
-                         Object.entries(audits).map(([month, files]) => (
-                            <SelectGroup key={month}>
-                                <SelectLabel className="text-primary font-bold uppercase">{month}</SelectLabel>
-                                {files.map((file) => (
-                                    <SelectItem key={file.path} value={file.path}>
-                                        {file.prestador.toUpperCase()}
-                                    </SelectItem>
-                                ))}
-                            </SelectGroup>
-                        ))
-                    ) : (
-                        <SelectItem value="none" disabled>No se encontraron archivos .json</SelectItem>
-                    )}
-                </SelectContent>
-            </Select>
-            <Button onClick={handleContinueAudit} disabled={!selectedAuditPath || isContinuing} className="bg-primary hover:bg-primary/90">
-                {isContinuing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                Cargar Auditoría
-            </Button>
-            <Button variant="outline" size="icon" onClick={fetchAudits} title="Refrescar carpetas">
-                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-            </Button>
+        <div className="space-y-4">
+            {isLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm py-8 justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Cargando auditorías desde Supabase...
+                </div>
+            ) : audits.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                    No hay auditorías guardadas. Usa <strong>"Guardar Auditoría"</strong> en el sidebar.
+                </div>
+            ) : (
+                <>
+                    <p className="text-xs text-muted-foreground">
+                        Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas al cargar.
+                    </p>
+                    <div className="rounded-lg border border-border overflow-auto max-h-96">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted sticky top-0">
+                                <tr>
+                                    <th className="px-3 py-2 w-8"></th>
+                                    <th className="px-4 py-2 text-left font-semibold">N°</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Prestador</th>
+                                    <th className="px-4 py-2 text-left font-semibold">NIT</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Mes</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                    <th className="px-4 py-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {audits.map((a, idx) => {
+                                    const checked = selectedIds.includes(a.id);
+                                    const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
+                                    const disabled = !checked && selectedIds.length >= 3;
+                                    const differentPrestador = !checked && firstPrestador && firstPrestador.toLowerCase() !== a.prestador.toLowerCase();
+                                    return (
+                                        <tr
+                                            key={`${a.id}-${idx}`}
+                                            className={`border-t border-border transition-colors ${
+                                                checked
+                                                    ? 'bg-emerald-50 border-emerald-200'
+                                                    : disabled || differentPrestador
+                                                    ? 'opacity-40 cursor-not-allowed'
+                                                    : 'hover:bg-muted/40'
+                                            }`}
+                                        >
+                                            <td className="px-3 py-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => !disabled && !differentPrestador && toggleSelect(a.id, a.prestador)}
+                                                    className="accent-emerald-600 h-4 w-4 cursor-pointer"
+                                                    disabled={disabled || !!differentPrestador}
+                                                />
+                                            </td>
+                                            <td className="px-4 py-2 font-mono text-primary font-bold">{a.numero}</td>
+                                            <td className="px-4 py-2 max-w-[180px] truncate">{a.prestador?.toUpperCase()}</td>
+                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.nit}</td>
+                                            <td className="px-4 py-2 capitalize">{a.month}</td>
+                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.fecha}</td>
+                                            <td className="px-4 py-2">
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); setDeletingId(a.id); setPwInput(''); setPwError(false); }}
+                                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                                    title="Eliminar auditoría"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                    onClick={handleLoad}
+                    disabled={selectedIds.length === 0 || isContinuing}
+                    className="bg-primary hover:bg-primary/90"
+                >
+                    {isContinuing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                    {selectedIds.length === 0
+                        ? 'Selecciona una auditoría'
+                        : selectedIds.length === 1
+                        ? 'Cargar Auditoría'
+                        : `Combinar ${selectedIds.length} auditorías`}
+                </Button>
+                <Button variant="outline" size="icon" onClick={fetchAudits} title="Refrescar lista">
+                    <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
+                {audits.length > 0 && (
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => { setDeleteAll(true); setDeletingId(null); setPwInput(''); setPwError(false); }}
+                        title="Eliminar todas las auditorías"
+                        className="text-red-500 hover:text-red-700 hover:border-red-400"
+                    >
+                        <Eraser className="h-4 w-4" />
+                    </Button>
+                )}
+                {selectedAudits.length > 0 && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <FolderOpen className="h-3 w-3" />
+                        {selectedAudits[0].prestador?.toUpperCase()} — {selectedAudits.map(a => a.month).join(' + ')}
+                    </span>
+                )}
+            </div>
+
+            {/* Modal eliminar con contraseña */}
+            {(deletingId || deleteAll) && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+                        <h3 className="font-semibold text-base">
+                            🔒 {deleteAll ? 'Eliminar TODAS las auditorías' : `Eliminar Auditoría N° ${audits.find(a => a.id === deletingId)?.numero}`}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                            {deleteAll
+                                ? `Se eliminarán ${audits.length} registros permanentemente.`
+                                : `${audits.find(a => a.id === deletingId)?.prestador?.toUpperCase()} — ${audits.find(a => a.id === deletingId)?.month}`}
+                        </p>
+                        <Input
+                            type="password"
+                            placeholder="Contraseña"
+                            value={pwInput}
+                            onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+                            onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+                            className={pwError ? 'border-red-500' : ''}
+                            autoFocus
+                        />
+                        {pwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+                        <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => { setDeletingId(null); setDeleteAll(false); setPwInput(''); setPwError(false); }}>
+                                Cancelar
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={handleDeleteConfirm}>
+                                Eliminar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

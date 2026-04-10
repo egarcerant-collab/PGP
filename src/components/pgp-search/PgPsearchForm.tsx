@@ -205,6 +205,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     matrizDescuentos.push({
         ...commonInfo,
         CUPS: row.CUPS,
+        Descripcion: row.Descripcion,
         Cantidad_Ejecutada: row.Cantidad_Ejecutada,
         Valor_Unitario: row.Valor_Unitario,
         Valor_Ejecutado: row.Valor_Ejecutado,

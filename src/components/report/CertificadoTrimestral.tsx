@@ -44,18 +44,16 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
 const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n));
 
-/** Dibuja una gráfica de barras nítida (2× resolución) y devuelve base64 PNG */
+/** Dibuja una gráfica de barras simple y devuelve base64 PNG */
 function drawBarChart(
   labels: string[], values: number[], color: string, W = 490, H = 175
 ): string {
   if (typeof window === 'undefined') return '';
-  const SCALE = 3; // 3× pixel density → completamente nítida en PDF
+  const SCALE = 3;
   const canvas = document.createElement('canvas');
   canvas.width = W * SCALE; canvas.height = H * SCALE;
   const ctx = canvas.getContext('2d')!;
   ctx.scale(SCALE, SCALE);
-
-  // Fondo blanco
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
   const maxVal = Math.max(...values, 1);
@@ -64,7 +62,6 @@ function drawBarChart(
   const cW = W - padL - padR, cH = H - padTop - padBot;
   const gap = 10, bW = Math.max(12, (cW - gap * (n + 1)) / n);
 
-  // Líneas de referencia horizontales
   for (let g = 0; g <= 4; g++) {
     const gy = padTop + (cH / 4) * g;
     ctx.strokeStyle = g === 4 ? '#9ca3af' : '#e5e7eb';
@@ -76,42 +73,117 @@ function drawBarChart(
     const x = padL + gap + i * (bW + gap);
     const bH = Math.max(2, (values[i] / maxVal) * cH);
     const y = padTop + cH - bH;
-
-    // Sombra suave
     ctx.fillStyle = 'rgba(0,0,0,0.07)';
     ctx.fillRect(x + 2, y + 2, bW, bH);
-
-    // Barra con gradiente vertical
     const grad = ctx.createLinearGradient(x, y, x, y + bH);
-    grad.addColorStop(0, color);
-    grad.addColorStop(1, color + 'aa');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, y, bW, bH);
-
-    // Borde superior de la barra
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
+    grad.addColorStop(0, color); grad.addColorStop(1, color + 'aa');
+    ctx.fillStyle = grad; ctx.fillRect(x, y, bW, bH);
+    ctx.strokeStyle = color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bW, y); ctx.stroke();
-
-    // Etiqueta de valor (encima de la barra)
-    const v = values[i] >= 1_000_000
-      ? `$${(values[i] / 1_000_000).toFixed(2)}M`
-      : values[i] >= 1_000
-      ? `$${(values[i] / 1_000).toFixed(0)}k`
-      : String(Math.round(values[i]));
-    ctx.fillStyle = '#111827';
-    ctx.font = 'bold 7.5px Arial';
-    ctx.textAlign = 'center';
+    const v = values[i] >= 1_000_000 ? `$${(values[i] / 1_000_000).toFixed(2)}M`
+      : values[i] >= 1_000 ? `$${(values[i] / 1_000).toFixed(0)}k` : String(Math.round(values[i]));
+    ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
     ctx.fillText(v, x + bW / 2, y - 5);
-
-    // Etiqueta del mes (debajo)
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 8px Arial';
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 8px Arial';
     ctx.fillText(label.substring(0, 3).toUpperCase(), x + bW / 2, padTop + cH + 14);
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '6.5px Arial';
+    ctx.fillStyle = '#6b7280'; ctx.font = '6.5px Arial';
     ctx.fillText(label.substring(0, 7), x + bW / 2, padTop + cH + 24);
   });
+  return canvas.toDataURL('image/png', 1.0);
+}
+
+/**
+ * Gráfica de barras apiladas: base (color primario) + inesperadas (naranja).
+ * `extra` = total inesperadas (se divide entre meses).
+ * `isCurrency` = true → etiqueta con "$M/k", false → número entero
+ * `baseColor` → color hex del segmento base
+ */
+function drawStackedBarChart(
+  labels: string[], base: number[], extra: number,
+  W = 490, H = 175, isCurrency = true, baseColor = '#1d4ed8'
+): string {
+  if (typeof window === 'undefined') return '';
+  const SCALE = 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * SCALE; canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
+  const extraPerBar = base.length > 0 ? extra / base.length : 0;
+  const totals = base.map(v => v + extraPerBar);
+  const maxVal = Math.max(...totals, 1);
+  const n = labels.length;
+  const padL = 8, padR = 8, padTop = 28, padBot = 46;
+  const cW = W - padL - padR, cH = H - padTop - padBot;
+  const gap = 10, bW = Math.max(12, (cW - gap * (n + 1)) / n);
+
+  // Líneas de referencia
+  for (let g = 0; g <= 4; g++) {
+    const gy = padTop + (cH / 4) * g;
+    ctx.strokeStyle = g === 4 ? '#9ca3af' : '#e5e7eb';
+    ctx.lineWidth = g === 4 ? 0.8 : 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+  }
+
+  labels.forEach((label, i) => {
+    const x = padL + gap + i * (bW + gap);
+    const baseH  = Math.max(2, (base[i] / maxVal) * cH);
+    const extraH = Math.max(0, (extraPerBar / maxVal) * cH);
+    const totalH = baseH + extraH;
+    const baseY  = padTop + cH - baseH;
+    const extraY = baseY - extraH;
+
+    // Sombra
+    ctx.fillStyle = 'rgba(0,0,0,0.06)';
+    ctx.fillRect(x + 2, extraY + 2, bW, totalH);
+
+    // Segmento base
+    const grad = ctx.createLinearGradient(x, baseY, x, baseY + baseH);
+    grad.addColorStop(0, baseColor); grad.addColorStop(1, baseColor + 'aa');
+    ctx.fillStyle = grad; ctx.fillRect(x, baseY, bW, baseH);
+
+    // Segmento inesperadas (naranja) — solo si hay extra
+    if (extraPerBar > 0) {
+      const gradE = ctx.createLinearGradient(x, extraY, x, extraY + extraH);
+      gradE.addColorStop(0, '#f97316'); gradE.addColorStop(1, '#f97316cc');
+      ctx.fillStyle = gradE; ctx.fillRect(x, extraY, bW, extraH);
+      // línea separadora
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x + bW, baseY); ctx.stroke();
+    }
+
+    // Borde superior
+    ctx.strokeStyle = extraPerBar > 0 ? '#f97316' : baseColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, extraY); ctx.lineTo(x + bW, extraY); ctx.stroke();
+
+    // Etiqueta total (encima)
+    const total = base[i] + extraPerBar;
+    const v = isCurrency
+      ? (total >= 1_000_000 ? `$${(total / 1_000_000).toFixed(2)}M`
+        : total >= 1_000 ? `$${(total / 1_000).toFixed(0)}k` : String(Math.round(total)))
+      : (total >= 1_000 ? `${(total / 1_000).toFixed(1)}k` : String(Math.round(total)));
+    ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(v, x + bW / 2, extraY - 5);
+
+    // Mes
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 8px Arial';
+    ctx.fillText(label.substring(0, 3).toUpperCase(), x + bW / 2, padTop + cH + 14);
+    ctx.fillStyle = '#6b7280'; ctx.font = '6.5px Arial';
+    ctx.fillText(label.substring(0, 7), x + bW / 2, padTop + cH + 24);
+  });
+
+  // Leyenda en la parte inferior
+  const legY = H - 10;
+  ctx.fillStyle = baseColor; ctx.fillRect(padL, legY - 7, 10, 7);
+  ctx.fillStyle = '#374151'; ctx.font = '6.5px Arial'; ctx.textAlign = 'left';
+  ctx.fillText(isCurrency ? 'Ejecución CUPS (valor)' : 'Actividades CUPS', padL + 13, legY - 1);
+  if (extraPerBar > 0) {
+    ctx.fillStyle = '#f97316'; ctx.fillRect(padL + 130, legY - 7, 10, 7);
+    ctx.fillStyle = '#374151';
+    ctx.fillText(isCurrency ? 'CUPS / Tec. Inesperadas (valor)' : 'Actividades Inesperadas', padL + 143, legY - 1);
+  }
 
   return canvas.toDataURL('image/png', 1.0);
 }
@@ -124,6 +196,7 @@ export default function CertificadoTrimestral({
   const [informeNum, setInformeNum] = useState('');
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
   const [responsable, setResponsable] = useState('EDUARDO GARCERANT GONZALEZ');
+  const [supervisorName, setSupervisorName] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
@@ -131,9 +204,34 @@ export default function CertificadoTrimestral({
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
+  const [viewingInf, setViewingInf] = useState<any | null>(null);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [viewPwInput, setViewPwInput] = useState('');
+  const [viewPwError, setViewPwError] = useState(false);
+  const [viewUnlocked, setViewUnlocked] = useState(false);
+  const [notaAdicional, setNotaAdicional] = useState('');
+  const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
+  const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
+  const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
   const { toast } = useToast();
+
+  // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
+  useEffect(() => {
+    const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    const valKey  = `pgp-cups-inesperadas-manual-${prestKey}`;
+    const cantKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
+    const savedVal  = localStorage.getItem(valKey);
+    const savedCant = localStorage.getItem(cantKey);
+    setValorCupsInesperadas(savedVal && !isNaN(Number(savedVal)) && Number(savedVal) > 0 ? Number(savedVal) : 0);
+    setCantidadCupsInesperadas(savedCant || '');
+  }, [selectedPrestador]);
+
+  const handleSaveCantidad = (val: string) => {
+    setCantidadCupsInesperadas(val);
+    const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
+    localStorage.setItem(`pgp-cups-inesperadas-cantidad-${prestKey}`, val);
+  };
 
   // Carga siguiente número disponible al montar
   useEffect(() => {
@@ -271,8 +369,15 @@ export default function CertificadoTrimestral({
 
       // ── Gráficas ──
       const labels = mesData.map(m => m.name);
-      const chart1 = drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
-      const chart2 = drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
+      const cantInespNum = parseInt(cantidadCupsInesperadas) || 0;
+      // Chart 1: apilado (base + inesperadas) si hay valor de inesperadas
+      const chart1 = valorCupsInesperadas > 0
+        ? drawStackedBarChart(labels, mesData.map(m => m.value), valorCupsInesperadas)
+        : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
+      // Chart 2: apilado (conteo normal + actividades inesperadas) si hay cantidad
+      const chart2 = cantInespNum > 0
+        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 175, false, '#15803d')
+        : drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
       const detalleValor = mesData.map((m, i) => {
@@ -283,10 +388,12 @@ export default function CertificadoTrimestral({
 
       const totalEjecutado = mesData.reduce((a, m) => a + m.value, 0);
       const totalCups = mesData.reduce((a, m) => a + m.cups, 0);
+      // Suma CUPS / Tecnologías Inesperadas al total ejecutado para el cálculo de bandas
+      const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
 
       // ── Cálculo DESCONTAR / RECONOCER según ejecución real vs banda 90-110% ──
-      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
-      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
@@ -404,28 +511,38 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
-          // ══ GRÁFICA 1 (valor) ══
-          { text: 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR', style: 'chartLabel' },
+          // ══ GRÁFICA 1 (valor, apilado si hay inesperadas) ══
+          {
+            text: valorCupsInesperadas > 0
+              ? 'GRÁFICO 1. CONSOLIDADO DE EJECUCIÓN EN VALOR POR CUPS — INCLUYE CUPS / TECNOLOGÍAS INESPERADAS'
+              : 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR',
+            style: 'chartLabel',
+          },
           chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 4] } : {},
 
           // ══ NARRATIVA 2 (entre gráficas) ══
           {
-            text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.`,
+            text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valorCupsInesperadas > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtN(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmt(valorCupsInesperadas)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`,
             style: 'p',
           },
           {
-            text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmt(totalEjecutado)}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`,
+            text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`,
             style: 'p',
             margin: [0, 0, 0, 4],
           },
 
-          // ══ GRÁFICA 2 (CUPS) ══
-          { text: 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
+          // ══ GRÁFICA 2 (CUPS conteo, apilado si hay inesperadas) ══
+          {
+            text: cantInespNum > 0
+              ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS'
+              : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE',
+            style: 'chartLabel',
+          },
           chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 4] } : {},
 
           // ══ NARRATIVA 3 (debajo de gráfica 2) ══
           {
-            text: `La ejecución de los espacios códigos Cups en valor de ejecución de las notas técnicas de los contratos entre Dusakawi EPSI y los prestadores de servicios médicos es un componente esencial en nuestra operación diaria, estos códigos representan los procedimientos y tratamientos médicos proporcionados a nuestros afiliados, y su correcta aplicación garantiza la precisión en la facturación y el cumplimiento de los términos acordados en los contratos. A través de una ejecución meticulosa de estos códigos, hemos podido mantener una relación transparente y colaborativa con nuestros proveedores de servicios de salud. Esto nos ha permitido asegurar la calidad y continuidad en la atención médica brindada a nuestros afiliados, al tiempo que fortalece nuestra red de atención y promueve la eficiencia en los procesos administrativos, ${detalleCups}`,
+            text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtN(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`,
             style: 'p',
           },
 
@@ -459,6 +576,16 @@ export default function CertificadoTrimestral({
                   { text: '$ -', ...CS, alignment: 'right' },
                   { text: '$ -', ...CS, alignment: 'right' },
                 ],
+                ...(valorCupsInesperadas > 0 ? [[
+                  { text: `CUPS / Tecnologías Inesperadas   ${fmt(valorCupsInesperadas)}`, ...CS, color: '#1d4ed8', bold: true },
+                  { text: fmt(0), ...CS, alignment: 'right' },
+                  { text: fmt(valorCupsInesperadas), ...CS, alignment: 'right', color: '#1d4ed8', bold: true },
+                ]] : []),
+                [
+                  { text: `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`, ...CS, bold: true, fillColor: '#f0fdf4' },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
+                  { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
+                ],
               ],
             },
             layout: 'lightHorizontalLines',
@@ -488,7 +615,7 @@ export default function CertificadoTrimestral({
                       { text: fmt(monthlyNT), ...CS, alignment: 'right' },
                       { text: fmt(adv80), ...CS, alignment: 'right' },
                     ])
-                  : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }]]),
+                  : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmt(monthlyNT), ...CS, alignment: 'right' }, { text: fmt(monthlyNT * 0.8), ...CS, alignment: 'right' }]]),
                 [
                   {
                     text: periodType === 'trimestral'
@@ -497,7 +624,7 @@ export default function CertificadoTrimestral({
                     ...CS, bold: true
                   },
                   { text: fmt(ntPeriodoFull), ...CS, alignment: 'right', bold: true },
-                  { text: fmt(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true },
+                  { text: fmt(advanceMonths === 0 ? adv80 : (lastMonthPay > 0 ? lastMonthPay : 0)), ...CS, alignment: 'right', bold: true },
                 ],
                 [
                   { text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true },
@@ -544,7 +671,7 @@ export default function CertificadoTrimestral({
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
                   { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+                  { text: supervisorName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
                 ],
               },
               {
@@ -558,6 +685,48 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 10],
           },
 
+          // ── Nota de ejecución financiera ──
+          ...(notaEjecucionFinanciera.trim() ? [
+            {
+              text: 'NOTA DE EJECUCIÓN FINANCIERA:',
+              bold: true, fontSize: 7.5, margin: [0, 8, 0, 2],
+            },
+            {
+              table: {
+                widths: ['*'],
+                body: [[{
+                  text: notaEjecucionFinanciera.trim(),
+                  fontSize: 7.5, alignment: 'justify',
+                  margin: [4, 4, 4, 4],
+                }]],
+              },
+              layout: { hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' },
+              fillColor: '#eff6ff',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
+          // ── Notas adicionales ──
+          ...(notaAdicional.trim() ? [
+            {
+              text: 'OBSERVACIONES ADICIONALES:',
+              bold: true, fontSize: 7.5, margin: [0, 4, 0, 2],
+            },
+            {
+              table: {
+                widths: ['*'],
+                body: [[{
+                  text: notaAdicional.trim(),
+                  fontSize: 7.5, alignment: 'justify',
+                  margin: [4, 4, 4, 4],
+                }]],
+              },
+              layout: { hLineColor: () => '#d1fae5', vLineColor: () => '#d1fae5' },
+              fillColor: '#f0fdf4',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
           // Nota legal
           {
             text: 'Nota: El valor total programado por concepto de prestación de servicios en salud se encuentra sujeto a los descuentos tributarios que apliquen conforme a la normatividad vigente (retenciones en la fuente, IVA u otros tributos según corresponda). El valor neto a pagar se reflejará una vez efectuadas las deducciones respectivas.',
@@ -569,11 +738,11 @@ export default function CertificadoTrimestral({
           // Narrativa página 3 — ejecución financiera
           { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
           {
-            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutado)} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
+            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
             style: 'p',
           },
           {
-            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(totalEjecutado)} ha sido calculado, registrado y conciliado mes a mes: ${mesData.map(m => `en ${m.name} se registró un valor ejecutado de ${fmt(m.value)} correspondiente a ${fmtN(m.cups)} actividades en salud`).join('; ')}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmt(minPeriodo)} y un máximo del 110% equivalente a ${fmt(maxPeriodo)}.`,
+            text: `En lo que respecta a los aspectos financieros, el valor total de ${fmt(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mesData.map(m => `en ${m.name} se registró un valor ejecutado de ${fmt(m.value)} correspondiente a ${fmtN(m.cups)} actividades en salud`).join('; ')}${valorCupsInesperadas > 0 ? `; adicionalmente se incluye un valor de ${fmt(valorCupsInesperadas)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmt(minPeriodo)} y un máximo del 110% equivalente a ${fmt(maxPeriodo)}.`,
             style: 'p',
           },
           {
@@ -629,7 +798,7 @@ export default function CertificadoTrimestral({
 
           // Narrativa CUPS — consolidado trimestral
           {
-            text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutado)} en valores ejecutados, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
+            text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutadoFinal)} en valores ejecutados${valorCupsInesperadas > 0 ? ` (de los cuales ${fmt(valorCupsInesperadas)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
             style: 'p',
             margin: [0, 0, 0, 0],
           },
@@ -698,7 +867,7 @@ export default function CertificadoTrimestral({
     } finally {
       setIsSaving(false);
     }
-  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, toast]);
+  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, toast]);
 
   if (!comparisonSummary || !pgpData || months.length === 0) return null;
 
@@ -746,10 +915,67 @@ export default function CertificadoTrimestral({
             <Input value={contrato} onChange={e => setContrato(e.target.value)} placeholder="Ej: 44847_03_PGP" />
           </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Responsable (firma)</Label>
-          <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Responsable (firma derecha)</Label>
+            <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Nombre Supervisor del Contrato</Label>
+            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." />
+          </div>
         </div>
+
+        {/* CUPS / Tecnologías Inesperadas — resumen cargado (readonly) */}
+        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-1">
+          <p className="text-xs font-semibold text-orange-800 flex items-center gap-1">
+            🟠 CUPS / Tecnologías Inesperadas <span className="font-normal text-orange-600">(cargado desde módulo CUPS / Tecnologías)</span>
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 text-xs">
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
+              <span className="text-orange-400">$</span>
+              {valorCupsInesperadas > 0
+                ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)
+                : 'Sin valor — guarda en módulo CUPS / Tecnologías'}
+            </div>
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${parseInt(cantidadCupsInesperadas) > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
+              <span className="text-orange-400">#</span>
+              {parseInt(cantidadCupsInesperadas) > 0
+                ? `${parseInt(cantidadCupsInesperadas).toLocaleString('es-CO')} actividades inesperadas`
+                : 'Sin cantidad — ingresa en módulo CUPS / Tecnologías'}
+            </div>
+          </div>
+          {(valorCupsInesperadas > 0 || parseInt(cantidadCupsInesperadas) > 0) && (
+            <p className="text-[10px] text-orange-600">El valor se suma al total ejecutado y ambos se grafican en naranja en los gráficos 1 y 2.</p>
+          )}
+        </div>
+
+        {/* Nota de ejecución financiera */}
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1">
+            <span>📊</span> Nota de ejecución financiera
+          </Label>
+          <textarea
+            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            placeholder="Ej: La ejecución del período refleja un incremento del 12% respecto al trimestre anterior..."
+            value={notaEjecucionFinanciera}
+            onChange={e => setNotaEjecucionFinanciera(e.target.value)}
+          />
+        </div>
+
+        {/* Notas adicionales */}
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1">
+            <span>⚙️</span> Notas adicionales
+          </Label>
+          <textarea
+            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            placeholder="Ej: Favorabilidad alta..."
+            value={notaAdicional}
+            onChange={e => setNotaAdicional(e.target.value)}
+          />
+        </div>
+
         <div className="flex gap-2">
           <Button onClick={handleGenerate} disabled={isGenerating} className="flex-1">
             {isGenerating ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
@@ -800,7 +1026,12 @@ export default function CertificadoTrimestral({
                           {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
                         </td>
                         <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-1.5 flex items-center gap-2">
+                          <button
+                            onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }}
+                            className="text-blue-400 hover:text-blue-600 transition-colors"
+                            title="Ver informe"
+                          >👁️</button>
                           <button
                             onClick={() => { setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }}
                             className="text-red-400 hover:text-red-600 transition-colors"
@@ -813,6 +1044,57 @@ export default function CertificadoTrimestral({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal Ver Informe con contraseña */}
+        {viewingInf && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-96 space-y-4">
+              <h3 className="font-semibold text-base">📋 Informe N° {viewingInf.numero}</h3>
+              {!viewUnlocked ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Ingresa la contraseña para ver los detalles.</p>
+                  <Input
+                    type="password"
+                    placeholder="Contraseña"
+                    value={viewPwInput}
+                    onChange={e => { setViewPwInput(e.target.value); setViewPwError(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
+                        else setViewPwError(true);
+                      }
+                    }}
+                    className={viewPwError ? 'border-red-500' : ''}
+                    autoFocus
+                  />
+                  {viewPwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cancelar</Button>
+                    <Button size="sm" onClick={() => {
+                      if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
+                      else setViewPwError(true);
+                    }}>Abrir</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Prestador</span><span className="font-semibold">{viewingInf.prestador}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Período</span><span className="font-semibold">{viewingInf.periodo}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Tipo</span><span className="font-semibold">{viewingInf.tipoPeriodo}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Valor Final</span><span className="font-semibold text-green-700">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(viewingInf.valorFinal)}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">NIT</span><span className="font-semibold">{viewingInf.nit || '—'}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cerrar</Button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 

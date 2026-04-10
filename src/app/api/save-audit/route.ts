@@ -1,55 +1,82 @@
-
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
-const sanitizeFilename = (name: string) => {
-    if (!name) return 'desconocido';
-    return name.normalize('NFD')
-               .replace(/[\u0300-\u036f]/g, '')
-               .replace(/[^a-z0-9_.-]/gi, '_')
-               .toLowerCase();
-};
+const supabase = createClient(
+  'https://fvrgfqxohacipmnmqyef.supabase.co',
+  'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
+);
+
+const PASSWORD = '123456';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { auditData, prestadorName, month } = body;
+    const { auditData, prestadorName, month, password } = body;
+
+    if (password !== PASSWORD) {
+      return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
+    }
 
     if (!auditData || !prestadorName || !month) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
-    const sanitizedMonth = sanitizeFilename(month);
-    const sanitizedPrestadorName = sanitizeFilename(prestadorName);
-    
-    const rootDir = process.cwd();
-    const reportsDir = path.join(rootDir, 'public', 'informes');
-    const monthDir = path.join(reportsDir, sanitizedMonth);
-    const filePath = path.join(monthDir, `${sanitizedPrestadorName}.json`);
+    // Obtener siguiente número secuencial
+    const { data: existing, error: fetchError } = await supabase
+      .from('auditorias')
+      .select('numero')
+      .order('numero', { ascending: false })
+      .limit(1);
 
-    try {
-        await fs.mkdir(monthDir, { recursive: true });
-        await fs.writeFile(filePath, JSON.stringify(auditData, null, 2), 'utf-8');
-    } catch (fsError: any) {
-        console.error('File System Error:', fsError);
-        return NextResponse.json({ 
-            message: 'Error al escribir en el disco del servidor.',
-            error: fsError.message,
-            code: fsError.code
-        }, { status: 500 });
-    }
+    if (fetchError) throw fetchError;
 
-    return NextResponse.json({ 
-        message: `Archivo guardado exitosamente.`,
-        path: `/informes/${sanitizedMonth}/${sanitizedPrestadorName}.json`
+    const lastNumber = existing && existing.length > 0
+      ? parseInt(existing[0].numero, 10) || 0
+      : 0;
+    const numero = String(lastNumber + 1).padStart(3, '0');
+    const nit = auditData.selectedPrestador?.NIT || '';
+
+    const { data, error } = await supabase
+      .from('auditorias')
+      .insert([{ numero, prestador: prestadorName, nit, mes: month, datos: auditData }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      message: `Auditoría N° ${numero} guardada exitosamente.`,
+      numero,
+      id: data.id
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('General API Error:', error);
-    return NextResponse.json({ 
-        message: 'Error interno en la API de guardado.',
-        error: error.message 
-    }, { status: 500 });
+    console.error('Error al guardar auditoría:', error);
+    return NextResponse.json({ message: 'Error interno.', error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const password = searchParams.get('password');
+
+    if (password !== PASSWORD) {
+      return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
+    }
+    if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
+
+    if (id === 'ALL') {
+      const { error } = await supabase.from('auditorias').delete().neq('id', 0);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('auditorias').delete().eq('id', id);
+      if (error) throw error;
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ message: error.message }, { status: 500 });
   }
 }
