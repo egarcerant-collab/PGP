@@ -145,14 +145,14 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {audits.map(a => {
+                                {audits.map((a, idx) => {
                                     const checked = selectedIds.includes(a.id);
                                     const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
                                     const disabled = !checked && selectedIds.length >= 3;
                                     const differentPrestador = !checked && firstPrestador && firstPrestador.toLowerCase() !== a.prestador.toLowerCase();
                                     return (
                                         <tr
-                                            key={a.id}
+                                            key={`${a.id}-${idx}`}
                                             onClick={() => !disabled && toggleSelect(a.id, a.prestador)}
                                             className={`border-t border-border transition-colors ${
                                                 checked
