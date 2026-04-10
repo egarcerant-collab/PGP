@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('auditorias')
-      .select('id, numero, prestador, nit, mes, fecha, created_at')
+      .select('id, numero, prestador, nit, mes, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
