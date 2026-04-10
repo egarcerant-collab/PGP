@@ -204,8 +204,12 @@ export default function CertificadoTrimestral({
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
+  const [viewingInf, setViewingInf] = useState<any | null>(null);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [viewPwInput, setViewPwInput] = useState('');
+  const [viewPwError, setViewPwError] = useState(false);
+  const [viewUnlocked, setViewUnlocked] = useState(false);
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
   const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
@@ -1022,7 +1026,12 @@ export default function CertificadoTrimestral({
                           {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
                         </td>
                         <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-1.5 flex items-center gap-2">
+                          <button
+                            onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }}
+                            className="text-blue-400 hover:text-blue-600 transition-colors"
+                            title="Ver informe"
+                          >👁️</button>
                           <button
                             onClick={() => { setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }}
                             className="text-red-400 hover:text-red-600 transition-colors"
@@ -1035,6 +1044,57 @@ export default function CertificadoTrimestral({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal Ver Informe con contraseña */}
+        {viewingInf && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-96 space-y-4">
+              <h3 className="font-semibold text-base">📋 Informe N° {viewingInf.numero}</h3>
+              {!viewUnlocked ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Ingresa la contraseña para ver los detalles.</p>
+                  <Input
+                    type="password"
+                    placeholder="Contraseña"
+                    value={viewPwInput}
+                    onChange={e => { setViewPwInput(e.target.value); setViewPwError(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
+                        else setViewPwError(true);
+                      }
+                    }}
+                    className={viewPwError ? 'border-red-500' : ''}
+                    autoFocus
+                  />
+                  {viewPwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cancelar</Button>
+                    <Button size="sm" onClick={() => {
+                      if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
+                      else setViewPwError(true);
+                    }}>Abrir</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Prestador</span><span className="font-semibold">{viewingInf.prestador}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Período</span><span className="font-semibold">{viewingInf.periodo}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Tipo</span><span className="font-semibold">{viewingInf.tipoPeriodo}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Valor Final</span><span className="font-semibold text-green-700">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(viewingInf.valorFinal)}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">NIT</span><span className="font-semibold">{viewingInf.nit || '—'}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cerrar</Button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 
