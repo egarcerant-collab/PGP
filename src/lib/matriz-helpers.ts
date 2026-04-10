@@ -158,6 +158,22 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
       if ((serviceType === "Medicamento" || serviceType === "Otro Servicio") && monthCupData?.jsonDescription) {
           descripcion = monthCupData.jsonDescription;
       }
+      // Fallback inteligente: buscar cualquier columna de texto del PGP que parezca descripción
+      if (!descripcion && pgpRow) {
+          const EXCLUIDAS = ['cups','cup','cup/cum','codigo','código','id','nit','valor','costo','frecuencia',
+              'cantidad','evento','mes','año','año','periodo','contrato','municipio','departamento'];
+          const keys = Object.keys(pgpRow);
+          for (const key of keys) {
+              const keyLow = key.toLowerCase().trim();
+              const isExcluida = EXCLUIDAS.some(e => keyLow.includes(e));
+              if (isExcluida) continue;
+              const val = pgpRow[key];
+              if (val && typeof val === 'string' && val.trim().length > 4 && isNaN(Number(val))) {
+                  descripcion = val.trim();
+                  break;
+              }
+          }
+      }
 
       matriz.push({
         Mes: monthName,
