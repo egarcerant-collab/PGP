@@ -206,10 +206,22 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
           }
       }
 
+      // Último recurso absoluto: si no hay nada, mostrar todas las columnas de texto del pgpRow
+      if (!descripcion && pgpRow) {
+        for (const key of Object.keys(pgpRow)) {
+          if (key === 'CUPS' || key === 'cups' || /^_\d+$/.test(key)) continue;
+          const v = pgpRow[key];
+          if (v !== null && v !== undefined && String(v).trim().length > 3 && isNaN(Number(String(v).trim()))) {
+            descripcion = String(v).trim();
+            break;
+          }
+        }
+      }
+
       matriz.push({
         Mes: monthName,
         CUPS: cup,
-        Descripcion: descripcion || 'Descripción no encontrada',
+        Descripcion: descripcion || cup,
         Diagnostico_Principal: diagnosticoPrincipal,
         Cantidad_Esperada: cantidadEsperada,
         Cantidad_Ejecutada: cantidadEjecutada,
