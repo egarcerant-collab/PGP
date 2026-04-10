@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Play, RefreshCw, FolderOpen, Trash2 } from "lucide-react";
+import { Loader2, Play, RefreshCw, FolderOpen, Trash2, Eraser } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
@@ -26,6 +26,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isContinuing, setIsContinuing] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deleteAll, setDeleteAll] = useState(false);
     const [pwInput, setPwInput] = useState('');
     const [pwError, setPwError] = useState(false);
     const { toast } = useToast();
@@ -102,15 +103,23 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const handleDeleteConfirm = async () => {
         if (pwInput !== '123456') { setPwError(true); return; }
         try {
-            const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Error al eliminar.');
-            toast({ title: "Auditoría eliminada" });
-            setAudits(prev => prev.filter(a => a.id !== deletingId));
-            setSelectedIds(prev => prev.filter(x => x !== deletingId));
+            if (deleteAll) {
+                const res = await fetch(`/api/save-audit?id=ALL&password=${pwInput}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Error al eliminar.');
+                toast({ title: "Todas las auditorías eliminadas" });
+                setAudits([]);
+                setSelectedIds([]);
+            } else {
+                const res = await fetch(`/api/save-audit?id=${deletingId}&password=${pwInput}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Error al eliminar.');
+                toast({ title: "Auditoría eliminada" });
+                setAudits(prev => prev.filter(a => a.id !== deletingId));
+                setSelectedIds(prev => prev.filter(x => x !== deletingId));
+            }
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
-            setDeletingId(null); setPwInput(''); setPwError(false);
+            setDeletingId(null); setDeleteAll(false); setPwInput(''); setPwError(false);
         }
     };
 
@@ -210,6 +219,17 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 <Button variant="outline" size="icon" onClick={fetchAudits} title="Refrescar lista">
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </Button>
+                {audits.length > 0 && (
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => { setDeleteAll(true); setDeletingId(null); setPwInput(''); setPwError(false); }}
+                        title="Eliminar todas las auditorías"
+                        className="text-red-500 hover:text-red-700 hover:border-red-400"
+                    >
+                        <Eraser className="h-4 w-4" />
+                    </Button>
+                )}
                 {selectedAudits.length > 0 && (
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <FolderOpen className="h-3 w-3" />
@@ -219,14 +239,16 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             </div>
 
             {/* Modal eliminar con contraseña */}
-            {deletingId && (
+            {(deletingId || deleteAll) && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
                         <h3 className="font-semibold text-base">
-                            🔒 Eliminar Auditoría N° {audits.find(a => a.id === deletingId)?.numero}
+                            🔒 {deleteAll ? 'Eliminar TODAS las auditorías' : `Eliminar Auditoría N° ${audits.find(a => a.id === deletingId)?.numero}`}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                            {audits.find(a => a.id === deletingId)?.prestador?.toUpperCase()} — {audits.find(a => a.id === deletingId)?.month}
+                            {deleteAll
+                                ? `Se eliminarán ${audits.length} registros permanentemente.`
+                                : `${audits.find(a => a.id === deletingId)?.prestador?.toUpperCase()} — ${audits.find(a => a.id === deletingId)?.month}`}
                         </p>
                         <Input
                             type="password"
@@ -239,7 +261,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                         />
                         {pwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
                         <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => { setDeletingId(null); setPwInput(''); setPwError(false); }}>
+                            <Button variant="outline" size="sm" onClick={() => { setDeletingId(null); setDeleteAll(false); setPwInput(''); setPwError(false); }}>
                                 Cancelar
                             </Button>
                             <Button variant="destructive" size="sm" onClick={handleDeleteConfirm}>

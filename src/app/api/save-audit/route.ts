@@ -67,8 +67,13 @@ export async function DELETE(request: Request) {
     }
     if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
 
-    const { error } = await supabase.from('auditorias').delete().eq('id', id);
-    if (error) throw error;
+    if (id === 'ALL') {
+      const { error } = await supabase.from('auditorias').delete().neq('id', 0);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('auditorias').delete().eq('id', id);
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
