@@ -10,26 +10,23 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('auditorias')
-      .select('id, numero, prestador, nit, mes, created_at')
+      .select('id, numero, prestador, nit, mes, fecha, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Formato compatible con el componente AuditSearch existente
     const audits = (data || []).map(r => ({
       id: r.id,
       numero: r.numero,
-      month: r.mes,
       prestador: r.prestador,
       nit: r.nit,
-      fecha: r.created_at?.slice(0, 10),
-      // path ficticio — la carga real se hace por id
-      path: `/api/load-audit?id=${r.id}`,
+      month: r.mes,
+      fecha: r.created_at ? r.created_at.slice(0, 10) : '',
     }));
 
     return NextResponse.json(audits);
   } catch (error: any) {
     console.error('Error al listar auditorías:', error);
-    return NextResponse.json([], { status: 500 });
+    return NextResponse.json({ message: error.message }, { status: 500 });
   }
 }
