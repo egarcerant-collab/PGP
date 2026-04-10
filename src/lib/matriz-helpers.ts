@@ -151,9 +151,10 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
           // Consultas / Procedimientos: Sheet primero
           // Orden: columna exacta del NT de PROBIENESTAR → otros nombres conocidos → fallback
           if (pgpRow) {
+              // Buscar en todas las columnas conocidas, priorizando las más específicas
               descripcion = findColumnValue(pgpRow, [
-                  'descripcion cups',           // ← columna exacta del NT (índice 5)
-                  'descripcion id resolucion',  // ← columna índice 3 del NT
+                  'descripcion cups',           // columna exacta (puede estar vacía)
+                  'descripcion id resolucion',  // descripción del grupo Res.3100
                   'descripcion de la tecnologia',
                   'descripcion',
                   'descripción',
@@ -166,9 +167,15 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
                   'detalle',
                   'concepto',
                   'servicio',
-                  'subcategoria',               // ← columna índice 0 del NT
-                  'ambito',                     // ← columna índice 1 del NT
               ]);
+              // Si aún no hay descripción, combinar SUBCATEGORIA + AMBITO como referencia
+              if (!descripcion) {
+                  const sub = findColumnValue(pgpRow, ['subcategoria']);
+                  const amb = findColumnValue(pgpRow, ['ambito']);
+                  if (sub || amb) {
+                      descripcion = [sub, amb].filter(Boolean).join(' · ');
+                  }
+              }
           }
           // Fallback inteligente: escanear TODAS las columnas del Sheet buscando texto largo
           // (NO excluir columnas con 'cups' en el nombre para atrapar "DESCRIPCION CUPS")
