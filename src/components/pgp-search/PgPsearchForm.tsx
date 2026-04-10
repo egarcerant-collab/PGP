@@ -27,7 +27,7 @@ import { type ExecutionDataByMonth, type ModuleId } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
 import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
-import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
+import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
@@ -205,6 +205,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     matrizDescuentos.push({
         ...commonInfo,
         CUPS: row.CUPS,
+        Descripcion: row.Descripcion,
         Cantidad_Ejecutada: row.Cantidad_Ejecutada,
         Valor_Unitario: row.Valor_Unitario,
         Valor_Ejecutado: row.Valor_Ejecutado,
@@ -234,20 +235,20 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   };
 }
 
-const calculateSummaryData = (data: PgpRow[], mesesContrato = 12): SummaryData | null => {
+const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
   if (data.length === 0) return null;
   const totalCostoMes = data.reduce((acc, row) => {
     const costo = getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes']));
     return acc + costo;
   }, 0);
   return {
-    totalCostoMes, totalPeriodo: totalCostoMes, totalAnual: totalCostoMes * mesesContrato,
+    totalCostoMes, totalPeriodo: totalCostoMes, totalAnual: totalCostoMes * 12,
     costoMinimoPeriodo: totalCostoMes * 0.9, costoMaximoPeriodo: totalCostoMes * 1.1,
   };
 };
 
 const PgPsearchForm = forwardRef<
-  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> },
+  { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void },
   PgPsearchFormProps
 >(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
@@ -275,11 +276,8 @@ const PgPsearchForm = forwardRef<
   const showComparison = isDataLoaded && executionDataByMonth.size > 0;
 
   useEffect(() => {
-    if (isDataLoaded) {
-      const mesesContrato = parseInt(String(selectedPrestador?.MESES || '12')) || 12;
-      setGlobalSummary(calculateSummaryData(pgpData, mesesContrato));
-    }
-  }, [isDataLoaded, pgpData, selectedPrestador]);
+    if (isDataLoaded) setGlobalSummary(calculateSummaryData(pgpData));
+  }, [isDataLoaded, pgpData]);
 
   const comparisonSummary = useMemo(() => {
     if (!showComparison) return null;
@@ -411,41 +409,7 @@ const PgPsearchForm = forwardRef<
   }, [toast, onPrestadorLoaded]);
 
   useImperativeHandle(ref, () => ({
-    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador),
-    triggerSave: async (password: string, months: string[]): Promise<{ numero: string } | { error: string }> => {
-      if (!selectedPrestador || executionDataByMonth.size === 0) return { error: 'Sin datos' };
-      const selectedKeys = months.length > 0 ? months : Array.from(executionDataByMonth.keys());
-
-      // Filtrar solo los meses seleccionados
-      const filteredMap = new Map(
-        [...executionDataByMonth.entries()].filter(([k]) => selectedKeys.includes(k))
-      );
-
-      // Construir label del período
-      const monthLabel = selectedKeys
-        .sort((a, b) => parseInt(a) - parseInt(b))
-        .map(k => new Date(2024, parseInt(k) - 1, 1).toLocaleString('es-CO', { month: 'long' }))
-        .join('-');
-
-      const auditPackage = {
-        adjustedQuantities: adjustedData.adjustedQuantities,
-        comments: adjustedData.comments,
-        selectedRows: adjustedData.selectedRows,
-        executionData: serializeExecutionData(filteredMap),
-        jsonPrestadorCode,
-        uniqueUserCount,
-        pgpData,
-        selectedPrestador,
-      };
-      const res = await fetch('/api/save-audit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthLabel, password }),
-      });
-      const result = await res.json();
-      if (!res.ok) return { error: result.message || 'Error al guardar' };
-      return { numero: result.numero };
-    }
+    handleSelectPrestador: (p: any) => handleSelectPrestador(p as Prestador)
   }));
 
   useEffect(() => {
@@ -616,7 +580,7 @@ const PgPsearchForm = forwardRef<
         {/* NT band cards */}
         {globalSummary && (
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer={`Estimación de ${parseInt(String(selectedPrestador?.MESES || '12')) || 12} meses`} />
+            <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
             <StatCard accent="amber" title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado del período" />
             <StatCard accent="green" title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado del período" />
           </div>
