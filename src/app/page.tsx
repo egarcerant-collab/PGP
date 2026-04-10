@@ -225,46 +225,47 @@ export default function Home() {
           </div>
         </nav>
 
-        {/* User footer */}
-        {currentUser && (
-          <div className="px-3 pb-1 pt-2 border-t border-border shrink-0 space-y-1">
-            {/* Admin link */}
-            {currentUser.rol === 'superadmin' && (
-              <button
-                onClick={() => router.push('/admin')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <Users className="h-3.5 w-3.5 shrink-0" />
-                <span>Gestión de usuarios</span>
-              </button>
-            )}
-            {/* User info row */}
-            <div className="flex items-center gap-2 px-1 py-1">
-              <div className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary uppercase shrink-0">
-                {currentUser.nombre.charAt(0)}
+        {/* User footer — siempre visible */}
+        <div className="px-3 pb-1 pt-2 border-t border-border shrink-0 space-y-1">
+          {currentUser && (
+            <>
+              {currentUser.rol === 'superadmin' && (
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <Users className="h-3.5 w-3.5 shrink-0" />
+                  <span>Gestión de usuarios</span>
+                </button>
+              )}
+              <div className="flex items-center gap-2 px-1 py-1">
+                <div className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary uppercase shrink-0">
+                  {currentUser.nombre.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground truncate leading-tight">{currentUser.nombre}</p>
+                  <span className={cn(
+                    "inline-block text-[9px] font-semibold rounded px-1 py-0.5 leading-none mt-0.5",
+                    currentUser.rol === 'superadmin' ? 'bg-red-100 text-red-700' :
+                    currentUser.rol === 'auditor' ? 'bg-blue-100 text-blue-700' :
+                    'bg-slate-100 text-slate-600'
+                  )}>
+                    {currentUser.rol === 'superadmin' ? 'Super Admin' : currentUser.rol === 'auditor' ? 'Auditor' : 'Viewer'}
+                  </span>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground truncate leading-tight">{currentUser.nombre}</p>
-                <span className={cn(
-                  "inline-block text-[9px] font-semibold rounded px-1 py-0.5 leading-none mt-0.5",
-                  currentUser.rol === 'superadmin' ? 'bg-red-100 text-red-700' :
-                  currentUser.rol === 'auditor' ? 'bg-blue-100 text-blue-700' :
-                  'bg-slate-100 text-slate-600'
-                )}>
-                  {currentUser.rol === 'superadmin' ? 'Super Admin' : currentUser.rol === 'auditor' ? 'Auditor' : 'Viewer'}
-                </span>
-              </div>
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                title="Cerrar sesión"
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-              >
-                {loggingOut ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+          {/* Botón cerrar sesión — siempre visible */}
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            {loggingOut ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <LogOut className="h-3.5 w-3.5 shrink-0" />}
+            <span>Cerrar sesión</span>
+          </button>
+        </div>
 
         {/* Status footer */}
         <div className="p-3 border-t border-border shrink-0">
