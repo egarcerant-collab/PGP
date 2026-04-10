@@ -468,11 +468,10 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const overExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.overExecutedCups || []), [comparisonSummary]);
     const underExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.underExecutedCups || []), [comparisonSummary]);
     const missingCupsTotals = useMemo(() => calculateTotals(comparisonSummary?.missingCups || []), [comparisonSummary]);
-    // Valor NT de CUPS faltantes = suma de (frecuencia esperada × valor unitario NT)
+    // Valor NT de CUPS faltantes = valor absoluto de la sumatoria de deviationValue (siempre negativo para faltantes)
     const valorFaltantesNT = useMemo(() =>
-        (comparisonSummary?.missingCups || []).reduce((sum, cup) =>
-            sum + (cup.expectedFrequency * (cup.unitValueFromNote || 0)), 0),
-    [comparisonSummary]);
+        Math.abs(missingCupsTotals.desviacion),
+    [missingCupsTotals]);
     const normalExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.normalExecutionCups || []), [comparisonSummary]);
 
     const totalUnexpectedValue = useMemo(() =>
