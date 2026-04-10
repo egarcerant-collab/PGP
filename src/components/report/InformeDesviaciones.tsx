@@ -409,6 +409,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [valorGuardado, setValorGuardado] = useState(false);
     const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
     const [descontarNoEjecutadas, setDescontarNoEjecutadas] = useState(false);
+    const [descontarFaltantes, setDescontarFaltantes] = useState(false);
     const [showNtModal, setShowNtModal] = useState(false);
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
@@ -466,6 +467,12 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     
     const overExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.overExecutedCups || []), [comparisonSummary]);
     const underExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.underExecutedCups || []), [comparisonSummary]);
+    const missingCupsTotals = useMemo(() => calculateTotals(comparisonSummary?.missingCups || []), [comparisonSummary]);
+    // Valor NT de CUPS faltantes = suma de (frecuencia esperada × valor unitario NT)
+    const valorFaltantesNT = useMemo(() =>
+        (comparisonSummary?.missingCups || []).reduce((sum, cup) =>
+            sum + (cup.expectedFrequency * (cup.unitValueFromNote || 0)), 0),
+    [comparisonSummary]);
     const normalExecutionTotals = useMemo(() => calculateTotals(comparisonSummary?.normalExecutionCups || []), [comparisonSummary]);
 
     const totalUnexpectedValue = useMemo(() =>
@@ -483,7 +490,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const valorManual = isNaN(Number(valorConsolidadoManual)) ? 0 : Number(valorConsolidadoManual);
     // Valor absoluto de desviación de CUPS no ejecutadas (ya es negativo en underExecutionTotals)
     const valorNoEjecutadasDeduccion = descontarNoEjecutadas ? Math.abs(underExecutionTotals.desviacion) : 0;
-    const valorFinalEjecucion = totalNTEjecutado + valorManual - valorNoEjecutadasDeduccion;
+    const valorFaltantesDeduccion = descontarFaltantes ? valorFaltantesNT : 0;
+    const valorFinalEjecucion = totalNTEjecutado + valorManual - valorNoEjecutadasDeduccion - valorFaltantesDeduccion;
 
     const min90 = totalEsperado * 0.9;
     const max110 = totalEsperado * 1.1;
@@ -768,6 +776,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         data={comparisonSummary.missingCups}
                         onDownload={handleDownloadXls}
                         onDoubleClick={() => handleDoubleClick('missing', 'CUPS / Tecnologías No Ejecutadas', comparisonSummary.missingCups, {ejecutado: 0, desviacion: 0})}
+                        totalValue={valorFaltantesNT > 0 ? -valorFaltantesNT : undefined}
+                        valueLabel="Valor NT perdido"
                         color="black"
                     />
                      <DiscrepancyCard
@@ -947,25 +957,47 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     )}
                                 </div>
 
-                                {/* Descuento CUPS no ejecutadas */}
+                                {/* Descuento CUPS sub-ejecutadas */}
                                 {underExecutionTotals.desviacion < 0 && (
                                     <div className="space-y-1 border-t pt-2">
                                         <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                            🔴 Descontar CUPS sub-ejecutadas
+                                            🔵 Descontar CUPS sub-ejecutadas
                                         </Label>
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={descontarNoEjecutadas}
                                                 onChange={e => setDescontarNoEjecutadas(e.target.checked)}
-                                                className="accent-red-600 h-4 w-4"
+                                                className="accent-blue-600 h-4 w-4"
                                             />
-                                            <span className="text-xs font-mono text-red-600 font-semibold">
+                                            <span className="text-xs font-mono text-blue-700 font-semibold">
                                                 - {formatCurrency(Math.abs(underExecutionTotals.desviacion))}
                                             </span>
                                             <span className="text-xs text-muted-foreground">({comparisonSummary.underExecutedCups?.length || 0} CUPS)</span>
                                         </label>
-                                        <p className="text-xs text-muted-foreground">Resta la desviación total de CUPS sub-ejecutadas.</p>
+                                        <p className="text-xs text-muted-foreground">Resta la desviación de CUPS ejecutadas bajo el mínimo.</p>
+                                    </div>
+                                )}
+
+                                {/* Descuento CUPS no ejecutadas (faltantes) */}
+                                {valorFaltantesNT > 0 && (
+                                    <div className="space-y-1 border-t pt-2">
+                                        <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                            ⚫ Descontar CUPS no ejecutadas
+                                        </Label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={descontarFaltantes}
+                                                onChange={e => setDescontarFaltantes(e.target.checked)}
+                                                className="accent-slate-700 h-4 w-4"
+                                            />
+                                            <span className="text-xs font-mono text-slate-700 font-semibold">
+                                                - {formatCurrency(valorFaltantesNT)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">({comparisonSummary.missingCups?.length || 0} CUPS sin ejecución)</span>
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">Resta el valor NT total de CUPS completamente no ejecutadas.</p>
                                     </div>
                                 )}
 

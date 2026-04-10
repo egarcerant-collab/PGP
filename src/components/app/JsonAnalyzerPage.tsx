@@ -210,12 +210,16 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
                 cupData.totalValue += value;
                 cupData.uniqueUsers.add(userId);
                 
-                // Captura descripción de Medicamentos y Otros Servicios desde el JSON
-                if (type === "Medicamento" || type === "Otro Servicio") {
-                    const jsonName = service.nomTecnologiaSalud;
-                    if (jsonName && !cupData.jsonDescription) {
-                        cupData.jsonDescription = String(jsonName);
-                    }
+                // Captura descripción desde el JSON para todos los tipos de servicio
+                if (!cupData.jsonDescription) {
+                    const jsonName =
+                        service.nomTecnologiaSalud ||   // Medicamentos / Otros Servicios
+                        service.nomProcedimiento ||      // Procedimientos
+                        service.nomConsulta ||           // Consultas
+                        service.descripcion ||
+                        service.nombre ||
+                        service.nomServicio;
+                    if (jsonName) cupData.jsonDescription = String(jsonName);
                 }
 
                 const diagnosis = service[dField];

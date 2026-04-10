@@ -138,10 +138,23 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
           'descripcion cups',
           'descripcion id resolucion',
           'nombre',
-          'servicio'
+          'servicio',
+          'actividad',
+          'prestacion',
+          'tecnologia',
+          'descripción',
+          'descripcion de la tecnologia',
+          'nombre cups',
+          'nombre del servicio',
+          'detalle',
+          'concepto',
       ]);
 
-      // Si es Medicamento u Otro Servicio, priorizar el nombre que viene en el JSON si existe
+      // Para cualquier tipo de servicio, usar jsonDescription si no se encontró en el sheet
+      if (!descripcion && monthCupData?.jsonDescription) {
+          descripcion = monthCupData.jsonDescription;
+      }
+      // Para Medicamento u Otro Servicio, priorizar el nombre del JSON
       if ((serviceType === "Medicamento" || serviceType === "Otro Servicio") && monthCupData?.jsonDescription) {
           descripcion = monthCupData.jsonDescription;
       }
