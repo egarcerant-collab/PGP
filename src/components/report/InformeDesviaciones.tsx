@@ -408,6 +408,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
     const [valorGuardado, setValorGuardado] = useState(false);
     const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
+    const [descontarNoEjecutadas, setDescontarNoEjecutadas] = useState(false);
     const [showNtModal, setShowNtModal] = useState(false);
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
@@ -480,7 +481,9 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     [comparisonSummary]);
 
     const valorManual = isNaN(Number(valorConsolidadoManual)) ? 0 : Number(valorConsolidadoManual);
-    const valorFinalEjecucion = totalNTEjecutado + valorManual;
+    // Valor absoluto de desviación de CUPS no ejecutadas (ya es negativo en underExecutionTotals)
+    const valorNoEjecutadasDeduccion = descontarNoEjecutadas ? Math.abs(underExecutionTotals.desviacion) : 0;
+    const valorFinalEjecucion = totalNTEjecutado + valorManual - valorNoEjecutadasDeduccion;
 
     const min90 = totalEsperado * 0.9;
     const max110 = totalEsperado * 1.1;
@@ -944,6 +947,28 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     )}
                                 </div>
 
+                                {/* Descuento CUPS no ejecutadas */}
+                                {underExecutionTotals.desviacion < 0 && (
+                                    <div className="space-y-1 border-t pt-2">
+                                        <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                            🔴 Descontar CUPS no ejecutadas
+                                        </Label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={descontarNoEjecutadas}
+                                                onChange={e => setDescontarNoEjecutadas(e.target.checked)}
+                                                className="accent-red-600 h-4 w-4"
+                                            />
+                                            <span className="text-xs font-mono text-red-600 font-semibold">
+                                                - {formatCurrency(Math.abs(underExecutionTotals.desviacion))}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">({comparisonSummary.underExecutedCups?.length || 0} CUPS)</span>
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">Resta la desviación total de CUPS sub-ejecutadas.</p>
+                                    </div>
+                                )}
+
                                 {/* Cantidad de actividades inesperadas */}
                                 <div className="space-y-1 border-t pt-2">
                                     <Label className="text-xs text-muted-foreground font-medium flex items-center gap-1">
@@ -965,18 +990,22 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
 
                             {/* Col 3: Valor final — siempre visible */}
                             <div className={`rounded-md border-2 p-3 space-y-1 ${
-                                valorManual > 0
+                                (valorManual > 0 || descontarNoEjecutadas)
                                     ? 'border-primary bg-primary/10'
                                     : 'border-border bg-muted/30'
                             }`}>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">= Valor Final de Ejecución</p>
-                                <p className={`text-xl font-bold ${valorManual > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                <p className={`text-xl font-bold ${(valorManual > 0 || descontarNoEjecutadas) ? 'text-primary' : 'text-foreground'}`}>
                                     {formatCurrency(valorFinalEjecucion)}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    {valorManual > 0
-                                        ? <>NT {formatCurrency(totalNTEjecutado)} + Inesperadas {formatCurrency(valorManual)}</>
-                                        : <>Solo ejecución NT (sin valor inesperadas)</>
+                                    {(valorManual > 0 || descontarNoEjecutadas)
+                                        ? <>
+                                            NT {formatCurrency(totalNTEjecutado)}
+                                            {valorManual > 0 && <> + Inesperadas {formatCurrency(valorManual)}</>}
+                                            {descontarNoEjecutadas && <> − No ejecutadas {formatCurrency(Math.abs(underExecutionTotals.desviacion))}</>}
+                                          </>
+                                        : <>Solo ejecución NT (sin ajustes)</>
                                     }
                                 </p>
                             </div>
