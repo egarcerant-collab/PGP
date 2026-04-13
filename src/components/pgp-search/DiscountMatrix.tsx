@@ -437,22 +437,36 @@ interface CupDetailModalProps {
 }
 
 const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMonth, onClose }) => {
-    // Recolectar todos los registros individuales del CUPS desde rawJsonData
+    // Recolectar registros individuales desde rawJsonData (estructura RIPS: { usuarios: [...] })
     const records: { tipo: string; userId: string; fecha: string; diagnostico: string; valor: number }[] = [];
 
     executionDataByMonth.forEach((monthData) => {
         const raw = monthData.rawJsonData;
         if (!raw) return;
-        const items: any[] = Array.isArray(raw) ? raw : (raw.items || raw.data || raw.registros || []);
-        items.forEach((item: any) => {
-            const cups = String(item.codProcedimiento || item.cups || item.CUPS || item.cod_cups || '').trim().toUpperCase();
-            if (cups !== row.CUPS) return;
-            records.push({
-                tipo: item.tipoServicio || item.tipo_servicio || item.tipo || row.Tipo_Servicio,
-                userId: item.numDocumentoUsuario || item.id_usuario || item.nroDocUsuario || item.cedula || '—',
-                fecha: item.fechaInicioAtencion || item.fecha_atencion || item.fecha || '—',
-                diagnostico: item.codDiagnosticoPrincipal || item.diagnostico || item.diagnostico_principal || '—',
-                valor: Number(item.valorPagado || item.valor || 0),
+        const usuarios: any[] = raw.usuarios || [];
+        usuarios.forEach((user: any) => {
+            const userId = `${user.tipoDocumentoIdentificacion || ''}-${user.numDocumentoIdentificacion || ''}`.replace(/^-|-$/, '');
+            const servicios = user.servicios || {};
+
+            // Consultas
+            (servicios.consultas || []).forEach((s: any) => {
+                if (String(s.codConsulta || '').trim().toUpperCase() !== row.CUPS) return;
+                records.push({ tipo: 'Consulta', userId, fecha: s.fechaInicioAtencion || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrServicio || 0) });
+            });
+            // Procedimientos
+            (servicios.procedimientos || []).forEach((s: any) => {
+                if (String(s.codProcedimiento || '').trim().toUpperCase() !== row.CUPS) return;
+                records.push({ tipo: 'Procedimiento', userId, fecha: s.fechaInicioAtencion || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrServicio || 0) });
+            });
+            // Medicamentos
+            (servicios.medicamentos || []).forEach((s: any) => {
+                if (String(s.codTecnologiaSalud || '').trim().toUpperCase() !== row.CUPS) return;
+                records.push({ tipo: 'Medicamento', userId, fecha: s.fechaInicioAtencion || s.fechaDispensamiento || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrUnitarioMedicamento || s.vrServicio || 0) });
+            });
+            // Otros servicios
+            (servicios.otrosServicios || []).forEach((s: any) => {
+                if (String(s.codTecnologiaSalud || '').trim().toUpperCase() !== row.CUPS) return;
+                records.push({ tipo: 'Otro Servicio', userId, fecha: s.fechaInicioAtencion || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrServicio || 0) });
             });
         });
     });
@@ -498,7 +512,7 @@ const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMon
                     {stat('Frecuencia Esperada:', row.expectedFrequency)}
                     {stat('Usuarios Únicos:', row.uniqueUsers)}
                     {stat('Atenciones Repetidas:', row.repeatedAttentions)}
-                    {stat('Desviación (Cantidad):', row.deviation, row.deviation > 0 ? 'text-red-600' : 'text-green-600')}
+                    {stat('Desviación (Cantidad):', Number(row.deviation).toFixed(0), row.deviation > 0 ? 'text-red-600' : 'text-green-600')}
                     {stat('Desviación (Valor):', formatCurrency(row.deviationValue), row.deviationValue > 0 ? 'text-red-600' : 'text-green-600')}
                     {stat('>1 Atención Mismo Día (Usuarios):', row.sameDayDetections, row.sameDayDetections > 0 ? 'text-orange-600' : '')}
                     {stat('Costo Repetición Mismo Día:', formatCurrency(row.sameDayDetectionsCost), row.sameDayDetectionsCost > 0 ? 'text-red-700' : '')}
