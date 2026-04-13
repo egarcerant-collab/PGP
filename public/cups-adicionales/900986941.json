@@ -1,0 +1,26 @@
+{
+  "prestadorId": "900986941",
+  "rows": [
+    {
+      "cups": "890301",
+      "descripcion": "CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL",
+      "frecuencia": 120,
+      "valorUnitario": 32500,
+      "costoMes": 3900000
+    },
+    {
+      "cups": "890302",
+      "descripcion": "CONSULTA DE CONTROL O DE SEGUIMIENTO POR MEDICINA GENERAL",
+      "frecuencia": 200,
+      "valorUnitario": 28000,
+      "costoMes": 5600000
+    },
+    {
+      "cups": "903801",
+      "descripcion": "TERAPIA INDIVIDUAL",
+      "frecuencia": 50,
+      "valorUnitario": 45000,
+      "costoMes": 2250000
+    }
+  ]
+}
