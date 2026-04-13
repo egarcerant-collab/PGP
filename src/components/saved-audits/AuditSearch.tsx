@@ -99,8 +99,19 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             const prestadorName = base.prestador;
             const allMonths = results.map(r => r.mes).join(' + ');
 
+            const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
+
             onAuditLoad(merged, prestadorName, allMonths);
-            toast({ title: "Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
+
+            if (!hasExecData) {
+                toast({
+                    title: "⚠️ Auditoría sin datos de ejecución",
+                    description: "Esta auditoría fue guardada sin los datos de análisis. Carga los JSON nuevamente, realiza el análisis y guarda de nuevo con el botón 'Guardar Auditoría'.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({ title: "✅ Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
+            }
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
