@@ -1,0 +1,59 @@
+{
+  "lastNumber": 3,
+  "informes": [
+    {
+      "numero": "003",
+      "prestador": "PROBIENESTAR",
+      "nit": "825002902",
+      "contrato": "PGP-44430-2026-09-ES",
+      "municipio": "MAICAO",
+      "departamento": "LA GUAJIRA",
+      "periodo": "FEBRERO",
+      "tipoPeriodo": "MENSUAL",
+      "fecha": "2026-04-09",
+      "ntPeriodo": 431749422.16,
+      "totalEjecutado": 293970943.09000003,
+      "descontar": 94603536.85399997,
+      "reconocer": 0,
+      "valorFinal": 337145885.30600005,
+      "totalAnticipos": 0,
+      "responsable": "EDUARDO GARCERANT GONZALEZ"
+    },
+    {
+      "numero": "002",
+      "prestador": "PROBIENESTAR",
+      "nit": "825002902",
+      "contrato": "PGP-44430-2026-09-ES",
+      "municipio": "MAICAO",
+      "departamento": "LA GUAJIRA",
+      "periodo": "FEBRERO",
+      "tipoPeriodo": "TRIMESTRAL",
+      "fecha": "2026-04-09",
+      "ntPeriodo": 1295248266.48,
+      "totalEjecutado": 293970943.09000003,
+      "descontar": 871752496.742,
+      "reconocer": 0,
+      "valorFinal": 423495769.73800004,
+      "totalAnticipos": 345399537.72800004,
+      "responsable": "EDUARDO GARCERANT GONZALEZ"
+    },
+    {
+      "numero": "001",
+      "prestador": "UROMIL",
+      "nit": "900030445",
+      "contrato": "PGP-20001-2026-4-UR",
+      "municipio": "VALLEDUPAR",
+      "departamento": "CESAR",
+      "periodo": "FEBRERO-ENERO",
+      "tipoPeriodo": "TRIMESTRAL",
+      "fecha": "2026-04-09",
+      "ntPeriodo": 280785393.99,
+      "totalEjecutado": 178575914,
+      "descontar": 74130940.59100002,
+      "reconocer": 0,
+      "valorFinal": 206654453.399,
+      "totalAnticipos": 149752210.128,
+      "responsable": "EDUARDO GARCERANT GONZALEZ"
+    }
+  ]
+}
