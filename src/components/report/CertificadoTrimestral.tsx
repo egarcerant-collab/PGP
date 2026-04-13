@@ -198,7 +198,7 @@ export default function CertificadoTrimestral({
   const [informeNum, setInformeNum] = useState('');
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
   const [responsable, setResponsable] = useState(userName ? userName.toUpperCase() : 'EDUARDO GARCERANT GONZALEZ');
-  const [supervisorName, setSupervisorName] = useState('');
+  const [supervisorName, setSupervisorName] = useState(userName ? userName.toUpperCase() : '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
@@ -920,7 +920,7 @@ export default function CertificadoTrimestral({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label className="text-xs">Responsable (firma derecha)</Label>
+            <Label className="text-xs">Auditor Concurrente Asignado</Label>
             <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
           </div>
           <div className="space-y-1">
