@@ -29,8 +29,7 @@ export default function LoginPage() {
         setError('Error: ' + error.message);
       }
     } else {
-      router.push('/');
-      router.refresh();
+      window.location.href = '/';
     }
   };
 
@@ -65,8 +64,7 @@ export default function LoginPage() {
     }
 
     setLoading(false);
-    router.push('/');
-    router.refresh();
+    window.location.href = '/';
   };
 
   return (
