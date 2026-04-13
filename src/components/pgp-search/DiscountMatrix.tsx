@@ -95,12 +95,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const [activeFilter, setActiveFilter] = useState<ServiceType>("Todos");
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
+    const [detailRow, setDetailRow] = useState<DiscountMatrixRow | null>(null);
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
-    const [showSaveModal, setShowSaveModal] = useState(false);
-    const [savePw, setSavePw] = useState('');
-    const [savePwError, setSavePwError] = useState(false);
-    const [savedNumero, setSavedNumero] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialAuditData) {
@@ -130,24 +127,13 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         return data.filter(row => row.Tipo_Servicio === activeFilter);
     }, [data, activeFilter]);
 
-    const handleSaveState = () => {
+    const handleSaveState = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
             toast({ title: "No se puede guardar", description: "Faltan datos de ejecución.", variant: "destructive" });
             return;
         }
-        setSavePw('');
-        setSavePwError(false);
-        setShowSaveModal(true);
-    };
-
-    const handleSaveConfirm = async () => {
-        if (savePw !== '123456') {
-            setSavePwError(true);
-            return;
-        }
-        setShowSaveModal(false);
         setIsSaving(true);
-
+        
         const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
         const date = new Date(2024, parseInt(monthKey) - 1, 1);
         const monthName = date.toLocaleString('es-CO', { month: 'long' });
@@ -162,7 +148,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             pgpData: pgpData,
             selectedPrestador: selectedPrestador
         };
-
+        
         try {
             const response = await fetch('/api/save-audit', {
                 method: 'POST',
@@ -170,21 +156,17 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 body: JSON.stringify({
                     auditData: auditPackage,
                     prestadorName: selectedPrestador.PRESTADOR,
-                    month: monthName,
-                    password: savePw
+                    month: monthName
                 })
             });
-            const result = await response.json();
+
             if (response.ok) {
-                setSavedNumero(result.numero);
-                toast({ title: `✅ Auditoría N° ${result.numero} guardada`, description: `${selectedPrestador.PRESTADOR} — ${monthName}` });
-            } else if (response.status === 401) {
-                toast({ title: "Contraseña incorrecta", variant: "destructive" });
+                toast({ title: "Guardado Exitoso", description: `Auditoría guardada en la carpeta de ${monthName}.` });
             } else {
-                toast({ title: "Error al guardar", description: result.message, variant: "destructive" });
+                toast({ title: "Aviso de Servidor", description: "No se pudo guardar en el servidor. Verifique permisos.", variant: "destructive" });
             }
-        } catch {
-            toast({ title: "Error de red", variant: "destructive" });
+        } catch (error: any) {
+            toast({ title: "Error de Red", description: "No se pudo conectar con el servidor.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
@@ -367,7 +349,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                                 <TableCell className="px-2 text-center">
                                                     <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
                                                 </TableCell>
-                                                <TableCell className={cn("font-mono text-xs", statusColor)}>{row.CUPS}</TableCell>
+                                                <TableCell className={cn("font-mono text-xs cursor-pointer underline underline-offset-2 hover:opacity-70 transition-opacity", statusColor)} onClick={() => setDetailRow(row)}>{row.CUPS}</TableCell>
                                                 <TableCell className={cn("text-xs", statusColor)}>
                                                     <div className="flex items-center gap-2">
                                                         {getServiceIcon(row.Tipo_Servicio, statusColor)}
@@ -414,36 +396,13 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 onSave={(c) => currentCupForComment && setComments(prev => ({...prev, [currentCupForComment]: c}))}
             />
 
-            {/* Modal contraseña para guardar auditoría */}
-            {showSaveModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
-                        <h3 className="font-semibold text-base flex items-center gap-2">
-                            <Save className="h-4 w-4 text-green-600" />
-                            Guardar Auditoría en Supabase
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                            Ingresa la contraseña para guardar <strong>{selectedPrestador?.PRESTADOR}</strong>.
-                        </p>
-                        <Input
-                            type="password"
-                            placeholder="Contraseña"
-                            value={savePw}
-                            onChange={e => { setSavePw(e.target.value); setSavePwError(false); }}
-                            onKeyDown={e => e.key === 'Enter' && handleSaveConfirm()}
-                            className={savePwError ? 'border-red-500' : ''}
-                            autoFocus
-                        />
-                        {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
-                        {savedNumero && <p className="text-xs text-green-600 font-semibold">Última guardada: N° {savedNumero}</p>}
-                        <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSaveConfirm}>
-                                Guardar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+            {/* Modal detalle CUPS */}
+            {detailRow && (
+                <CupDetailModal
+                    row={detailRow}
+                    executionDataByMonth={executionDataByMonth}
+                    onClose={() => setDetailRow(null)}
+                />
             )}
         </div>
     );
@@ -469,6 +428,123 @@ const CommentModal = ({ open, onOpenChange, onSave, initialComment }: { open: bo
       </DialogContent>
     </Dialog>
   );
+};
+
+interface CupDetailModalProps {
+    row: DiscountMatrixRow;
+    executionDataByMonth: ExecutionDataByMonth;
+    onClose: () => void;
+}
+
+const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMonth, onClose }) => {
+    // Recolectar todos los registros individuales del CUPS desde rawJsonData
+    const records: { tipo: string; userId: string; fecha: string; diagnostico: string; valor: number }[] = [];
+
+    executionDataByMonth.forEach((monthData) => {
+        const raw = monthData.rawJsonData;
+        if (!raw) return;
+        const items: any[] = Array.isArray(raw) ? raw : (raw.items || raw.data || raw.registros || []);
+        items.forEach((item: any) => {
+            const cups = String(item.codProcedimiento || item.cups || item.CUPS || item.cod_cups || '').trim().toUpperCase();
+            if (cups !== row.CUPS) return;
+            records.push({
+                tipo: item.tipoServicio || item.tipo_servicio || item.tipo || row.Tipo_Servicio,
+                userId: item.numDocumentoUsuario || item.id_usuario || item.nroDocUsuario || item.cedula || '—',
+                fecha: item.fechaInicioAtencion || item.fecha_atencion || item.fecha || '—',
+                diagnostico: item.codDiagnosticoPrincipal || item.diagnostico || item.diagnostico_principal || '—',
+                valor: Number(item.valorPagado || item.valor || 0),
+            });
+        });
+    });
+
+    const handleDownload = () => {
+        const csv = Papa.unparse(records.map(r => ({
+            'Tipo Servicio': r.tipo,
+            'ID Usuario': r.userId,
+            'Fecha Atención': r.fecha,
+            'Diagnóstico': r.diagnostico,
+            'Valor': r.valor,
+        })), { delimiter: ';' });
+        const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `detalle_${row.CUPS}.csv`;
+        link.click();
+    };
+
+    const stat = (label: string, value: string | number, color?: string) => (
+        <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <span className={cn("font-semibold text-sm", color)}>{value}</span>
+        </div>
+    );
+
+    return (
+        <Dialog open onOpenChange={onClose}>
+            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle className="text-base">
+                        Ejecuciones Detalladas del CUPS: <span className="font-mono text-primary">{row.CUPS}</span>
+                    </DialogTitle>
+                    {row.Descripcion && row.Descripcion !== row.CUPS && (
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">{row.Descripcion}</p>
+                    )}
+                </DialogHeader>
+
+                {/* Estadísticas */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-lg border text-sm">
+                    {stat('Valor Unitario (NT):', formatCurrency(row.Valor_Unitario), 'text-violet-700')}
+                    {stat('Frecuencia Real:', row.realFrequency, 'text-blue-600')}
+                    {stat('Frecuencia Esperada:', row.expectedFrequency)}
+                    {stat('Usuarios Únicos:', row.uniqueUsers)}
+                    {stat('Atenciones Repetidas:', row.repeatedAttentions)}
+                    {stat('Desviación (Cantidad):', row.deviation, row.deviation > 0 ? 'text-red-600' : 'text-green-600')}
+                    {stat('Desviación (Valor):', formatCurrency(row.deviationValue), row.deviationValue > 0 ? 'text-red-600' : 'text-green-600')}
+                    {stat('>1 Atención Mismo Día (Usuarios):', row.sameDayDetections, row.sameDayDetections > 0 ? 'text-orange-600' : '')}
+                    {stat('Costo Repetición Mismo Día:', formatCurrency(row.sameDayDetectionsCost), row.sameDayDetectionsCost > 0 ? 'text-red-700' : '')}
+                </div>
+
+                {/* Tabla de registros individuales */}
+                {records.length > 0 ? (
+                    <ScrollArea className="flex-1 rounded border mt-1">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-white z-10">
+                                <TableRow>
+                                    <TableHead className="text-xs">Tipo Servicio</TableHead>
+                                    <TableHead className="text-xs">ID Usuario</TableHead>
+                                    <TableHead className="text-xs">Fecha Atención</TableHead>
+                                    <TableHead className="text-xs">Diagnóstico</TableHead>
+                                    <TableHead className="text-xs text-right">Valor</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {records.map((r, i) => (
+                                    <TableRow key={i} className="text-xs">
+                                        <TableCell>{r.tipo}</TableCell>
+                                        <TableCell className="font-mono">{r.userId}</TableCell>
+                                        <TableCell>{r.fecha}</TableCell>
+                                        <TableCell>{r.diagnostico}</TableCell>
+                                        <TableCell className="text-right">{r.valor > 0 ? formatCurrency(r.valor) : '$ 0'}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4 italic">No hay registros individuales disponibles para este CUPS.</p>
+                )}
+
+                <DialogFooter className="gap-2">
+                    {records.length > 0 && (
+                        <Button variant="outline" size="sm" onClick={handleDownload}>
+                            <Download className="h-4 w-4 mr-2" /> Descargar Detalle
+                        </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 };
 
 export default DiscountMatrix;
