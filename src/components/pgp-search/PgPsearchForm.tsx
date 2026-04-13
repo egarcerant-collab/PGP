@@ -123,6 +123,7 @@ interface PgPsearchFormProps {
   regimenTotals?: RegimenTotals;
   activeModule?: ModuleId;
   onPrestadorLoaded?: (name: string) => void;
+  userName?: string;
 }
 
 const PRESTADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04/edit?gid=0#gid=0";
@@ -250,7 +251,7 @@ const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
 const PgPsearchForm = forwardRef<
   { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> },
   PgPsearchFormProps
->(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded }, ref) => {
+>(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded, userName }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -733,6 +734,7 @@ const PgPsearchForm = forwardRef<
               pgpData={reportData}
               selectedPrestador={selectedPrestador}
               executionDataByMonth={executionDataByMonth}
+              userName={userName}
               onSaveAudit={async () => {
                 if (!selectedPrestador || executionDataByMonth.size === 0) return;
                 const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';

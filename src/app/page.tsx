@@ -349,6 +349,7 @@ export default function Home() {
               regimenTotals={regimenTotals}
               activeModule={activeModule}
               onPrestadorLoaded={handlePrestadorLoaded}
+              userName={currentUser?.nombre}
             />
           </div>
 
