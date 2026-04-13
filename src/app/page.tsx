@@ -99,8 +99,7 @@ export default function Home() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
-      router.push('/login');
-      router.refresh();
+      window.location.href = '/login';
     }
   };
 
