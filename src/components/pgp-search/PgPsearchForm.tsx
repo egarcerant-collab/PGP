@@ -733,6 +733,24 @@ const PgPsearchForm = forwardRef<
               pgpData={reportData}
               selectedPrestador={selectedPrestador}
               executionDataByMonth={executionDataByMonth}
+              onSaveAudit={async () => {
+                if (!selectedPrestador || executionDataByMonth.size === 0) return;
+                const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
+                const date = new Date(2024, parseInt(monthKey) - 1, 1);
+                const monthName = date.toLocaleString('es-CO', { month: 'long' });
+                const auditPackage = {
+                  adjustedQuantities: adjustedData.adjustedQuantities,
+                  comments: adjustedData.comments,
+                  selectedRows: adjustedData.selectedRows,
+                  pgpData,
+                  selectedPrestador,
+                };
+                await fetch('/api/save-audit', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName }),
+                });
+              }}
             />
           </div>
         </div>

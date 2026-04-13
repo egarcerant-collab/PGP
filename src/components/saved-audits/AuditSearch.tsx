@@ -73,7 +73,13 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         try {
             // Cargar todas las auditorías seleccionadas en paralelo
             const results = await Promise.all(
-                selectedIds.map(id => fetch(`/api/load-audit?id=${id}`).then(r => r.json()))
+                selectedIds.map(id => {
+                    const audit = audits.find(a => a.id === id);
+                    const url = audit?.fsPath
+                        ? `/api/load-audit?fsPath=${encodeURIComponent(audit.fsPath)}`
+                        : `/api/load-audit?id=${id}`;
+                    return fetch(url).then(r => r.json());
+                })
             );
 
             // Tomar datos base de la primera

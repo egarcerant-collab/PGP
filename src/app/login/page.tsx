@@ -23,7 +23,11 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
+      if (error.message.includes('Email not confirmed')) {
+        setError('Debes confirmar tu correo. Ve a Supabase → Authentication → Sign In Providers → Email → desactiva "Confirm email".');
+      } else {
+        setError('Error: ' + error.message);
+      }
     } else {
       router.push('/');
       router.refresh();
@@ -41,9 +45,7 @@ export default function LoginPage() {
 
     if (signUpError) {
       setLoading(false);
-      setError(signUpError.message === 'User already registered'
-        ? 'Este correo ya está registrado. Inicia sesión.'
-        : signUpError.message);
+      setError('Error registro: ' + signUpError.message);
       return;
     }
 

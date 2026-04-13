@@ -27,6 +27,7 @@ interface CertificadoTrimestralProps {
   pgpData: { notaTecnica: { valor3m: number } } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
+  onSaveAudit?: () => Promise<void>;
 }
 
 const MONTH_ES: Record<string, string> = {
@@ -189,7 +190,7 @@ function drawStackedBarChart(
 }
 
 export default function CertificadoTrimestral({
-  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth,
+  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit,
 }: CertificadoTrimestralProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('trimestral');
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState(0);
@@ -200,6 +201,7 @@ export default function CertificadoTrimestral({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
+  const [isSavingAudit, setIsSavingAudit] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
@@ -985,6 +987,12 @@ export default function CertificadoTrimestral({
             {isSaving ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">💾</span>}
             {savedNum ? `Guardado N° ${savedNum}` : 'Guardar en Registro'}
           </Button>
+          {onSaveAudit && (
+            <Button variant="outline" onClick={async () => { setIsSavingAudit(true); await onSaveAudit(); setIsSavingAudit(false); }} disabled={isSavingAudit} className="flex-1 border-blue-400 text-blue-700 hover:bg-blue-50">
+              {isSavingAudit ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">🗂️</span>}
+              Guardar Auditoría
+            </Button>
+          )}
           <Button variant="ghost" size="icon" title="Ver historial de informes"
             onClick={() => { setShowHistorial(v => !v); if (!showHistorial) loadHistorial(); }}>
             📋
@@ -1089,7 +1097,13 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex gap-2 justify-end">
+                    {onSaveAudit && (
+                      <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
+                        onClick={async () => { await onSaveAudit(); setViewingInf(null); }}>
+                        🔄 Reabrir Auditoría
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cerrar</Button>
                   </div>
                 </>
