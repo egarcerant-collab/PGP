@@ -19,20 +19,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
-    // Obtener siguiente número secuencial
-    const { data: existing, error: fetchError } = await supabase
+    const nit = auditData.selectedPrestador?.NIT || '';
+
+    // Verificar si ya existe una auditoría con el mismo prestador y mes
+    const { data: duplicate } = await supabase
+      .from('auditorias')
+      .select('id, numero')
+      .eq('prestador', prestadorName)
+      .eq('mes', month)
+      .maybeSingle();
+
+    if (duplicate) {
+      // Sobreescribir el registro existente
+      const { error: updateError } = await supabase
+        .from('auditorias')
+        .update({ datos: auditData, nit })
+        .eq('id', duplicate.id);
+
+      if (updateError) throw updateError;
+
+      return NextResponse.json({
+        message: `Auditoría N° ${duplicate.numero} actualizada.`,
+        numero: duplicate.numero,
+        id: duplicate.id,
+        updated: true,
+      }, { status: 200 });
+    }
+
+    // Insertar nuevo registro con número secuencial
+    const { data: last } = await supabase
       .from('auditorias')
       .select('numero')
       .order('numero', { ascending: false })
       .limit(1);
 
-    if (fetchError) throw fetchError;
-
-    const lastNumber = existing && existing.length > 0
-      ? parseInt(existing[0].numero, 10) || 0
-      : 0;
+    const lastNumber = last && last.length > 0 ? parseInt(last[0].numero, 10) || 0 : 0;
     const numero = String(lastNumber + 1).padStart(3, '0');
-    const nit = auditData.selectedPrestador?.NIT || '';
 
     const { data, error } = await supabase
       .from('auditorias')
@@ -45,7 +67,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: `Auditoría N° ${numero} guardada exitosamente.`,
       numero,
-      id: data.id
+      id: data.id,
+      updated: false,
     }, { status: 200 });
 
   } catch (error: any) {
