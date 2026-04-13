@@ -1020,6 +1020,7 @@ export default function CertificadoTrimestral({
                       <th className="px-3 py-2 text-left font-semibold">Período</th>
                       <th className="px-3 py-2 text-left font-semibold">Tipo</th>
                       <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
+                      <th className="px-3 py-2 text-left font-semibold">Auditor</th>
                       <th className="px-3 py-2 text-left font-semibold">Fecha</th>
                       <th className="px-3 py-2"></th>
                     </tr>
@@ -1034,6 +1035,7 @@ export default function CertificadoTrimestral({
                         <td className="px-3 py-1.5 text-right font-semibold text-green-700">
                           {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
                         </td>
+                        <td className="px-3 py-1.5 max-w-[140px] truncate text-xs text-blue-700 font-medium" title={inf.responsable}>{inf.responsable || '—'}</td>
                         <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                         <td className="px-3 py-1.5 flex items-center gap-2">
                           <button
