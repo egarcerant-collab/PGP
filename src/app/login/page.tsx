@@ -79,16 +79,20 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setSuccess('');
     if (!email.trim()) { setError('Escribe tu correo electrónico.'); return; }
+    if (newPassword.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return; }
     setLoading(true);
-    const supabase = createSupabaseClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, newPassword }),
     });
+    const data = await res.json();
     setLoading(false);
-    if (error) {
-      setError('Error: ' + error.message);
+    if (!res.ok) {
+      setError(data.message || 'Error al actualizar la contraseña.');
     } else {
-      setSuccess('Correo enviado. Revisa tu bandeja de entrada y haz clic en el enlace para crear una nueva contraseña.');
+      setSuccess('✅ Contraseña actualizada. Ya puedes iniciar sesión con tu nueva contraseña.');
     }
   };
 
@@ -150,13 +154,13 @@ export default function LoginPage() {
               <h2 className="text-slate-800 font-semibold text-lg">
                 {mode === 'login' ? 'Iniciar Sesión'
                   : mode === 'register' ? 'Crear Cuenta'
-                  : mode === 'reset' ? 'Recuperar Contraseña'
+                  : mode === 'reset' ? 'Cambiar Contraseña'
                   : 'Nueva Contraseña'}
               </h2>
               <p className="text-slate-500 text-sm mt-1">
                 {mode === 'login' ? 'Sistema de Auditoría de Tecnologías en Salud'
                   : mode === 'register' ? 'Completa tus datos para registrarte'
-                  : mode === 'reset' ? 'Te enviaremos un enlace a tu correo'
+                  : mode === 'reset' ? 'Ingresa tu correo y una nueva contraseña'
                   : 'Crea una nueva contraseña para tu cuenta'}
               </p>
             </div>
@@ -240,6 +244,24 @@ export default function LoginPage() {
                     placeholder="usuario@dusakawi.com"
                     className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all" />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Nueva contraseña</label>
+                  <div className="relative">
+                    <input type={showNewPassword ? 'text' : 'password'} required
+                      value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••••"
+                      className="w-full px-4 py-2.5 pr-11 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all" />
+                    <button type="button" onClick={() => setShowNewPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" tabIndex={-1}>
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Confirmar contraseña</label>
+                  <input type={showNewPassword ? 'text' : 'password'} required
+                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••"
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all" />
+                </div>
                 {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3"><p className="text-red-700 text-sm">{error}</p></div>}
                 {success && (
                   <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex gap-2">
@@ -250,7 +272,13 @@ export default function LoginPage() {
                 {!success && (
                   <button type="submit" disabled={loading}
                     className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
-                    {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Enviando...</> : <><KeyRound className="h-4 w-4" />Enviar enlace de recuperación</>}
+                    {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Actualizando...</> : <><KeyRound className="h-4 w-4" />Actualizar contraseña</>}
+                  </button>
+                )}
+                {success && (
+                  <button type="button" onClick={() => switchMode('login')}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
+                    <LogIn className="h-4 w-4" /> Ir a iniciar sesión
                   </button>
                 )}
                 <button type="button" onClick={() => switchMode('login')}

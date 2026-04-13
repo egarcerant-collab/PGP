@@ -28,6 +28,7 @@ interface CertificadoTrimestralProps {
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
   onSaveAudit?: () => Promise<void>;
+  userName?: string;
 }
 
 const MONTH_ES: Record<string, string> = {
@@ -190,13 +191,13 @@ function drawStackedBarChart(
 }
 
 export default function CertificadoTrimestral({
-  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit,
+  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName,
 }: CertificadoTrimestralProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('trimestral');
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState(0);
   const [informeNum, setInformeNum] = useState('');
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
-  const [responsable, setResponsable] = useState('EDUARDO GARCERANT GONZALEZ');
+  const [responsable, setResponsable] = useState(userName ? userName.toUpperCase() : 'EDUARDO GARCERANT GONZALEZ');
   const [supervisorName, setSupervisorName] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
