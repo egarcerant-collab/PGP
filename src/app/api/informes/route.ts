@@ -1,26 +1,48 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const supabase = createClient(
   'https://fvrgfqxohacipmnmqyef.supabase.co',
   'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
 );
 
-// GET /api/informes  — lista todos los informes guardados
+async function getCurrentUser() {
+  try {
+    const serverClient = await createSupabaseServerClient();
+    const { data: { user } } = await serverClient.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await serverClient
+      .from('profiles')
+      .select('nombre, rol')
+      .eq('id', user.id)
+      .single();
+    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
+  } catch {
+    return null;
+  }
+}
+
+// GET /api/informes  — lista informes (filtrado por usuario si no es admin)
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from('informes')
-      .select('*')
-      .order('numero', { ascending: false });
+    const currentUser = await getCurrentUser();
+    const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
 
+    let query = supabase.from('informes').select('*').order('numero', { ascending: false });
+
+    // Auditor solo ve sus propios informes (por nombre en responsable)
+    if (!isAdmin && currentUser?.nombre) {
+      query = query.ilike('responsable', currentUser.nombre);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
     const lastNumber = data.length > 0
       ? Math.max(...data.map(r => parseInt(r.numero, 10) || 0))
       : 0;
 
-    // Mapear snake_case → camelCase para el componente
     const informes = data.map(r => ({
       numero: r.numero,
       prestador: r.prestador,
@@ -51,7 +73,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Obtener el siguiente número
     const { data: existing, error: fetchError } = await supabase
       .from('informes')
       .select('numero')
@@ -105,6 +126,23 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const numero = searchParams.get('numero');
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
+
+    // Verificar propiedad (solo admin o el dueño puede eliminar)
+    const currentUser = await getCurrentUser();
+    const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+
+    if (!isAdmin && currentUser?.nombre) {
+      const { data: informe } = await supabase
+        .from('informes')
+        .select('responsable')
+        .eq('numero', numero)
+        .maybeSingle();
+      const owner = informe?.responsable?.toLowerCase() || '';
+      const me = currentUser.nombre.toLowerCase();
+      if (owner && owner !== me) {
+        return NextResponse.json({ message: 'No tienes permiso para eliminar este informe.' }, { status: 403 });
+      }
+    }
 
     const { error } = await supabase
       .from('informes')
