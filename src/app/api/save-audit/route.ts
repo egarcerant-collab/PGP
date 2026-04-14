@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -9,6 +10,22 @@ const supabase = createClient(
 );
 
 const PASSWORD = '123456';
+
+async function getCurrentUser() {
+  try {
+    const serverClient = await createSupabaseServerClient();
+    const { data: { user } } = await serverClient.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await serverClient
+      .from('profiles')
+      .select('nombre, rol')
+      .eq('id', user.id)
+      .single();
+    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -21,19 +38,40 @@ export async function POST(request: Request) {
 
     const nit = auditData.selectedPrestador?.NIT || '';
 
+    // Obtener usuario actual para asociar la auditoría
+    const currentUser = await getCurrentUser();
+    const auditDataWithOwner = {
+      ...auditData,
+      auditor_id: currentUser?.id || null,
+      auditor_nombre: currentUser?.nombre || '',
+    };
+
     // Verificar si ya existe una auditoría con el mismo prestador y mes
     const { data: duplicate } = await supabase
       .from('auditorias')
-      .select('id, numero')
+      .select('id, numero, datos')
       .eq('prestador', prestadorName)
       .eq('mes', month)
       .maybeSingle();
 
     if (duplicate) {
-      // Sobreescribir el registro existente
+      // Verificar que el usuario actual es el dueño o es admin
+      const existingOwnerId = (duplicate.datos as any)?.auditor_id;
+      const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+      if (!isAdmin && existingOwnerId && currentUser?.id && existingOwnerId !== currentUser.id) {
+        return NextResponse.json({ message: 'No tienes permiso para modificar esta auditoría.' }, { status: 403 });
+      }
+
+      // Sobreescribir manteniendo el auditor original
+      const preservedData = {
+        ...auditDataWithOwner,
+        auditor_id: existingOwnerId || currentUser?.id || null,
+        auditor_nombre: (duplicate.datos as any)?.auditor_nombre || currentUser?.nombre || '',
+      };
+
       const { error: updateError } = await supabase
         .from('auditorias')
-        .update({ datos: auditData, nit })
+        .update({ datos: preservedData, nit })
         .eq('id', duplicate.id);
 
       if (updateError) throw updateError;
@@ -58,7 +96,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from('auditorias')
-      .insert([{ numero, prestador: prestadorName, nit, mes: month, datos: auditData }])
+      .insert([{ numero, prestador: prestadorName, nit, mes: month, datos: auditDataWithOwner }])
       .select()
       .single();
 
@@ -89,9 +127,13 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
 
     if (id === 'ALL') {
-      // Borrar de Supabase
+      // Solo admins pueden eliminar todas
+      const currentUser = await getCurrentUser();
+      const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+      if (!isAdmin) {
+        return NextResponse.json({ message: 'Solo los administradores pueden eliminar todas las auditorías.' }, { status: 403 });
+      }
       await supabase.from('auditorias').delete().neq('id', 0);
-      // Borrar del filesystem
       try {
         const reportsDir = path.join(process.cwd(), 'public', 'informes');
         const monthDirs = await fs.readdir(reportsDir, { withFileTypes: true });
@@ -110,11 +152,23 @@ export async function DELETE(request: Request) {
     } else {
       const fsPath = searchParams.get('fsPath');
       if (fsPath) {
-        // Es un registro del filesystem
         const filePath = path.join(process.cwd(), 'public', fsPath);
         await fs.unlink(filePath);
       } else {
-        // Es un registro de Supabase
+        // Verificar propiedad antes de eliminar
+        const currentUser = await getCurrentUser();
+        const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+        if (!isAdmin) {
+          const { data: record } = await supabase
+            .from('auditorias')
+            .select('datos')
+            .eq('id', id)
+            .maybeSingle();
+          const ownerId = (record?.datos as any)?.auditor_id;
+          if (ownerId && currentUser?.id && ownerId !== currentUser.id) {
+            return NextResponse.json({ message: 'No tienes permiso para eliminar esta auditoría.' }, { status: 403 });
+          }
+        }
         const { error } = await supabase.from('auditorias').delete().eq('id', id);
         if (error) throw error;
       }
