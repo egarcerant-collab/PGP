@@ -173,7 +173,7 @@ const getCodPrestadorFromJson = (jsonData: any): string | null => {
   return prestadorCodeRaw ? normalizeDigits(prestadorCodeRaw) : null;
 };
 
-export const calculateCupCounts = (jsonData: any): CupCountsMap => {
+export const calculateCupCounts = (jsonData: any, allowDuplicates = false): CupCountsMap => {
     const counts: CupCountsMap = new Map();
     if (!jsonData || !jsonData.usuarios) return counts;
     jsonData.usuarios.forEach((user: any) => {
@@ -187,7 +187,7 @@ export const calculateCupCounts = (jsonData: any): CupCountsMap => {
                 if (!code) return;
                 let quantity = 1;
                 let value = 0;
-                if (isProcedure) {
+                if (isProcedure && !allowDuplicates) {
                     const uniqueKey = `${service.codProcedimiento}|${service.fechaInicioAtencion}`;
                     if (uniqueProceduresForUser.has(uniqueKey)) {
                         quantity = 0;
@@ -381,7 +381,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     const dataByMonth: ExecutionDataByMonth = new Map();
     filesByMonth.forEach((monthFiles, month) => {
         const combinedJsonDataForMonth = { usuarios: monthFiles.flatMap(f => f.jsonData?.usuarios || []) };
-        const monthCupCounts = calculateCupCounts(combinedJsonDataForMonth);
+        const monthCupCounts = calculateCupCounts(combinedJsonDataForMonth, allowDuplicates);
         let monthTotalRealValue = 0;
         monthCupCounts.forEach(cupData => { monthTotalRealValue += cupData.totalValue; });
         const combinedSummary = calculateSummary(combinedJsonDataForMonth);
@@ -426,7 +426,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     const regimenResult = { subsidiado: sub, contributivo: con, byMonth: regimenByMonth, subsidiadoUsers: subUsers, contributivoUsers: conUsers };
     setLocalRegimenTotals(regimenResult);
     if (setRegimenTotals) setRegimenTotals(regimenResult);
-  }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount, setRegimenTotals, regimenByKey]);
+  }, [files, filesByMonth, setExecutionData, setJsonPrestadorCode, setUniqueUserCount, setRegimenTotals, regimenByKey, allowDuplicates]);
 
   const handleReset = () => {
     setFiles([]);
