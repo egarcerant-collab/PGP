@@ -4,22 +4,25 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  DollarSign, 
-  WalletCards, 
-  TrendingDown, 
-  CheckCircle, 
-  MessageSquarePlus, 
-  Eraser, 
-  Save, 
-  Loader2, 
-  Download, 
-  FileText, 
-  Filter, 
-  Stethoscope, 
-  Microscope, 
-  Pill, 
-  Syringe 
+import {
+  DollarSign,
+  WalletCards,
+  TrendingDown,
+  CheckCircle,
+  MessageSquarePlus,
+  Eraser,
+  Save,
+  Loader2,
+  Download,
+  FileText,
+  Filter,
+  Stethoscope,
+  Microscope,
+  Pill,
+  Syringe,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldOff,
 } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from './PgPsearchForm';
@@ -72,22 +75,24 @@ interface DiscountMatrixProps {
   executionDataByMonth: ExecutionDataByMonth;
   pgpData: any[];
   onAdjustmentsChange: (adjustments: AdjustedData) => void;
-  storageKey: string; 
+  storageKey: string;
   selectedPrestador: any;
   initialAuditData: SavedAuditData | null;
   uniqueUserCount: number;
   jsonPrestadorCode: string | null;
+  userRole?: string;
 }
 
-const DiscountMatrix: React.FC<DiscountMatrixProps> = ({ 
-    data, 
-    executionDataByMonth, 
+const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
+    data,
+    executionDataByMonth,
     pgpData,
-    onAdjustmentsChange, 
+    onAdjustmentsChange,
     selectedPrestador,
     initialAuditData,
     uniqueUserCount,
-    jsonPrestadorCode
+    jsonPrestadorCode,
+    userRole,
 }) => {
     const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
@@ -96,7 +101,17 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
     const [detailRow, setDetailRow] = useState<DiscountMatrixRow | null>(null);
+    const [cupsExcepciones, setCupsExcepciones] = useState<any[]>([]);
     const { toast } = useToast();
+
+    const fetchExcepciones = () => {
+        fetch('/api/cups-excepciones')
+            .then(r => r.ok ? r.json() : { excepciones: [] })
+            .then(d => setCupsExcepciones(d.excepciones || []))
+            .catch(() => {});
+    };
+
+    useEffect(() => { fetchExcepciones(); }, []);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -349,7 +364,14 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                                                 <TableCell className="px-2 text-center">
                                                     <Checkbox checked={selectedRows[row.CUPS] || false} onCheckedChange={(checked) => setSelectedRows(prev => ({ ...prev, [row.CUPS]: !!checked }))} />
                                                 </TableCell>
-                                                <TableCell className={cn("font-mono text-xs cursor-pointer underline underline-offset-2 hover:opacity-70 transition-opacity", statusColor)} onClick={() => setDetailRow(row)}>{row.CUPS}</TableCell>
+                                                <TableCell className={cn("font-mono text-xs cursor-pointer underline underline-offset-2 hover:opacity-70 transition-opacity", statusColor)} onClick={() => setDetailRow(row)}>
+                                                    <div className="flex items-center gap-1">
+                                                        {row.CUPS}
+                                                        {cupsExcepciones.some(e => e.cup === row.CUPS) && (
+                                                            <span title="Duplicados autorizados"><ShieldCheck className="h-3 w-3 text-green-500 flex-shrink-0" /></span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className={cn("text-xs", statusColor)}>
                                                     <div className="flex items-center gap-2">
                                                         {getServiceIcon(row.Tipo_Servicio, statusColor)}
@@ -402,6 +424,9 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                     row={detailRow}
                     executionDataByMonth={executionDataByMonth}
                     onClose={() => setDetailRow(null)}
+                    cupsExcepciones={cupsExcepciones}
+                    userRole={userRole}
+                    onExcepcionChange={fetchExcepciones}
                 />
             )}
         </div>
@@ -434,9 +459,53 @@ interface CupDetailModalProps {
     row: DiscountMatrixRow;
     executionDataByMonth: ExecutionDataByMonth;
     onClose: () => void;
+    cupsExcepciones?: any[];
+    userRole?: string;
+    onExcepcionChange?: () => void;
 }
 
-const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMonth, onClose }) => {
+const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMonth, onClose, cupsExcepciones = [], userRole, onExcepcionChange }) => {
+    const isAdmin = userRole === 'superadmin' || userRole === 'admin';
+    const excepcion = cupsExcepciones.find(e => e.cup === row.CUPS);
+    const isAutorizado = !!excepcion;
+    const [showAuthForm, setShowAuthForm] = useState(false);
+    const [motivoInput, setMotivoInput] = useState('');
+    const [authLoading, setAuthLoading] = useState(false);
+    const { toast } = useToast();
+
+    const handleAutorizar = async () => {
+        if (!motivoInput.trim()) { toast({ title: 'Ingresa el motivo de autorización', variant: 'destructive' }); return; }
+        setAuthLoading(true);
+        try {
+            const res = await fetch('/api/cups-excepciones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cup: row.CUPS, descripcion: row.Descripcion || '', motivo: motivoInput }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            toast({ title: `✅ CUPS ${row.CUPS} autorizado`, description: `Duplicados permitidos: ${motivoInput}` });
+            onExcepcionChange?.();
+            setShowAuthForm(false);
+            setMotivoInput('');
+        } catch (e: any) {
+            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+        } finally { setAuthLoading(false); }
+    };
+
+    const handleRevocar = async () => {
+        setAuthLoading(true);
+        try {
+            const res = await fetch(`/api/cups-excepciones?cup=${encodeURIComponent(row.CUPS)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            toast({ title: `🔴 Autorización revocada`, description: `CUPS ${row.CUPS} ya no tiene excepción de duplicados` });
+            onExcepcionChange?.();
+        } catch (e: any) {
+            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+        } finally { setAuthLoading(false); }
+    };
+
     // Recolectar registros individuales desde rawJsonData (estructura RIPS: { usuarios: [...] })
     const records: { tipo: string; userId: string; fecha: string; diagnostico: string; valor: number }[] = [];
 
@@ -497,13 +566,69 @@ const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMon
         <Dialog open onOpenChange={onClose}>
             <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle className="text-base">
+                    <DialogTitle className="text-base flex items-center gap-2">
                         Ejecuciones Detalladas del CUPS: <span className="font-mono text-primary">{row.CUPS}</span>
+                        {isAutorizado
+                            ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold"><ShieldCheck className="h-3.5 w-3.5" /> Duplicados Autorizados</span>
+                            : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold"><ShieldAlert className="h-3.5 w-3.5" /> Sin Autorización</span>
+                        }
                     </DialogTitle>
                     {row.Descripcion && row.Descripcion !== row.CUPS && (
                         <p className="text-xs text-muted-foreground uppercase tracking-wide">{row.Descripcion}</p>
                     )}
                 </DialogHeader>
+
+                {/* Autorización de duplicados (solo admins) */}
+                {isAutorizado && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-green-700 font-semibold">
+                                <ShieldCheck className="h-4 w-4" />
+                                Duplicados permitidos para este CUPS
+                            </div>
+                            {isAdmin && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleRevocar} disabled={authLoading}>
+                                    {authLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <><ShieldOff className="h-3 w-3 mr-1" />Revocar</>}
+                                </Button>
+                            )}
+                        </div>
+                        <p className="text-green-600"><span className="font-medium">Motivo:</span> {excepcion?.motivo || '—'}</p>
+                        <p className="text-green-500">Autorizado por: {excepcion?.autorizadoPor} — {excepcion?.fecha}</p>
+                    </div>
+                )}
+
+                {!isAutorizado && isAdmin && (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-orange-700 font-semibold">
+                                <ShieldAlert className="h-4 w-4" />
+                                Duplicados no autorizados — se aplica restricción de un solo procedimiento por día
+                            </div>
+                            {!showAuthForm && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50" onClick={() => setShowAuthForm(true)}>
+                                    <ShieldCheck className="h-3 w-3 mr-1" />Autorizar
+                                </Button>
+                            )}
+                        </div>
+                        {showAuthForm && (
+                            <div className="space-y-2 pt-1">
+                                <p className="text-orange-600 font-medium">Motivo de autorización de duplicados:</p>
+                                <Input
+                                    value={motivoInput}
+                                    onChange={e => setMotivoInput(e.target.value)}
+                                    placeholder="Ej: Procedimiento bilateral ojo izquierdo y ojo derecho"
+                                    className="h-8 text-xs"
+                                />
+                                <div className="flex gap-2">
+                                    <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={handleAutorizar} disabled={authLoading}>
+                                        {authLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ShieldCheck className="h-3 w-3 mr-1" />}Confirmar Autorización
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAuthForm(false); setMotivoInput(''); }}>Cancelar</Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Estadísticas */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-lg border text-sm">
