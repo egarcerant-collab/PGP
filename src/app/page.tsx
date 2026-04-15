@@ -334,6 +334,8 @@ export default function Home() {
                 setJsonPrestadorCode={setJsonPrestadorCode}
                 setUniqueUserCount={setUniqueUserCount}
                 setRegimenTotals={setRegimenTotals}
+                userRole={currentUser?.rol}
+                userName={currentUser?.nombre}
               />
             </div>
           </div>
