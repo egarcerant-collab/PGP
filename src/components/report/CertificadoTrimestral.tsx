@@ -1102,45 +1102,9 @@ export default function CertificadoTrimestral({
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
                     <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
-                      onClick={() => {
-                        const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
-                        const H = { bold: true, fillColor: '#1e3a5f', color: 'white', fontSize: 9, margin: [4,4,4,4] as [number,number,number,number] };
-                        const C = { fontSize: 9, margin: [4,4,4,4] as [number,number,number,number] };
-                        const docDef: any = {
-                          pageSize: 'A4', pageMargins: [40,50,40,50],
-                          content: [
-                            { text: 'RESUMEN DE INFORME PGP', style: 'header', alignment: 'center', margin: [0,0,0,4] },
-                            { text: `Informe N° ${viewingInf.numero}`, alignment: 'center', fontSize: 11, bold: true, color: '#1e3a5f', margin: [0,0,0,12] },
-                            {
-                              table: {
-                                widths: ['35%','65%'],
-                                body: [
-                                  [{ text: 'Prestador', ...H }, { text: viewingInf.prestador || '—', ...C }],
-                                  [{ text: 'NIT', ...H }, { text: viewingInf.nit || '—', ...C }],
-                                  [{ text: 'N° Contrato', ...H }, { text: viewingInf.contrato || '—', ...C }],
-                                  [{ text: 'Municipio', ...H }, { text: `${viewingInf.municipio || '—'}, ${viewingInf.departamento || '—'}`, ...C }],
-                                  [{ text: 'Período', ...H }, { text: viewingInf.periodo || '—', ...C }],
-                                  [{ text: 'Tipo de Período', ...H }, { text: viewingInf.tipoPeriodo || '—', ...C }],
-                                  [{ text: 'Fecha', ...H }, { text: viewingInf.fecha || '—', ...C }],
-                                  [{ text: 'Responsable', ...H }, { text: viewingInf.responsable || '—', ...C }],
-                                  [{ text: 'NT del Período', ...H }, { text: fmt(viewingInf.ntPeriodo || 0), ...C }],
-                                  [{ text: 'Total Ejecutado', ...H }, { text: fmt(viewingInf.totalEjecutado || 0), ...C }],
-                                  [{ text: 'Valor a Descontar', ...H }, { text: fmt(viewingInf.descontar || 0), color: 'red', ...C }],
-                                  [{ text: 'Valor a Reconocer', ...H }, { text: fmt(viewingInf.reconocer || 0), ...C }],
-                                  [{ text: 'Total Anticipos', ...H }, { text: fmt(viewingInf.totalAnticipos || 0), ...C }],
-                                  [{ text: 'VALOR FINAL', bold: true, fillColor: '#1e3a5f', color: 'white', fontSize: 10, margin: [4,6,4,6] },
-                                   { text: fmt(viewingInf.valorFinal || 0), bold: true, fontSize: 10, color: '#166534', ...C }],
-                                ],
-                              },
-                              layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#d1d5db', vLineColor: () => '#d1d5db' },
-                            },
-                            { text: '\nGenerado por Auditoría PGP · DUSAKAWI EPSI', fontSize: 7, color: '#9ca3af', alignment: 'center', margin: [0,16,0,0] },
-                          ],
-                          styles: { header: { fontSize: 14, bold: true, color: '#1e3a5f' } },
-                        };
-                        pdfMake.createPdf(docDef).download(`Informe_${viewingInf.numero}_${viewingInf.prestador?.replace(/\s+/g,'_')}.pdf`);
-                      }}>
-                      📄 Descargar PDF
+                      onClick={() => { setViewingInf(null); setTimeout(() => handleGenerate(), 100); }}
+                      disabled={isGenerating}>
+                      {isGenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : '📄'} Generar PDF
                     </Button>
                     {onSaveAudit && (
                       <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
