@@ -237,14 +237,14 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   };
 }
 
-const calculateSummaryData = (data: PgpRow[]): SummaryData | null => {
+const calculateSummaryData = (data: PgpRow[], numMeses = 12): SummaryData | null => {
   if (data.length === 0) return null;
   const totalCostoMes = data.reduce((acc, row) => {
     const costo = getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes']));
     return acc + costo;
   }, 0);
   return {
-    totalCostoMes, totalPeriodo: totalCostoMes, totalAnual: totalCostoMes * 12,
+    totalCostoMes, totalPeriodo: totalCostoMes, totalAnual: totalCostoMes * numMeses,
     costoMinimoPeriodo: totalCostoMes * 0.9, costoMaximoPeriodo: totalCostoMes * 1.1,
   };
 };
@@ -278,8 +278,11 @@ const PgPsearchForm = forwardRef<
   const showComparison = isDataLoaded && executionDataByMonth.size > 0;
 
   useEffect(() => {
-    if (isDataLoaded) setGlobalSummary(calculateSummaryData(pgpData));
-  }, [isDataLoaded, pgpData]);
+    if (isDataLoaded) {
+      const numMeses = selectedPrestador?.MESES ? parseInt(String(selectedPrestador.MESES), 10) || 12 : 12;
+      setGlobalSummary(calculateSummaryData(pgpData, numMeses));
+    }
+  }, [isDataLoaded, pgpData, selectedPrestador]);
 
   const comparisonSummary = useMemo(() => {
     if (!showComparison) return null;
@@ -625,7 +628,7 @@ const PgPsearchForm = forwardRef<
         {/* NT band cards */}
         {globalSummary && (
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer="Estimación de 12 meses" />
+            <StatCard accent="blue" title="Proyección Anual" value={formatCurrency(globalSummary.totalAnual)} icon={Calendar} footer={`Estimación de ${selectedPrestador?.MESES ? parseInt(String(selectedPrestador.MESES), 10) || 12 : 12} meses`} />
             <StatCard accent="amber" title="Límite Inferior (90%)" value={formatCurrency(globalSummary.costoMinimoPeriodo)} icon={TrendingDown} footer="Mínimo esperado del período" />
             <StatCard accent="green" title="Límite Superior (110%)" value={formatCurrency(globalSummary.costoMaximoPeriodo)} icon={TrendingUp} footer="Máximo esperado del período" />
           </div>
