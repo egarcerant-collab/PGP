@@ -6,7 +6,7 @@ import FileUpload from "@/components/json-analyzer/FileUpload";
 import DataVisualizer, { calculateSummary } from "@/components/json-analyzer/DataVisualizer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar, ShieldCheck, ShieldOff, ShieldAlert, Plus, Trash2 } from 'lucide-react';
+import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar, ShieldCheck, ShieldOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +14,6 @@ import { fetchSheetData, type PrestadorInfo } from '@/lib/sheets';
 import { type CupCountsMap, type CupCountInfo, type ExecutionDataByMonth } from '@/app/page';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Input } from '@/components/ui/input';
 
 export interface MonthlyExecutionData {
   cupCounts: CupCountsMap;
@@ -284,56 +283,9 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth() + 1));
   const [localRegimenTotals, setLocalRegimenTotals] = useState<RegimenTotals>({ subsidiado: 0, contributivo: 0, byMonth: {}, subsidiadoUsers: 0, contributivoUsers: 0 });
 
-  // Excepciones de duplicados CUPS
-  const [excepciones, setExcepciones] = useState<any[]>([]);
-  const [newCup, setNewCup] = useState('');
-  const [newMotivo, setNewMotivo] = useState('');
-  const [excLoading, setExcLoading] = useState(false);
+  // Restricción de duplicados
+  const [allowDuplicates, setAllowDuplicates] = useState(false);
   const isAdmin = userRole === 'superadmin' || userRole === 'admin';
-
-  const fetchExcepciones = useCallback(async () => {
-    try {
-      const r = await fetch('/api/cups-excepciones');
-      const d = await r.json();
-      setExcepciones(d.excepciones || []);
-    } catch {}
-  }, []);
-
-  useEffect(() => { fetchExcepciones(); }, [fetchExcepciones]);
-
-  const handleAgregarExcepcion = async () => {
-    const cup = newCup.trim().toUpperCase();
-    if (!cup) { toast({ title: 'Ingresa el código CUPS', variant: 'destructive' }); return; }
-    if (!newMotivo.trim()) { toast({ title: 'Ingresa el motivo', variant: 'destructive' }); return; }
-    setExcLoading(true);
-    try {
-      const res = await fetch('/api/cups-excepciones', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cup, motivo: newMotivo, descripcion: '' }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.message);
-      toast({ title: `✅ CUPS ${cup} autorizado`, description: newMotivo });
-      setNewCup(''); setNewMotivo('');
-      fetchExcepciones();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally { setExcLoading(false); }
-  };
-
-  const handleEliminarExcepcion = async (cup: string) => {
-    setExcLoading(true);
-    try {
-      const res = await fetch(`/api/cups-excepciones?cup=${encodeURIComponent(cup)}`, { method: 'DELETE' });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.message);
-      toast({ title: `Autorización revocada para ${cup}` });
-      fetchExcepciones();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally { setExcLoading(false); }
-  };
 
   const filesByMonth = useMemo(() => {
     return files.reduce((acc, file) => {
@@ -510,103 +462,49 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <FileUpload onFileLoad={handleFileLoad} disabled={isLoadingProviders} loadedFileNames={files.map(f => `${f.fileName} (${getMonthName(f.month)})`)} maxFiles={50} />
-        </CardContent>
-      </Card>
 
-      {/* ── Panel Excepciones Duplicados CUPS ── */}
-      <Card className="w-full border-2 border-amber-200 bg-amber-50/40">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-amber-600" />
-              <CardTitle className="text-base text-amber-800">Excepciones de Duplicados CUPS</CardTitle>
+          {/* Checkbox: desactivar restricción de duplicados */}
+          <div
+            onClick={() => isAdmin && setAllowDuplicates(v => !v)}
+            className={`flex items-start gap-3 rounded-lg border-2 p-3 transition-all select-none ${
+              isAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+            } ${
+              allowDuplicates
+                ? 'border-green-400 bg-green-50'
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+            }`}
+          >
+            <div className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition-all ${
+              allowDuplicates ? 'border-green-500 bg-green-500' : 'border-slate-400 bg-white'
+            }`}>
+              {allowDuplicates && (
+                <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
             </div>
-            <span className="text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded-full font-medium">
-              {excepciones.length} CUPS autorizado{excepciones.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          <CardDescription className="text-amber-700 text-xs mt-1">
-            CUPS autorizados para tener procedimientos duplicados el mismo día (ej: procedimientos bilaterales de oftalmología — ojo izquierdo y ojo derecho).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Lista de excepciones actuales */}
-          {excepciones.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-amber-600 italic py-2">
-              <ShieldAlert className="h-4 w-4" />
-              No hay CUPS autorizados. Todos los duplicados del mismo día se aplica la restricción de un procedimiento.
-            </div>
-          ) : (
-            <div className="rounded-lg border border-amber-200 overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-amber-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-amber-800">CUPS</th>
-                    <th className="px-3 py-2 text-left font-semibold text-amber-800">Motivo de autorización</th>
-                    <th className="px-3 py-2 text-left font-semibold text-amber-800">Autorizado por</th>
-                    <th className="px-3 py-2 text-left font-semibold text-amber-800">Fecha</th>
-                    {isAdmin && <th className="px-3 py-2 w-10"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {excepciones.map((e, i) => (
-                    <tr key={i} className="border-t border-amber-100 bg-white hover:bg-amber-50/30">
-                      <td className="px-3 py-2 font-mono font-bold text-green-700 flex items-center gap-1">
-                        <ShieldCheck className="h-3.5 w-3.5 text-green-500" />{e.cup}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700">{e.motivo || '—'}</td>
-                      <td className="px-3 py-2 text-gray-500">{e.autorizadoPor || '—'}</td>
-                      <td className="px-3 py-2 text-gray-400">{e.fecha || '—'}</td>
-                      {isAdmin && (
-                        <td className="px-3 py-2 text-center">
-                          <button
-                            onClick={() => handleEliminarExcepcion(e.cup)}
-                            disabled={excLoading}
-                            className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Revocar autorización"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Formulario agregar (solo admins) */}
-          {isAdmin && (
-            <div className="border border-dashed border-amber-300 rounded-lg p-3 space-y-2 bg-white/60">
-              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1"><Plus className="h-3.5 w-3.5" />Autorizar nuevo CUPS</p>
-              <div className="flex gap-2 flex-wrap">
-                <Input
-                  value={newCup}
-                  onChange={e => setNewCup(e.target.value.toUpperCase())}
-                  placeholder="Código CUPS (ej: 895209)"
-                  className="h-8 text-xs w-44 font-mono"
-                />
-                <Input
-                  value={newMotivo}
-                  onChange={e => setNewMotivo(e.target.value)}
-                  placeholder="Motivo (ej: Procedimiento bilateral - ojo izq/der)"
-                  className="h-8 text-xs flex-1 min-w-[200px]"
-                />
-                <Button
-                  size="sm"
-                  className="h-8 text-xs bg-amber-600 hover:bg-amber-700"
-                  onClick={handleAgregarExcepcion}
-                  disabled={excLoading}
-                >
-                  {excLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1" />}
-                  Autorizar
-                </Button>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                {allowDuplicates
+                  ? <ShieldCheck className="h-4 w-4 text-green-600" />
+                  : <ShieldOff className="h-4 w-4 text-slate-400" />
+                }
+                <span className={`text-sm font-semibold ${allowDuplicates ? 'text-green-700' : 'text-slate-600'}`}>
+                  {allowDuplicates
+                    ? 'Restricción de duplicados DESACTIVADA'
+                    : 'Restricción de duplicados ACTIVA'}
+                </span>
+                {!isAdmin && <span className="text-xs text-slate-400">(Solo admin puede modificar)</span>}
               </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {allowDuplicates
+                  ? 'Se reconocen procedimientos duplicados el mismo día (ej: ojo izquierdo y ojo derecho).'
+                  : 'Un solo procedimiento por CUPS por paciente por día. Actívalo si el prestador tiene procedimientos bilaterales.'}
+              </p>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
