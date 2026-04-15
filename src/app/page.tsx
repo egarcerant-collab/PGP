@@ -350,6 +350,7 @@ export default function Home() {
               activeModule={activeModule}
               onPrestadorLoaded={handlePrestadorLoaded}
               userName={currentUser?.nombre}
+              userRole={currentUser?.rol}
             />
           </div>
 
