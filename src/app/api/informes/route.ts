@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     const nuevoNumero = lastNumber + 1;
     const numeroFormateado = String(nuevoNumero).padStart(3, '0');
 
-    const nuevoInforme = {
+    const base = {
       numero: numeroFormateado,
       prestador: body.prestador || '',
       nit: body.nit || '',
@@ -105,15 +105,14 @@ export async function POST(request: Request) {
       valor_final: body.valorFinal || 0,
       total_anticipos: body.totalAnticipos || 0,
       responsable: body.responsable || '',
-      pdf_data: body.pdfData || {},
     };
 
-    const { data, error } = await supabase
-      .from('informes')
-      .insert([nuevoInforme])
-      .select()
-      .single();
-
+    // Intenta con pdf_data; si la columna no existe aún, guarda sin ella
+    let result = await supabase.from('informes').insert([{ ...base, pdf_data: body.pdfData || {} }]).select().single();
+    if (result.error && result.error.message?.includes('pdf_data')) {
+      result = await supabase.from('informes').insert([base]).select().single();
+    }
+    const { data, error } = result;
     if (error) throw error;
 
     return NextResponse.json({ success: true, numero: numeroFormateado, informe: data });
