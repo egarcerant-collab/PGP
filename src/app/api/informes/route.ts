@@ -60,6 +60,7 @@ export async function GET() {
       valorFinal: r.valor_final,
       totalAnticipos: r.total_anticipos,
       responsable: r.responsable,
+      pdfData: r.pdf_data || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
       valor_final: body.valorFinal || 0,
       total_anticipos: body.totalAnticipos || 0,
       responsable: body.responsable || '',
+      pdf_data: body.pdfData || {},
     };
 
     const { data, error } = await supabase

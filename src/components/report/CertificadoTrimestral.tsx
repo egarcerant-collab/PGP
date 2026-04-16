@@ -839,19 +839,82 @@ export default function CertificadoTrimestral({
     try {
       const selectedGroup = periodGroups[selectedPeriodIndex] ?? periodGroups[0];
       const n = selectedGroup?.months.length || 0;
+
       const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
+      const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
+      const fechaInicio = String(selectedPrestador['FECHA INICIO DE CONTRATO'] || '01/01/2025').trim();
+      const fechaFin    = String(selectedPrestador['FECHA FIN DE CONTRATO']    || '31/12/2025').trim();
+
       const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
+      const ntPeriodo  = monthlyNT * n;
+
+      const minPeriodo = franjaInf90Mensual > 0 ? franjaInf90Mensual * n : ntPeriodo * 0.9;
+      const maxPeriodo = franjaSup110Mensual > 0 ? franjaSup110Mensual * n : ntPeriodo * 1.1;
+
+      const adv80 = monthlyNT * 0.8;
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
-      const ntPeriodoFull = monthlyNT * expectedMonths;
-      const totalEjecutado = selectedGroup?.months.reduce((s, m) => s + m.totalValorEjecutado, 0) || 0;
-      const minPeriodo = ntPeriodoFull * 0.9;
-      const maxPeriodo = ntPeriodoFull * 1.1;
-      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
-      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
-      const valorFinal = ntPeriodoFull - descontar + reconocer;
-      const advanceMonths = periodType === 'trimestral' ? n : Math.max(0, n - 1);
-      const totalAdv = monthlyNT * 0.8 * advanceMonths;
-      const ciudadRaw = String(selectedPrestador.CIUDAD || 'RIOHACHA').toUpperCase();
+      const ntPeriodoFull  = monthlyNT * expectedMonths;
+      const advanceMonths  = periodType === 'trimestral' ? n : periodType === 'bimensual' ? Math.max(0, n - 1) : 0;
+      const totalAdv       = adv80 * advanceMonths;
+      const lastMonthPay   = ntPeriodoFull - totalAdv;
+
+      const mesData = selectedGroup?.months.map(m => ({
+        name: MONTH_ES[m.month] || m.month.toUpperCase(),
+        value: m.totalValorEjecutado,
+        cups: m.totalActividades ?? 0,
+      })) || [];
+
+      const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
+      const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
+      const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
+      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+      const valorFinal = ntPeriodo - descontar + reconocer;
+
+      const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRE' : periodType === 'bimensual' ? 'BIMESTRE' : 'MES';
+      const ciudadRaw = String(selectedPrestador.CIUDAD || (selectedPrestador as Record<string,string>)['MUNICIPIO'] || 'RIOHACHA').trim().toUpperCase();
+      const depto = String(
+        selectedPrestador.DEPARTAMENTO ||
+        (selectedPrestador as Record<string,string>)['DEPARTAMENTO'] ||
+        CIUDAD_DEPARTAMENTO[ciudadRaw] || 'LA GUAJIRA'
+      ).trim().toUpperCase();
+
+      // Snapshot completo para regenerar el PDF completo desde el Registro
+      const pdfData = {
+        mesData,
+        monthlyNT,
+        fechaInicio,
+        fechaFin,
+        supervisorName,
+        advanceMonths,
+        adv80,
+        totalAdv,
+        ntPeriodoFull,
+        ntPeriodo,
+        minPeriodo,
+        maxPeriodo,
+        lastMonthPay,
+        notaAdicional,
+        notaEjecucionFinanciera,
+        valorCupsInesperadas,
+        cantidadCupsInesperadas,
+        periodoLabel,
+        periodType,
+        empresa: String(selectedPrestador.PRESTADOR || '').trim(),
+        nit: String(selectedPrestador.NIT || '').trim(),
+        municipio: ciudadRaw,
+        depto,
+        contratoNum: contrato || selectedPrestador.CONTRATO || 'N/A',
+        periodo: selectedGroup?.label || '',
+        n,
+        expectedMonths,
+        descontar,
+        reconocer,
+        valorFinal,
+        totalEjecutadoFinal,
+        totalCups,
+      };
 
       const res = await fetch('/api/informes', {
         method: 'POST',
@@ -861,16 +924,17 @@ export default function CertificadoTrimestral({
           nit: selectedPrestador.NIT,
           contrato: contrato || selectedPrestador.CONTRATO || '',
           municipio: ciudadRaw,
-          departamento: String(selectedPrestador.DEPARTAMENTO || CIUDAD_DEPARTAMENTO[ciudadRaw] || '').toUpperCase(),
+          departamento: depto,
           periodo: selectedGroup?.label || '',
           tipoPeriodo: periodType.toUpperCase(),
           ntPeriodo: ntPeriodoFull,
-          totalEjecutado,
+          totalEjecutado: totalEjecutadoFinal,
           descontar,
           reconocer,
           valorFinal,
           totalAnticipos: totalAdv,
           responsable,
+          pdfData,
         }),
       });
       const data = await res.json();
@@ -878,125 +942,257 @@ export default function CertificadoTrimestral({
         setSavedNum(data.numero);
         setInformeNum(String(parseInt(data.numero) + 1).padStart(3, '0'));
         toast({ title: `✓ Informe N° ${data.numero} guardado`, description: `${selectedPrestador.PRESTADOR} · ${selectedGroup?.label}` });
+        loadHistorial();
       }
     } catch (e: any) {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
-  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, toast]);
+  }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, notaAdicional, notaEjecucionFinanciera, valorCupsInesperadas, cantidadCupsInesperadas, toast]);
 
-  // Genera PDF directamente desde los datos guardados en el Registro (sin necesitar JSON cargado)
+  // Genera PDF completo desde los datos guardados en el Registro (idéntico a handleGenerate)
   const handleGenerateFromRecord = useCallback((inf: any) => {
-    const fmt = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v || 0);
+    const pd = inf.pdfData;
+
+    // Registros antiguos sin pdfData: PDF de respaldo simplificado
+    if (!pd || !pd.mesData || !(pd.mesData as any[]).length) {
+      const fmtB = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v || 0);
+      const HSB = { bold: true, fontSize: 7, fillColor: '#e0e7ff' as string };
+      const CSB = { fontSize: 7 };
+      const TS2B = { bold: true, fontSize: 7, fillColor: '#bfdbfe' as string };
+      const minPB = (inf.ntPeriodo || 0) * 0.9;
+      const maxPB = (inf.ntPeriodo || 0) * 1.1;
+      const docB: any = {
+        pageSize: 'A4', pageMargins: [38, 45, 38, 45],
+        defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+        content: [
+          { table: { widths: ['*','auto','auto','auto','auto'], body: [[{ text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },{ text: 'Código: DI-MT-SD-F-14', fontSize: 6.5, alignment: 'center' },{ text: 'Versión: 01', fontSize: 6.5, alignment: 'center' },{ text: 'Emisión: 21/02/2023', fontSize: 6.5, alignment: 'center' },{ text: 'Vigencia: 22/02/2023', fontSize: 6.5, alignment: 'center' }]] }, layout: 'noBorders', margin: [0,0,0,2] },
+          { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0,0,0,4] },
+          { table: { widths: ['auto','*','auto','*'], body: [[{ text: 'INFORME Nº', ...HSB },{ text: inf.numero||'', ...CSB },{ text: 'FECHA', ...HSB },{ text: inf.fecha||'', ...CSB }],[{ text: 'EMPRESA', ...HSB },{ text: inf.prestador||'', ...CSB },{ text: 'NIT', ...HSB },{ text: inf.nit||'', ...CSB }],[{ text: 'MUNICIPIO', ...HSB },{ text: (inf.municipio||'').toUpperCase(), ...CSB },{ text: 'DEPARTAMENTO', ...HSB },{ text: (inf.departamento||'').toUpperCase(), ...CSB }],[{ text: 'Nº CONTRATO', ...HSB },{ text: inf.contrato||'', ...CSB },{ text: 'TIPO PERÍODO', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'RESPONSABLE', ...HSB },{ text: inf.responsable||'', ...CSB },{ text: 'MESES', ...HSB },{ text: inf.periodo||'', ...CSB }]] }, margin: [0,0,0,8] },
+          { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0,4,0,2] },
+          { table: { widths: ['*',130], body: [[{ text: 'CONCEPTO', ...TS2B, alignment: 'center' },{ text: 'VALOR', ...TS2B, alignment: 'right' }],[{ text: 'VALOR NT DEL PERÍODO', ...CSB, bold: true },{ text: fmtB(inf.ntPeriodo), ...CSB, alignment: 'right' }],[{ text: 'FRANJA INFERIOR (90%)', ...CSB },{ text: fmtB(minPB), ...CSB, alignment: 'right' }],[{ text: 'FRANJA SUPERIOR (110%)', ...CSB },{ text: fmtB(maxPB), ...CSB, alignment: 'right' }],[{ text: 'TOTAL EJECUTADO', ...CSB, bold: true },{ text: fmtB(inf.totalEjecutado), ...CSB, alignment: 'right', bold: true }],[{ text: 'VALOR A DESCONTAR', ...CSB },{ text: fmtB(inf.descontar), ...CSB, alignment: 'right' }],[{ text: 'VALOR A RECONOCER', ...CSB },{ text: fmtB(inf.reconocer), ...CSB, alignment: 'right' }],[{ text: 'TOTAL ANTICIPOS PAGADOS', ...CSB },{ text: fmtB(inf.totalAnticipos), ...CSB, alignment: 'right' }],[{ text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },{ text: fmtB(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' }]] }, layout: 'lightHorizontalLines', margin: [0,0,0,16] },
+        ],
+      };
+      pdfMake.createPdf(docB).download(`Certificado_${inf.numero}_${(inf.prestador||'').replace(/\s+/g,'_')}.pdf`);
+      return;
+    }
+
+    // ── PDF completo con gráficas, narrativas y tablas ──
+    const fmtL  = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(v);
+    const fmtNL = (v: number) => new Intl.NumberFormat('es-CO').format(Math.round(v));
+
+    const {
+      mesData: md, monthlyNT, fechaInicio, fechaFin,
+      supervisorName: svName, advanceMonths, adv80, totalAdv,
+      ntPeriodoFull, ntPeriodo, minPeriodo, maxPeriodo, lastMonthPay,
+      notaAdicional: notaAd, notaEjecucionFinanciera: notaEF,
+      valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
+      periodoLabel, periodType: pt, empresa, nit: empresaNit,
+      municipio, depto, contratoNum, periodo, n, expectedMonths,
+      descontar, reconocer, valorFinal, totalEjecutadoFinal, totalCups,
+    } = pd;
+
+    const cantInespNum = parseInt(cantCupsIn) || 0;
+    const labels = (md as any[]).map((m: any) => m.name);
+
+    const chart1 = valCupsIn > 0
+      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.value), valCupsIn)
+      : drawBarChart(labels, (md as any[]).map((m: any) => m.value), '#1d4ed8');
+    const chart2 = cantInespNum > 0
+      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 175, false, '#15803d')
+      : drawBarChart(labels, (md as any[]).map((m: any) => m.cups), '#15803d');
+
+    const detalleValor = (md as any[]).map((m: any, i: number) => {
+      if (i === 0) return `En el mes de ${m.name}, se registró un total de ${fmtNL(m.cups)} actividades asociadas a CUPS (Códigos Únicos en Salud), con un consolidado en costos equivalente a ${fmtL(m.value)}.`;
+      if (i === (md as any[]).length - 1) return `Finalmente, en el mes de ${m.name}, la ejecución alcanzó ${fmtNL(m.cups)} actividades, reflejando un costo acumulado de ${fmtL(m.value)}.`;
+      return `Durante el mes de ${m.name}, el comportamiento presentó una variación correspondiente a ${fmtNL(m.cups)} actividades, para un total consolidado de ${fmtL(m.value)}.`;
+    }).join(' ');
+
+    const detalleCups = (md as any[]).map((m: any, i: number) => {
+      if (i === (md as any[]).length - 1) return `y en mes de ${m.name} un ${fmtNL(m.cups)} así concluyendo el ${periodoLabel.toLowerCase()}`;
+      return `para un total de CUPS ${fmtNL(m.cups)} en el mes de ${m.name}`;
+    }).join(', ');
+
     const HS  = { bold: true, fontSize: 7, fillColor: '#e0e7ff' as string };
     const CS  = { fontSize: 7 };
     const TS2 = { bold: true, fontSize: 7, fillColor: '#bfdbfe' as string };
-    const minP = (inf.ntPeriodo || 0) * 0.9;
-    const maxP = (inf.ntPeriodo || 0) * 1.1;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const docDef: any = {
       pageSize: 'A4',
       pageMargins: [38, 45, 38, 45],
       defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
       styles: {
         p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
+        bold: { bold: true },
         sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 4, 0, 2] },
+        chartLabel: { fontSize: 7.5, bold: true, margin: [0, 4, 0, 1] },
+        tableTitle: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 6, 0, 4], decoration: 'underline' },
       },
       content: [
-        // ── CABECERA PROCESO ──
+        // ══ CABECERA PROCESO ══
         {
           table: {
             widths: ['*', 'auto', 'auto', 'auto', 'auto'],
             body: [[
               { text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },
               { text: 'Código: DI-MT-SD-F-14', fontSize: 6.5, alignment: 'center' },
-              { text: 'Versión: 01',           fontSize: 6.5, alignment: 'center' },
-              { text: 'Emisión: 21/02/2023',   fontSize: 6.5, alignment: 'center' },
-              { text: 'Vigencia: 22/02/2023',  fontSize: 6.5, alignment: 'center' },
+              { text: 'Versión: 01', fontSize: 6.5, alignment: 'center' },
+              { text: 'Emisión: 21/02/2023', fontSize: 6.5, alignment: 'center' },
+              { text: 'Vigencia: 22/02/2023', fontSize: 6.5, alignment: 'center' },
             ]],
           },
           layout: 'noBorders',
           margin: [0, 0, 0, 2],
         },
-        { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0, 0, 0, 4] },
+        { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0, 0, 0, 1] },
 
-        // ── TABLA ENCABEZADO ──
+        // ══ TABLA ENCABEZADO ══
         {
           table: {
             widths: ['auto', '*', 'auto', '*'],
             body: [
-              [{ text: 'INFORME Nº', ...HS }, { text: inf.numero || '', ...CS }, { text: 'FECHA', ...HS }, { text: inf.fecha || '', ...CS }],
-              [{ text: 'EMPRESA',    ...HS }, { text: inf.prestador || '', ...CS }, { text: 'NIT',  ...HS }, { text: inf.nit || '', ...CS }],
-              [{ text: 'MUNICIPIO',  ...HS }, { text: (inf.municipio || '').toUpperCase(), ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: (inf.departamento || '').toUpperCase(), ...CS }],
-              [{ text: 'Nº CONTRATO', ...HS }, { text: inf.contrato || '', ...CS }, { text: 'TIPO PERÍODO', ...HS }, { text: inf.tipoPeriodo || '', ...CS }],
-              [{ text: 'RESPONSABLE', ...HS }, { text: inf.responsable || '', ...CS }, { text: 'MESES', ...HS }, { text: inf.periodo || '', ...CS }],
+              [{ text: 'INFORME Nº', ...HS }, { text: inf.numero || '', ...CS }, { text: 'FECHA', ...HS }, { text: inf.fecha ? new Date(inf.fecha + 'T12:00:00').toLocaleDateString('es-CO') + ' 12:00 a. m.' : new Date().toLocaleDateString('es-CO') + ' 12:00 a. m.', ...CS }],
+              [{ text: 'EMPRESA', ...HS }, { text: empresa, ...CS }, { text: 'NIT', ...HS }, { text: empresaNit, ...CS }],
+              [{ text: 'MUNICIPIO', ...HS }, { text: municipio, ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: depto, ...CS }],
+              [{ text: 'Nº CONTRATO', ...HS }, { text: contratoNum, ...CS }, { text: 'VIGENCIA', ...HS }, { text: `${fechaInicio} - ${fechaFin}`, ...CS }],
+              [{ text: 'PUNTOS A TRATAR:', ...HS }, { text: '1. RESULTADO DE LA EVALUACIÓN', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
+              [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'MESES', ...HS }, { text: periodo, ...CS }],
             ],
           },
-          margin: [0, 0, 0, 8],
+          margin: [0, 0, 0, 5],
         },
 
-        // ── RESUMEN FINANCIERO ──
-        { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0, 4, 0, 2] },
+        // ══ OBJETIVO ══
+        { text: [{ text: 'OBJETIVO: ', bold: true, fontSize: 7.5 }, 'Evaluar la ejecución del Acuerdo de Pago Global Prospectivo (PGP) de la DUSAKAWI EPSI, asegurando que se cumplan los términos contractuales y que se garantice la calidad en la prestación de servicios de salud a la población afiliada. Este objetivo incluye la revisión del impacto del PGP en la gestión financiera, el reconocimiento de incrementos en la población afiliada, y la validación de los valores financieros registrados, incluyendo el valor ejecutado, descuentos, y reconocimientos. La evaluación busca garantizar una gestión eficiente, equitativa y orientada a resultados, que refleje de manera precisa el desempeño bajo el modelo de pago prospectivo, incluyendo:'], style: 'p', margin: [0, 0, 0, 2] },
+        { text: [{ text: 'Revisión de la Gestión Financiera: ', bold: true }, 'Analizar cómo el PGP influye en la administración de los recursos financieros de la EPS, evaluando la eficiencia en el uso de los fondos, la precisión en los registros contables y el cumplimiento de los presupuestos establecidos.'], style: 'p' },
+        { text: [{ text: 'Impacto en la Calidad del Servicio: ', bold: true }, 'Estudiar los efectos del acuerdo en la calidad de los servicios ofrecidos a los afiliados, verificando el cumplimiento de estándares de calidad, la satisfacción del usuario y la mejora continua en los procesos de atención médica.'], style: 'p' },
+        { text: [{ text: 'Reconocimiento de Cambios Demográficos: ', bold: true }, 'Identificar y documentar cualquier incremento en la población afiliada y cómo este cambio afecta la distribución de recursos y la planificación de servicios, asegurando que el modelo PGP se ajusta dinámicamente a las necesidades emergentes.'], style: 'p' },
+        { text: [{ text: 'Validación de Valores Financieros: ', bold: true }, 'Confirmar la exactitud de todos los valores financieros registrados bajo el PGP, incluyendo el valor ejecutado del contrato, los descuentos otorgados y los reconocimientos realizados, para garantizar transparencia y responsabilidad.'], style: 'p' },
+        { text: [{ text: 'Evaluación de Resultados y Eficiencia: ', bold: true }, 'Medir la eficacia del PGP en la consecución de resultados esperados, como la optimización de costos y la mejora en la atención al paciente, facilitando un análisis de rentabilidad que justifique el modelo de pago.'], style: 'p' },
+        { text: [{ text: 'Desarrollo de Recomendaciones para Mejoras Futuras: ', bold: true }, 'Basándose en los hallazgos de la evaluación, proponer ajustes o mejoras al acuerdo PGP que puedan optimizar tanto la gestión financiera como la calidad de la atención a los afiliados.'], style: 'p', margin: [0, 0, 0, 4] },
+
+        // ══ NARRATIVA 1 ══
+        { text: `Para el seguimeinto a la ejecución del los contratos, se lleva a cabo un seguimiento y evaluación desde la Dirección Nacional del Riesgo en Salud. Se verifican los datos reportados por la institución ${empresa} del de ${periodo} quien tiene sede en el municipio de ${municipio} del departamento de ${depto} Se examina detalladamente la información de las acciones y actividades que demandaron los usuarios. Bajo esta perspectiva, se analizan con detalle las acciones destinadas para implementar en el territorio. La institución ${empresa} realizó su reporte mediante el cargue de la información en la plataforma Aryuwi Soft, establecida para dichos fines. Se cuentan con los registros individuales de las siguientes acciones. Además, la EPSI Dusakawi ha implementado el tipo de contrato de pago global prospectivo para optimizar la gestión de recursos y garantizar una atención integral y oportuna a los usuarios. Este modelo de contrato permite una planificación más efectiva de los recursos, promoviendo la prevención y el cuidado de la salud de la población asegurada.`, style: 'p', margin: [0, 0, 0, 4] },
+
+        // ══ GRÁFICA 1 ══
+        { text: valCupsIn > 0 ? 'GRÁFICO 1. CONSOLIDADO DE EJECUCIÓN EN VALOR POR CUPS — INCLUYE CUPS / TECNOLOGÍAS INESPERADAS' : 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR', style: 'chartLabel' },
+        chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 4] } : {},
+
+        // ══ NARRATIVA 2 ══
+        { text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valCupsIn > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtNL(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmtL(valCupsIn)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`, style: 'p' },
+        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
+
+        // ══ GRÁFICA 2 ══
+        { text: cantInespNum > 0 ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS' : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
+        chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 4] } : {},
+
+        // ══ NARRATIVA 3 ══
+        { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
+
+        // ══════════════════════ PÁGINA 2 ══════════════════════
+        { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle', pageBreak: 'before' },
+
+        // Tabla financiera
         {
           table: {
-            widths: ['*', 130],
+            widths: ['*', 100, 100],
             body: [
-              [{ text: 'CONCEPTO', ...TS2, alignment: 'center' }, { text: 'VALOR', ...TS2, alignment: 'right' }],
-              [{ text: 'VALOR NT DEL PERÍODO',   ...CS, bold: true }, { text: fmt(inf.ntPeriodo),       ...CS, alignment: 'right' }],
-              [{ text: 'FRANJA INFERIOR (90%)',   ...CS },            { text: fmt(minP),                 ...CS, alignment: 'right' }],
-              [{ text: 'FRANJA SUPERIOR (110%)',  ...CS },            { text: fmt(maxP),                 ...CS, alignment: 'right' }],
-              [{ text: 'TOTAL EJECUTADO',         ...CS, bold: true }, { text: fmt(inf.totalEjecutado),  ...CS, alignment: 'right', bold: true }],
-              [{ text: 'VALOR A DESCONTAR',       ...CS },            { text: fmt(inf.descontar),        ...CS, alignment: 'right' }],
-              [{ text: 'VALOR A RECONOCER',       ...CS },            { text: fmt(inf.reconocer),        ...CS, alignment: 'right' }],
-              [{ text: 'TOTAL ANTICIPOS PAGADOS', ...CS },            { text: fmt(inf.totalAnticipos),   ...CS, alignment: 'right' }],
-              [
-                { text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },
-                { text: fmt(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' },
-              ],
+              [{ text: 'VALOR ESTIMADO', ...TS2, alignment: 'center' }, { text: 'DESCONTAR', ...TS2, alignment: 'center' }, { text: 'RECONOCER', ...TS2, alignment: 'center' }],
+              [{ text: `% MINIMO PERMITIDO 90%   ${fmtL(minPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
+              [{ text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmtL(ntPeriodoFull)}`, ...CS, bold: true }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right' }],
+              [{ text: `% MAXIMO PERMITIDO 110%   ${fmtL(maxPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
+              ...(valCupsIn > 0 ? [[{ text: `CUPS / Tecnologías Inesperadas   ${fmtL(valCupsIn)}`, ...CS, color: '#1d4ed8', bold: true }, { text: fmtL(0), ...CS, alignment: 'right' }, { text: fmtL(valCupsIn), ...CS, alignment: 'right', color: '#1d4ed8', bold: true }]] : []),
+              [{ text: `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`, ...CS, bold: true, fillColor: '#f0fdf4' }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' }],
             ],
           },
           layout: 'lightHorizontalLines',
-          margin: [0, 0, 0, 16],
+          margin: [0, 0, 0, 8],
         },
 
-        // ── FIRMAS ──
-        { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 8] },
+        // Pagos anticipados
+        { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
+        {
+          table: {
+            widths: ['*', 110, 110],
+            body: [
+              [{ text: 'CONCEPTO', ...TS2, alignment: 'center' }, { text: 'VALOR NT MENSUAL', ...TS2, alignment: 'right' }, { text: 'PAGO 80%', ...TS2, alignment: 'right' }],
+              [{ text: 'PAGOS ANTICIPADOS', ...CS, bold: true }, { text: fmtL(monthlyNT * advanceMonths), ...CS, alignment: 'right' }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true }],
+              ...(advanceMonths > 0
+                ? (md as any[]).slice(0, advanceMonths).map((m: any) => [{ text: m.name, ...CS }, { text: fmtL(monthlyNT), ...CS, alignment: 'right' }, { text: fmtL(adv80), ...CS, alignment: 'right' }])
+                : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmtL(monthlyNT), ...CS, alignment: 'right' }, { text: fmtL(monthlyNT * 0.8), ...CS, alignment: 'right' }]]),
+              [{ text: pt === 'trimestral' ? 'TOTAL VALOR A PAGAR EN EL MES DE LIQUIDACIÓN (3er MES)' : 'TOTAL VALOR A PAGAR EN EL ÚLTIMO MES', ...CS, bold: true }, { text: fmtL(ntPeriodoFull), ...CS, alignment: 'right', bold: true }, { text: fmtL(advanceMonths === 0 ? adv80 : (lastMonthPay > 0 ? lastMonthPay : 0)), ...CS, alignment: 'right', bold: true }],
+              [{ text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true }, { text: '', ...CS }, { text: fmtL(ntPeriodoFull), ...CS, alignment: 'right', bold: true }],
+              [{ text: 'TOTAL ANTICIPOS PAGADOS', ...CS, bold: true }, { text: '', ...CS }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true }],
+            ],
+          },
+          layout: 'lightHorizontalLines',
+          margin: [0, 0, 0, 12],
+        },
+
+        // Firmas
+        { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 6] },
         {
           columns: [
-            { stack: [
-              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-              { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
-              { text: inf.prestador || '', alignment: 'center', fontSize: 7, italics: true },
-              { text: `NIT: ${inf.nit || ''}`, alignment: 'center', fontSize: 6.5, color: '#555555' },
-            ]},
-            { stack: [
-              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-              { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
-              { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
-              { text: 'NIT: 813.001.862-0', alignment: 'center', fontSize: 6.5, color: '#555555' },
-            ]},
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 }, { text: empresa, alignment: 'center', fontSize: 7, italics: true }, { text: `NIT: ${empresaNit}`, alignment: 'center', fontSize: 6.5, color: '#555555' }] },
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 }, { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true }, { text: 'NIT: 813.001.862-0', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
-          margin: [0, 0, 0, 16],
+          margin: [0, 0, 0, 14],
         },
         {
           columns: [
-            { stack: [
-              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-              { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
-              { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
-            ]},
-            { stack: [
-              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-              { text: inf.responsable || 'AUDITOR CONCURRENTE', bold: true, alignment: 'center', fontSize: 7 },
-              { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' },
-            ]},
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 }, { text: svName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true }] },
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
+          margin: [0, 0, 0, 10],
         },
+
+        // Nota ejecución financiera
+        ...(notaEF && notaEF.trim() ? [
+          { text: 'NOTA DE EJECUCIÓN FINANCIERA:', bold: true, fontSize: 7.5, margin: [0, 8, 0, 2] },
+          { table: { widths: ['*'], body: [[{ text: notaEF.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' }, fillColor: '#eff6ff', margin: [0, 0, 0, 6] },
+        ] : []),
+
+        // Notas adicionales
+        ...(notaAd && notaAd.trim() ? [
+          { text: 'OBSERVACIONES ADICIONALES:', bold: true, fontSize: 7.5, margin: [0, 4, 0, 2] },
+          { table: { widths: ['*'], body: [[{ text: notaAd.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#d1fae5', vLineColor: () => '#d1fae5' }, fillColor: '#f0fdf4', margin: [0, 0, 0, 6] },
+        ] : []),
+
+        // Nota legal
+        { text: 'Nota: El valor total programado por concepto de prestación de servicios en salud se encuentra sujeto a los descuentos tributarios que apliquen conforme a la normatividad vigente (retenciones en la fuente, IVA u otros tributos según corresponda). El valor neto a pagar se reflejará una vez efectuadas las deducciones respectivas.', fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#555555' },
+
+        // ══════════════════════ PÁGINA 3 ══════════════════════
+        { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
+        { text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
+        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${(md as any[]).map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsIn > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsIn)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(lastMonthPay > 0 ? lastMonthPay : 0)}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, se considera un valor a ${descontar > 0 ? `descontar de ${fmtL(descontar)} por ejecución inferior al 90%` : 'descontar de $0,00'} y un valor a ${reconocer > 0 ? `reconocer de ${fmtL(reconocer)} por ejecución superior al 110%` : 'reconocer de $0,00'}, resultando en un valor estimado final del ${periodoLabel.toLowerCase()} de ${fmtL(valorFinal)}.`, style: 'p' },
+
+        // Tabla resumen final
+        {
+          table: {
+            widths: ['*', 90, 90, 90],
+            body: [
+              [{ text: 'CONCEPTO', ...TS2, alignment: 'left' }, { text: 'DESCONTAR', ...TS2, alignment: 'right' }, { text: 'RECONOCER', ...TS2, alignment: 'right' }, { text: 'VALOR ESTIMADO', ...TS2, alignment: 'right', fillColor: '#bbf7d0' }],
+              [{ text: `Valor NT del ${periodoLabel} (${periodo})`, ...CS }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' }, { text: fmtL(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
+              [{ text: 'Total anticipos pagados (80% mensual)', ...CS }, { text: '', ...CS }, { text: fmtL(totalAdv), ...CS, alignment: 'right' }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
+              [{ text: `Saldo a pagar en el mes de cierre (${(md as any[])[(md as any[]).length - 1]?.name || ''})`, ...CS, bold: true }, { text: '', ...CS }, { text: '', ...CS }, { text: fmtL(lastMonthPay > 0 ? lastMonthPay : 0), ...CS, alignment: 'right', bold: true, fillColor: '#dcfce7' }],
+            ],
+          },
+          layout: 'lightHorizontalLines',
+          margin: [0, 4, 0, 8],
+        },
+
+        // Párrafo de cierre
+        { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 6] },
+
+        // Narrativa CUPS
+        { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 0] },
       ],
     };
 
-    pdfMake.createPdf(docDef).download(`Certificado_${inf.numero}_${(inf.prestador || '').replace(/\s+/g, '_')}.pdf`);
+    pdfMake.createPdf(docDef).download(`Certificado_${inf.numero}_${empresa.replace(/\s+/g, '_')}.pdf`);
   }, []);
 
   const hasData = !!comparisonSummary && !!pgpData && months.length > 0;
