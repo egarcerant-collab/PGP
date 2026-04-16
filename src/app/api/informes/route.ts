@@ -83,15 +83,13 @@ export async function POST(request: Request) {
     const { data: existing, error: fetchError } = await supabase
       .from('informes')
       .select('numero')
-      .order('numero', { ascending: false })
-      .limit(1);
+      .order('numero', { ascending: true });
 
     if (fetchError) throw fetchError;
 
-    const lastNumber = existing && existing.length > 0
-      ? parseInt(existing[0].numero, 10) || 0
-      : 0;
-    const nuevoNumero = lastNumber + 1;
+    const used = new Set((existing || []).map(r => parseInt(r.numero, 10) || 0));
+    let nuevoNumero = 1;
+    while (used.has(nuevoNumero)) nuevoNumero++;
     const numeroFormateado = String(nuevoNumero).padStart(3, '0');
 
     const base = {

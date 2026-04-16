@@ -191,6 +191,29 @@ function drawStackedBarChart(
   return canvas.toDataURL('image/png', 1.0);
 }
 
+/** Carga el logo de Dusakawi y devuelve base64 usando canvas */
+async function loadLogoBase64(): Promise<string> {
+  if (typeof window === 'undefined') return '';
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(''); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve('');
+      }
+    };
+    img.onerror = () => resolve('');
+    img.src = '/imagenes pdf/logo-dusakawi.png';
+  });
+}
+
 export default function CertificadoTrimestral({
   comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable,
 }: CertificadoTrimestralProps) {
@@ -320,6 +343,7 @@ export default function CertificadoTrimestral({
     if (!selectedGroup || !pgpData || !selectedPrestador) return;
     setIsGenerating(true);
     toast({ title: 'Generando certificado...', description: 'Construyendo el documento.' });
+    const logoBase64 = await loadLogoBase64();
     try {
       const n = selectedGroup.months.length;
 
@@ -427,8 +451,15 @@ export default function CertificadoTrimestral({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const docDef: any = {
         pageSize: 'A4',
-        pageMargins: [38, 45, 38, 45],
+        pageMargins: [38, 52, 38, 45],
         defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+        ...(logoBase64 ? {
+          header: () => ({
+            image: logoBase64,
+            width: 80,
+            margin: [38, 7, 0, 0],
+          }),
+        } : {}),
         styles: {
           p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
           bold: { bold: true },
@@ -952,7 +983,8 @@ export default function CertificadoTrimestral({
   }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, notaAdicional, notaEjecucionFinanciera, valorCupsInesperadas, cantidadCupsInesperadas, toast]);
 
   // Genera PDF completo desde los datos guardados en el Registro (idéntico a handleGenerate)
-  const handleGenerateFromRecord = useCallback((inf: any) => {
+  const handleGenerateFromRecord = useCallback(async (inf: any) => {
+    const logoBase64 = await loadLogoBase64();
     const pd = inf.pdfData;
 
     // Registros antiguos sin pdfData: PDF de respaldo simplificado
@@ -964,8 +996,11 @@ export default function CertificadoTrimestral({
       const minPB = (inf.ntPeriodo || 0) * 0.9;
       const maxPB = (inf.ntPeriodo || 0) * 1.1;
       const docB: any = {
-        pageSize: 'A4', pageMargins: [38, 45, 38, 45],
+        pageSize: 'A4', pageMargins: [38, 52, 38, 45],
         defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+        ...(logoBase64 ? {
+          header: () => ({ image: logoBase64, width: 80, margin: [38, 7, 0, 0] }),
+        } : {}),
         content: [
           { table: { widths: ['*','auto','auto','auto','auto'], body: [[{ text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },{ text: 'Código: DI-MT-SD-F-14', fontSize: 6.5, alignment: 'center' },{ text: 'Versión: 01', fontSize: 6.5, alignment: 'center' },{ text: 'Emisión: 21/02/2023', fontSize: 6.5, alignment: 'center' },{ text: 'Vigencia: 22/02/2023', fontSize: 6.5, alignment: 'center' }]] }, layout: 'noBorders', margin: [0,0,0,2] },
           { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0,0,0,4] },
@@ -1021,8 +1056,11 @@ export default function CertificadoTrimestral({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const docDef: any = {
       pageSize: 'A4',
-      pageMargins: [38, 45, 38, 45],
+      pageMargins: [38, 52, 38, 45],
       defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+      ...(logoBase64 ? {
+        header: () => ({ image: logoBase64, width: 80, margin: [38, 7, 0, 0] }),
+      } : {}),
       styles: {
         p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
         bold: { bold: true },
