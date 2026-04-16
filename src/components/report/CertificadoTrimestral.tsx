@@ -1209,8 +1209,9 @@ export default function CertificadoTrimestral({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-
-        {/* Auditor y Supervisor — siempre visibles */}
+        {hasData ? (
+          <>
+        {/* Auditor y Supervisor — visibles con auditoría abierta */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-blue-700">Auditor Concurrente Asignado</Label>
@@ -1221,9 +1222,6 @@ export default function CertificadoTrimestral({
             <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." className="border-blue-200 focus:border-blue-400" />
           </div>
         </div>
-
-        {hasData ? (
-          <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label className="text-xs">Tipo de período</Label>
