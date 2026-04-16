@@ -31,9 +31,15 @@ export async function GET() {
 
     let query = supabase.from('informes').select('*').order('numero', { ascending: false });
 
-    // Auditor solo ve sus propios informes (por nombre en responsable)
-    if (!isAdmin && currentUser?.nombre) {
-      query = query.ilike('responsable', currentUser.nombre);
+    // Superadmin/admin ven todos — auditor solo ve los suyos
+    if (!isAdmin) {
+      if (currentUser?.nombre) {
+        // Coincidencia parcial para tolerar variaciones de capitalización
+        query = query.ilike('responsable', `%${currentUser.nombre.trim()}%`);
+      } else {
+        // Sin usuario identificado: no mostrar nada
+        query = query.eq('numero', '__none__');
+      }
     }
 
     const { data, error } = await query;
