@@ -29,6 +29,7 @@ interface CertificadoTrimestralProps {
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
   onSaveAudit?: () => Promise<void>;
   userName?: string;
+  initialResponsable?: string;
 }
 
 const MONTH_ES: Record<string, string> = {
@@ -191,14 +192,16 @@ function drawStackedBarChart(
 }
 
 export default function CertificadoTrimestral({
-  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName,
+  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable,
 }: CertificadoTrimestralProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('trimestral');
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState(0);
   const [informeNum, setInformeNum] = useState('');
   const [contrato, setContrato] = useState(selectedPrestador?.CONTRATO || '');
-  const [responsable, setResponsable] = useState(userName ? userName.toUpperCase() : 'EDUARDO GARCERANT GONZALEZ');
-  const [supervisorName, setSupervisorName] = useState(userName ? userName.toUpperCase() : '');
+  const [responsable, setResponsable] = useState(
+    initialResponsable ? initialResponsable.toUpperCase() : (userName ? userName.toUpperCase() : '')
+  );
+  const [supervisorName, setSupervisorName] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
@@ -218,6 +221,13 @@ export default function CertificadoTrimestral({
   const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
   const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
   const { toast } = useToast();
+
+  // Actualiza el responsable cuando se carga una auditoría de otro auditor
+  useEffect(() => {
+    if (initialResponsable) {
+      setResponsable(initialResponsable.toUpperCase());
+    }
+  }, [initialResponsable]);
 
   // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
   useEffect(() => {
@@ -257,6 +267,10 @@ export default function CertificadoTrimestral({
       setLoadingHistorial(false);
     }
   };
+
+  // Auto-carga el registro al montar el componente
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadHistorial(); }, []);
 
   const handleDeleteConfirm = async () => {
     if (pwInput !== '123456') {
@@ -872,7 +886,7 @@ export default function CertificadoTrimestral({
     }
   }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, toast]);
 
-  if (!comparisonSummary || !pgpData || months.length === 0) return null;
+  const hasData = !!comparisonSummary && !!pgpData && months.length > 0;
 
   return (
     <Card className="shadow-lg border-primary/20 bg-slate-50/50">
@@ -886,6 +900,8 @@ export default function CertificadoTrimestral({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {hasData ? (
+          <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label className="text-xs">Tipo de período</Label>
@@ -999,9 +1015,16 @@ export default function CertificadoTrimestral({
             📋
           </Button>
         </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm">
+            <FileText className="h-4 w-4 shrink-0" />
+            <span>Selecciona un prestador y carga datos JSON para generar nuevos certificados.</span>
+          </div>
+        )}
 
-        {/* Historial de informes */}
-        {showHistorial && (
+        {/* Historial de informes — siempre visible */}
+        {(!hasData || showHistorial) && (
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-sm">📂 Registro de Informes</h4>

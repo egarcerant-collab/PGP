@@ -49,11 +49,11 @@ const NAV: NavItem[] = [
   { id: "datos",      label: "Carga de Datos",          icon: FileJson,        group: "general" },
   { id: "validador",  label: "Validador NT",             icon: ShieldCheck,     group: "general" },
   { id: "historial",  label: "Historial",                icon: Archive,         group: "general" },
+  { id: "informes",   label: "Informes y Certificados",  icon: FileText,        group: "general" },
   { id: "inicio",     label: "Dashboard",                icon: LayoutDashboard, group: "analisis", requiresData: true },
   { id: "financiero", label: "Análisis Financiero",      icon: TrendingUp,      group: "analisis", requiresData: true },
   { id: "cups",       label: "CUPS / Tecnologías",       icon: Activity,        group: "analisis", requiresData: true },
   { id: "ajustes",    label: "Descuentos y Ajustes",     icon: Sliders,         group: "analisis", requiresData: true },
-  { id: "informes",   label: "Informes y Certificados",  icon: FileText,        group: "analisis", requiresData: true },
 ];
 
 export default function Home() {
@@ -201,7 +201,7 @@ export default function Home() {
             <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Análisis</p>
             <div className="space-y-0.5">
               {NAV.filter(n => n.group === "analisis").map(item => {
-                const locked = item.requiresData && !hasFullData;
+                const locked = item.requiresData && !hasFullData && currentUser?.rol !== 'superadmin';
                 return (
                   <button key={item.id}
                     onClick={() => !locked && setActiveModule(item.id)}

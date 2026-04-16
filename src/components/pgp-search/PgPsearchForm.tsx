@@ -542,8 +542,8 @@ const PgPsearchForm = forwardRef<
     );
   }
 
-  // ── no data yet: show empty state for analysis modules ──
-  if (!showComparison) {
+  // ── no data yet: show empty state for analysis modules (excepto informes que siempre se muestra) ──
+  if (!showComparison && activeModule !== "informes") {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
@@ -726,20 +726,23 @@ const PgPsearchForm = forwardRef<
   if (activeModule === "informes") {
     return (
       <div className="space-y-6">
-        {analysisHeader}
+        {showComparison && analysisHeader}
         <div className="flex flex-col gap-6">
+          {showComparison && (
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
             <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
           </div>
+          )}
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Certificado de Ejecución (DI-MT-SD-F-14)</h3>
             <CertificadoTrimestral
-              comparisonSummary={comparisonSummary!}
+              comparisonSummary={comparisonSummary}
               pgpData={reportData}
               selectedPrestador={selectedPrestador}
               executionDataByMonth={executionDataByMonth}
               userName={userName}
+              initialResponsable={initialAuditData?.auditor_nombre || userName}
               onSaveAudit={async () => {
                 if (!selectedPrestador || executionDataByMonth.size === 0) return;
                 const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';

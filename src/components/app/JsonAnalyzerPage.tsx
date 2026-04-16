@@ -26,11 +26,12 @@ export interface SavedAuditData {
   adjustedQuantities: Record<string, number>;
   comments: Record<string, string>;
   selectedRows: Record<string, boolean>;
-  executionData?: any; 
+  executionData?: any;
   jsonPrestadorCode?: string | null;
   uniqueUserCount?: number;
   pgpData?: any[];
   selectedPrestador?: any;
+  auditor_nombre?: string;
 }
 
 export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
