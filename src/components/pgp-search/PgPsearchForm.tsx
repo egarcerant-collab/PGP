@@ -566,7 +566,7 @@ const PgPsearchForm = forwardRef<
         <span className="text-xs text-muted-foreground">· NIT {selectedPrestador?.NIT}</span>
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>{comparisonSummary!.monthlyFinancials.length} mes{comparisonSummary!.monthlyFinancials.length !== 1 ? "es" : ""} analizados</span>
+        <span>{comparisonSummary?.monthlyFinancials.length ?? 0} mes{(comparisonSummary?.monthlyFinancials.length ?? 0) !== 1 ? "es" : ""} analizados</span>
       </div>
     </div>
   );
