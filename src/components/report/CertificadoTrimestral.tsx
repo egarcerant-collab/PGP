@@ -1124,11 +1124,15 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
-                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
+                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50 disabled:opacity-50"
                       onClick={() => { setViewingInf(null); setTimeout(() => handleGenerate(), 100); }}
-                      disabled={isGenerating}>
+                      disabled={!hasData || isGenerating}
+                      title={!hasData ? 'Carga los datos JSON del prestador para poder regenerar el PDF' : 'Generar PDF'}>
                       {isGenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : '📄'} Generar PDF
                     </Button>
+                    {!hasData && (
+                      <p className="w-full text-xs text-amber-600 text-center">Para regenerar el PDF, abre la auditoría desde Historial y carga los datos.</p>
+                    )}
                     {onSaveAudit && (
                       <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
                         onClick={async () => { await onSaveAudit(); setViewingInf(null); }}>
