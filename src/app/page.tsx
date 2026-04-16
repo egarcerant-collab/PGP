@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
   Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
-  Users, LogOut,
+  Users, LogOut, ClipboardCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ export type CupCountInfo = {
 };
 export type CupCountsMap = Map<string, CupCountInfo>;
 export type ExecutionDataByMonth = Map<string, MonthlyExecutionData>;
-export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador";
+export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador" | "cierre";
 
 interface NavItem {
   id: ModuleId;
@@ -54,6 +54,7 @@ const NAV: NavItem[] = [
   { id: "financiero", label: "Análisis Financiero",      icon: TrendingUp,      group: "analisis", requiresData: true },
   { id: "cups",       label: "CUPS / Tecnologías",       icon: Activity,        group: "analisis", requiresData: true },
   { id: "ajustes",    label: "Descuentos y Ajustes",     icon: Sliders,         group: "analisis", requiresData: true },
+  { id: "cierre",     label: "Generación de Certificados", icon: ClipboardCheck, group: "analisis", requiresData: true },
 ];
 
 export default function Home() {

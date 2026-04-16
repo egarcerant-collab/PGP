@@ -722,18 +722,34 @@ const PgPsearchForm = forwardRef<
     );
   }
 
-  // ── informes ──
+  // ── informes (General): solo Registro de Informes ──
   if (activeModule === "informes") {
     return (
       <div className="space-y-6">
-        {showComparison && analysisHeader}
+        <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+          <CertificadoTrimestral
+            comparisonSummary={comparisonSummary}
+            pgpData={reportData}
+            selectedPrestador={selectedPrestador}
+            executionDataByMonth={executionDataByMonth}
+            userName={userName}
+            initialResponsable={initialAuditData?.auditor_nombre || userName}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── cierre (Análisis): Generación de Certificados completa ──
+  if (activeModule === "cierre") {
+    return (
+      <div className="space-y-6">
+        {analysisHeader}
         <div className="flex flex-col gap-6">
-          {showComparison && (
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
             <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
           </div>
-          )}
           <div className="rounded-xl border border-border bg-card shadow-sm p-5">
             <h3 className="font-semibold text-sm mb-4">Certificado de Ejecución (DI-MT-SD-F-14)</h3>
             <CertificadoTrimestral
