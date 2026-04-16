@@ -192,7 +192,7 @@ export default function Home() {
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}>
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span className="truncate">{item.label}</span>
                 </button>
               ))}
             </div>
