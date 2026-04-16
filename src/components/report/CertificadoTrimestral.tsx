@@ -206,7 +206,7 @@ export default function CertificadoTrimestral({
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
   const [isSavingAudit, setIsSavingAudit] = useState(false);
-  const [showHistorial, setShowHistorial] = useState(false);
+
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
@@ -1209,6 +1209,19 @@ export default function CertificadoTrimestral({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {/* Auditor y Supervisor — siempre visibles */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-blue-700">Auditor Concurrente Asignado</Label>
+            <Input value={responsable} onChange={e => setResponsable(e.target.value)} placeholder="Nombre del auditor..." className="border-blue-200 focus:border-blue-400" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-blue-700">Nombre Supervisor del Contrato</Label>
+            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." className="border-blue-200 focus:border-blue-400" />
+          </div>
+        </div>
+
         {hasData ? (
           <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1241,16 +1254,6 @@ export default function CertificadoTrimestral({
           <div className="space-y-1">
             <Label className="text-xs">Nº Contrato</Label>
             <Input value={contrato} onChange={e => setContrato(e.target.value)} placeholder="Ej: 44847_03_PGP" />
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-xs">Auditor Concurrente Asignado</Label>
-            <Input value={responsable} onChange={e => setResponsable(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Nombre Supervisor del Contrato</Label>
-            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." />
           </div>
         </div>
 
@@ -1329,7 +1332,7 @@ export default function CertificadoTrimestral({
         )}
 
         {/* Historial de informes — siempre visible */}
-        {(!hasData || showHistorial) && (
+        {(
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-sm">📂 Registro de Informes</h4>
@@ -1426,6 +1429,7 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Valor Final</span><span className="font-semibold text-green-700">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(viewingInf.valorFinal)}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">NIT</span><span className="font-semibold">{viewingInf.nit || '—'}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Auditor Concurrente</span><span className="font-semibold text-blue-700">{viewingInf.responsable || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
