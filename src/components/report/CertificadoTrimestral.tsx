@@ -886,6 +886,119 @@ export default function CertificadoTrimestral({
     }
   }, [selectedPrestador, comparisonSummary, periodGroups, selectedPeriodIndex, periodType, pgpData, contrato, responsable, supervisorName, toast]);
 
+  // Genera PDF directamente desde los datos guardados en el Registro (sin necesitar JSON cargado)
+  const handleGenerateFromRecord = useCallback((inf: any) => {
+    const fmt = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v || 0);
+    const HS  = { bold: true, fontSize: 7, fillColor: '#e0e7ff' as string };
+    const CS  = { fontSize: 7 };
+    const TS2 = { bold: true, fontSize: 7, fillColor: '#bfdbfe' as string };
+    const minP = (inf.ntPeriodo || 0) * 0.9;
+    const maxP = (inf.ntPeriodo || 0) * 1.1;
+
+    const docDef: any = {
+      pageSize: 'A4',
+      pageMargins: [38, 45, 38, 45],
+      defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+      styles: {
+        p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
+        sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 4, 0, 2] },
+      },
+      content: [
+        // ── CABECERA PROCESO ──
+        {
+          table: {
+            widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+            body: [[
+              { text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },
+              { text: 'Código: DI-MT-SD-F-14', fontSize: 6.5, alignment: 'center' },
+              { text: 'Versión: 01',           fontSize: 6.5, alignment: 'center' },
+              { text: 'Emisión: 21/02/2023',   fontSize: 6.5, alignment: 'center' },
+              { text: 'Vigencia: 22/02/2023',  fontSize: 6.5, alignment: 'center' },
+            ]],
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, 2],
+        },
+        { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0, 0, 0, 4] },
+
+        // ── TABLA ENCABEZADO ──
+        {
+          table: {
+            widths: ['auto', '*', 'auto', '*'],
+            body: [
+              [{ text: 'INFORME Nº', ...HS }, { text: inf.numero || '', ...CS }, { text: 'FECHA', ...HS }, { text: inf.fecha || '', ...CS }],
+              [{ text: 'EMPRESA',    ...HS }, { text: inf.prestador || '', ...CS }, { text: 'NIT',  ...HS }, { text: inf.nit || '', ...CS }],
+              [{ text: 'MUNICIPIO',  ...HS }, { text: (inf.municipio || '').toUpperCase(), ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: (inf.departamento || '').toUpperCase(), ...CS }],
+              [{ text: 'Nº CONTRATO', ...HS }, { text: inf.contrato || '', ...CS }, { text: 'TIPO PERÍODO', ...HS }, { text: inf.tipoPeriodo || '', ...CS }],
+              [{ text: 'RESPONSABLE', ...HS }, { text: inf.responsable || '', ...CS }, { text: 'MESES', ...HS }, { text: inf.periodo || '', ...CS }],
+            ],
+          },
+          margin: [0, 0, 0, 8],
+        },
+
+        // ── RESUMEN FINANCIERO ──
+        { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0, 4, 0, 2] },
+        {
+          table: {
+            widths: ['*', 130],
+            body: [
+              [{ text: 'CONCEPTO', ...TS2, alignment: 'center' }, { text: 'VALOR', ...TS2, alignment: 'right' }],
+              [{ text: 'VALOR NT DEL PERÍODO',   ...CS, bold: true }, { text: fmt(inf.ntPeriodo),       ...CS, alignment: 'right' }],
+              [{ text: 'FRANJA INFERIOR (90%)',   ...CS },            { text: fmt(minP),                 ...CS, alignment: 'right' }],
+              [{ text: 'FRANJA SUPERIOR (110%)',  ...CS },            { text: fmt(maxP),                 ...CS, alignment: 'right' }],
+              [{ text: 'TOTAL EJECUTADO',         ...CS, bold: true }, { text: fmt(inf.totalEjecutado),  ...CS, alignment: 'right', bold: true }],
+              [{ text: 'VALOR A DESCONTAR',       ...CS },            { text: fmt(inf.descontar),        ...CS, alignment: 'right' }],
+              [{ text: 'VALOR A RECONOCER',       ...CS },            { text: fmt(inf.reconocer),        ...CS, alignment: 'right' }],
+              [{ text: 'TOTAL ANTICIPOS PAGADOS', ...CS },            { text: fmt(inf.totalAnticipos),   ...CS, alignment: 'right' }],
+              [
+                { text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },
+                { text: fmt(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' },
+              ],
+            ],
+          },
+          layout: 'lightHorizontalLines',
+          margin: [0, 0, 0, 16],
+        },
+
+        // ── FIRMAS ──
+        { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 8] },
+        {
+          columns: [
+            { stack: [
+              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
+              { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
+              { text: inf.prestador || '', alignment: 'center', fontSize: 7, italics: true },
+              { text: `NIT: ${inf.nit || ''}`, alignment: 'center', fontSize: 6.5, color: '#555555' },
+            ]},
+            { stack: [
+              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
+              { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 },
+              { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+              { text: 'NIT: 813.001.862-0', alignment: 'center', fontSize: 6.5, color: '#555555' },
+            ]},
+          ],
+          margin: [0, 0, 0, 16],
+        },
+        {
+          columns: [
+            { stack: [
+              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
+              { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
+              { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+            ]},
+            { stack: [
+              { text: '________________________________', alignment: 'center', fontSize: 7.5 },
+              { text: inf.responsable || 'AUDITOR CONCURRENTE', bold: true, alignment: 'center', fontSize: 7 },
+              { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' },
+            ]},
+          ],
+        },
+      ],
+    };
+
+    pdfMake.createPdf(docDef).download(`Certificado_${inf.numero}_${(inf.prestador || '').replace(/\s+/g, '_')}.pdf`);
+  }, []);
+
   const hasData = !!comparisonSummary && !!pgpData && months.length > 0;
 
   return (
@@ -1010,10 +1123,6 @@ export default function CertificadoTrimestral({
               Guardar Auditoría
             </Button>
           )}
-          <Button variant="ghost" size="icon" title="Ver historial de informes"
-            onClick={() => { setShowHistorial(v => !v); if (!showHistorial) loadHistorial(); }}>
-            📋
-          </Button>
         </div>
           </>
         ) : (
@@ -1124,15 +1233,11 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
-                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50 disabled:opacity-50"
-                      onClick={() => { setViewingInf(null); setTimeout(() => handleGenerate(), 100); }}
-                      disabled={!hasData || isGenerating}
-                      title={!hasData ? 'Carga los datos JSON del prestador para poder regenerar el PDF' : 'Generar PDF'}>
-                      {isGenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : '📄'} Generar PDF
+                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
+                      onClick={() => handleGenerateFromRecord(viewingInf)}
+                      title="Descargar PDF del certificado">
+                      📄 Descargar PDF
                     </Button>
-                    {!hasData && (
-                      <p className="w-full text-xs text-amber-600 text-center">Para regenerar el PDF, abre la auditoría desde Historial y carga los datos.</p>
-                    )}
                     {onSaveAudit && (
                       <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
                         onClick={async () => { await onSaveAudit(); setViewingInf(null); }}>
