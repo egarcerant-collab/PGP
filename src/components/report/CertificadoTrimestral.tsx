@@ -49,7 +49,7 @@ const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n))
 
 /** Dibuja una gráfica de barras simple y devuelve base64 PNG */
 function drawBarChart(
-  labels: string[], values: number[], color: string, W = 490, H = 175
+  labels: string[], values: number[], color: string, W = 490, H = 130
 ): string {
   if (typeof window === 'undefined') return '';
   const SCALE = 3;
@@ -103,7 +103,7 @@ function drawBarChart(
  */
 function drawStackedBarChart(
   labels: string[], base: number[], extra: number,
-  W = 490, H = 175, isCurrency = true, baseColor = '#1d4ed8'
+  W = 490, H = 130, isCurrency = true, baseColor = '#1d4ed8'
 ): string {
   if (typeof window === 'undefined') return '';
   const SCALE = 3;
@@ -417,7 +417,7 @@ export default function CertificadoTrimestral({
         : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
       // Chart 2: apilado (conteo normal + actividades inesperadas) si hay cantidad
       const chart2 = cantInespNum > 0
-        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 175, false, '#15803d')
+        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 130, false, '#15803d')
         : drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
@@ -461,11 +461,11 @@ export default function CertificadoTrimestral({
           }),
         } : {}),
         styles: {
-          p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
+          p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 2] },
           bold: { bold: true },
-          sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 4, 0, 2] },
-          chartLabel: { fontSize: 7.5, bold: true, margin: [0, 4, 0, 1] },
-          tableTitle: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 6, 0, 4], decoration: 'underline' },
+          sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 2, 0, 2] },
+          chartLabel: { fontSize: 7.5, bold: true, margin: [0, 2, 0, 1] },
+          tableTitle: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 3, 0, 2], decoration: 'underline' },
         },
         content: [
 
@@ -531,7 +531,7 @@ export default function CertificadoTrimestral({
                 ],
               ],
             },
-            margin: [0, 0, 0, 5],
+            margin: [0, 0, 0, 3],
           },
 
           // ══ OBJETIVO ══
@@ -566,7 +566,7 @@ export default function CertificadoTrimestral({
               : 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR',
             style: 'chartLabel',
           },
-          chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 4] } : {},
+          chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 2] } : {},
 
           // ══ NARRATIVA 2 (entre gráficas) ══
           {
@@ -586,7 +586,7 @@ export default function CertificadoTrimestral({
               : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE',
             style: 'chartLabel',
           },
-          chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 4] } : {},
+          chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 2] } : {},
 
           // ══ NARRATIVA 3 (debajo de gráfica 2) ══
           {
@@ -637,7 +637,7 @@ export default function CertificadoTrimestral({
               ],
             },
             layout: 'lightHorizontalLines',
-            margin: [0, 0, 0, 8],
+            margin: [0, 0, 0, 4],
           },
 
           // Tabla de pagos anticipados
@@ -687,11 +687,11 @@ export default function CertificadoTrimestral({
               ],
             },
             layout: 'lightHorizontalLines',
-            margin: [0, 0, 0, 12],
+            margin: [0, 0, 0, 6],
           },
 
           // Firma — sección antes de la narrativa
-          { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 6] },
+          { text: 'Se firma por', fontSize: 7.5, margin: [0, 2, 0, 3] },
           {
             columns: [
               {
@@ -711,7 +711,7 @@ export default function CertificadoTrimestral({
                 ],
               },
             ],
-            margin: [0, 0, 0, 14],
+            margin: [0, 0, 0, 6],
           },
           {
             columns: [
@@ -730,7 +730,7 @@ export default function CertificadoTrimestral({
                 ],
               },
             ],
-            margin: [0, 0, 0, 10],
+            margin: [0, 0, 0, 5],
           },
 
           // ── Nota de ejecución financiera ──
@@ -1035,7 +1035,7 @@ export default function CertificadoTrimestral({
       ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.value), valCupsIn)
       : drawBarChart(labels, (md as any[]).map((m: any) => m.value), '#1d4ed8');
     const chart2 = cantInespNum > 0
-      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 175, false, '#15803d')
+      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 130, false, '#15803d')
       : drawBarChart(labels, (md as any[]).map((m: any) => m.cups), '#15803d');
 
     const detalleValor = (md as any[]).map((m: any, i: number) => {
@@ -1062,11 +1062,11 @@ export default function CertificadoTrimestral({
         header: () => ({ image: logoBase64, width: 80, margin: [38, 7, 0, 0] }),
       } : {}),
       styles: {
-        p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 3] },
+        p: { fontSize: 7.5, alignment: 'justify', margin: [0, 0, 0, 2] },
         bold: { bold: true },
-        sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 4, 0, 2] },
-        chartLabel: { fontSize: 7.5, bold: true, margin: [0, 4, 0, 1] },
-        tableTitle: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 6, 0, 4], decoration: 'underline' },
+        sectionHead: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 2, 0, 2] },
+        chartLabel: { fontSize: 7.5, bold: true, margin: [0, 2, 0, 1] },
+        tableTitle: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 3, 0, 2], decoration: 'underline' },
       },
       content: [
         // ══ CABECERA PROCESO ══
@@ -1099,7 +1099,7 @@ export default function CertificadoTrimestral({
               [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'MESES', ...HS }, { text: periodo, ...CS }],
             ],
           },
-          margin: [0, 0, 0, 5],
+          margin: [0, 0, 0, 3],
         },
 
         // ══ OBJETIVO ══
@@ -1116,7 +1116,7 @@ export default function CertificadoTrimestral({
 
         // ══ GRÁFICA 1 ══
         { text: valCupsIn > 0 ? 'GRÁFICO 1. CONSOLIDADO DE EJECUCIÓN EN VALOR POR CUPS — INCLUYE CUPS / TECNOLOGÍAS INESPERADAS' : 'GRÁFICO 1. CONSOLIDO DE EJECUCIÓN EN VALOR POR CUPS SEGÚN REPORTE DEL PRESTADOR', style: 'chartLabel' },
-        chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 4] } : {},
+        chart1 ? { image: chart1, width: 490, margin: [0, 0, 0, 2] } : {},
 
         // ══ NARRATIVA 2 ══
         { text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valCupsIn > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtNL(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmtL(valCupsIn)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`, style: 'p' },
@@ -1124,7 +1124,7 @@ export default function CertificadoTrimestral({
 
         // ══ GRÁFICA 2 ══
         { text: cantInespNum > 0 ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS' : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
-        chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 4] } : {},
+        chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 2] } : {},
 
         // ══ NARRATIVA 3 ══
         { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
@@ -1146,7 +1146,7 @@ export default function CertificadoTrimestral({
             ],
           },
           layout: 'lightHorizontalLines',
-          margin: [0, 0, 0, 8],
+          margin: [0, 0, 0, 4],
         },
 
         // Pagos anticipados
@@ -1166,24 +1166,24 @@ export default function CertificadoTrimestral({
             ],
           },
           layout: 'lightHorizontalLines',
-          margin: [0, 0, 0, 12],
+          margin: [0, 0, 0, 6],
         },
 
         // Firmas
-        { text: 'Se firma por', fontSize: 7.5, margin: [0, 4, 0, 6] },
+        { text: 'Se firma por', fontSize: 7.5, margin: [0, 2, 0, 3] },
         {
           columns: [
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 }, { text: empresa, alignment: 'center', fontSize: 7, italics: true }, { text: `NIT: ${empresaNit}`, alignment: 'center', fontSize: 6.5, color: '#555555' }] },
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'REPRESENTANTE LEGAL', bold: true, alignment: 'center', fontSize: 7 }, { text: 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true }, { text: 'NIT: 813.001.862-0', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
-          margin: [0, 0, 0, 14],
+          margin: [0, 0, 0, 6],
         },
         {
           columns: [
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 }, { text: svName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true }] },
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
-          margin: [0, 0, 0, 10],
+          margin: [0, 0, 0, 5],
         },
 
         // Nota ejecución financiera
@@ -1219,11 +1219,11 @@ export default function CertificadoTrimestral({
             ],
           },
           layout: 'lightHorizontalLines',
-          margin: [0, 4, 0, 8],
+          margin: [0, 2, 0, 4],
         },
 
         // Párrafo de cierre
-        { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 6] },
+        { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 3] },
 
         // Narrativa CUPS
         { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 0] },
