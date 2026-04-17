@@ -597,7 +597,7 @@ export default function CertificadoTrimestral({
           // ══════════════════════
           //       PÁGINA 2
           // ══════════════════════
-          { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle', pageBreak: 'before' },
+          { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle' },
 
           // Tabla financiera — TABLA 1
           {
@@ -784,7 +784,7 @@ export default function CertificadoTrimestral({
 
           // ══════════════════════ PÁGINA 3 ══════════════════════
           // Narrativa página 3 — ejecución financiera
-          { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
+          { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
           {
             text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
             style: 'p',
@@ -1130,7 +1130,7 @@ export default function CertificadoTrimestral({
         { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
 
         // ══════════════════════ PÁGINA 2 ══════════════════════
-        { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle', pageBreak: 'before' },
+        { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle' },
 
         // Tabla financiera
         {
@@ -1202,7 +1202,7 @@ export default function CertificadoTrimestral({
         { text: 'Nota: El valor total programado por concepto de prestación de servicios en salud se encuentra sujeto a los descuentos tributarios que apliquen conforme a la normatividad vigente (retenciones en la fuente, IVA u otros tributos según corresponda). El valor neto a pagar se reflejará una vez efectuadas las deducciones respectivas.', fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#555555' },
 
         // ══════════════════════ PÁGINA 3 ══════════════════════
-        { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', pageBreak: 'before', decoration: 'underline', margin: [0, 0, 0, 4] },
+        { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
         { text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
         { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${(md as any[]).map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsIn > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsIn)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
         { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(lastMonthPay > 0 ? lastMonthPay : 0)}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, se considera un valor a ${descontar > 0 ? `descontar de ${fmtL(descontar)} por ejecución inferior al 90%` : 'descontar de $0,00'} y un valor a ${reconocer > 0 ? `reconocer de ${fmtL(reconocer)} por ejecución superior al 110%` : 'reconocer de $0,00'}, resultando en un valor estimado final del ${periodoLabel.toLowerCase()} de ${fmtL(valorFinal)}.`, style: 'p' },
