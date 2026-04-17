@@ -49,7 +49,7 @@ const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n))
 
 /** Dibuja una gráfica de barras simple y devuelve base64 PNG */
 function drawBarChart(
-  labels: string[], values: number[], color: string, W = 490, H = 130
+  labels: string[], values: number[], color: string, W = 490, H = 95
 ): string {
   if (typeof window === 'undefined') return '';
   const SCALE = 3;
@@ -103,7 +103,7 @@ function drawBarChart(
  */
 function drawStackedBarChart(
   labels: string[], base: number[], extra: number,
-  W = 490, H = 130, isCurrency = true, baseColor = '#1d4ed8'
+  W = 490, H = 95, isCurrency = true, baseColor = '#1d4ed8'
 ): string {
   if (typeof window === 'undefined') return '';
   const SCALE = 3;
@@ -417,7 +417,7 @@ export default function CertificadoTrimestral({
         : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
       // Chart 2: apilado (conteo normal + actividades inesperadas) si hay cantidad
       const chart2 = cantInespNum > 0
-        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 130, false, '#15803d')
+        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 95, false, '#15803d')
         : drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
@@ -451,8 +451,8 @@ export default function CertificadoTrimestral({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const docDef: any = {
         pageSize: 'A4',
-        pageMargins: [38, 52, 38, 45],
-        defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+        pageMargins: [35, 48, 35, 30],
+        defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.1 },
         ...(logoBase64 ? {
           header: () => ({
             image: logoBase64,
@@ -996,8 +996,8 @@ export default function CertificadoTrimestral({
       const minPB = (inf.ntPeriodo || 0) * 0.9;
       const maxPB = (inf.ntPeriodo || 0) * 1.1;
       const docB: any = {
-        pageSize: 'A4', pageMargins: [38, 52, 38, 45],
-        defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
+        pageSize: 'A4', pageMargins: [35, 48, 35, 30],
+        defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.1 },
         ...(logoBase64 ? {
           header: () => ({ image: logoBase64, width: 80, margin: [38, 7, 0, 0] }),
         } : {}),
@@ -1035,7 +1035,7 @@ export default function CertificadoTrimestral({
       ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.value), valCupsIn)
       : drawBarChart(labels, (md as any[]).map((m: any) => m.value), '#1d4ed8');
     const chart2 = cantInespNum > 0
-      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 130, false, '#15803d')
+      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 95, false, '#15803d')
       : drawBarChart(labels, (md as any[]).map((m: any) => m.cups), '#15803d');
 
     const detalleValor = (md as any[]).map((m: any, i: number) => {
