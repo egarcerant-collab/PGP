@@ -1154,7 +1154,7 @@ export default function CertificadoTrimestral({
               [{ text: 'PRESTADOR IPS', ...HS }, { text: empresa, ...CS }, { text: 'NIT', ...HS }, { text: empresaNit, ...CS }],
               [{ text: 'MUNICIPIO', ...HS }, { text: municipio, ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: depto, ...CS }],
               [{ text: 'Nº CONTRATO', ...HS }, { text: contratoNum, ...CS }, { text: 'VIGENCIA CONTRACTUAL', ...HS }, { text: `${fechaInicio} - ${fechaFin}`, ...CS }],
-              [{ text: 'OBJETO DE LA EVALUACIÓN', ...HS }, { text: 'Ejecución Financiera y Financiación', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
+              [{ text: 'OBJETO DE LA EVALUACIÓN', ...HS }, { text: 'Seguimiento y evaluación de la ejecución financiera del contrato PGP frente a la Nota Técnica establecida', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
               [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'CORTE DE LA INFORMACIÓN', ...HS }, { text: periodo, ...CS }],
             ],
           },
