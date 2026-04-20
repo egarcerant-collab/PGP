@@ -612,6 +612,47 @@ export default function CertificadoTrimestral({
             style: 'p',
           },
 
+          // ══ TABLA % EJECUCIÓN MENSUAL ══
+          { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
+          {
+            table: {
+              widths: ['*', 110, 110, 60],
+              body: [
+                [
+                  { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                  { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                  { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                  { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                ],
+                ...mesData.map(m => {
+                  const pct = monthlyNT > 0 ? (m.value / monthlyNT) * 100 : 0;
+                  const ok = pct >= 90 && pct <= 110;
+                  const high = pct > 110;
+                  const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
+                  const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
+                  return [
+                    { text: m.name, fontSize: 7, fillColor: rowFill },
+                    { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
+                    { text: fmt(m.value), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                    { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
+                  ];
+                }),
+                [
+                  { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
+                  { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  { text: fmt(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  {
+                    text: `${(monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
+                    bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
+                    color: (() => { const p = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                  },
+                ],
+              ],
+            },
+            layout: 'lightHorizontalLines',
+            margin: [0, 0, 0, 4],
+          },
+
           // ══════════════════════
           //       PÁGINA 2
           // ══════════════════════
@@ -1146,6 +1187,47 @@ export default function CertificadoTrimestral({
 
         // ══ NARRATIVA 3 ══
         { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
+
+        // ══ TABLA % EJECUCIÓN MENSUAL ══
+        { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
+        {
+          table: {
+            widths: ['*', 110, 110, 60],
+            body: [
+              [
+                { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+              ],
+              ...(md as any[]).map((m: any) => {
+                const pct = monthlyNT > 0 ? (m.value / monthlyNT) * 100 : 0;
+                const ok = pct >= 90 && pct <= 110;
+                const high = pct > 110;
+                const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
+                const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
+                return [
+                  { text: m.name, fontSize: 7, fillColor: rowFill },
+                  { text: fmtL(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
+                  { text: fmtL(m.value), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                  { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
+                ];
+              }),
+              [
+                { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
+                { text: fmtL(monthlyNT * (md as any[]).length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                { text: fmtL(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                {
+                  text: `${(monthlyNT * (md as any[]).length > 0 ? (totalEjecutadoFinal / (monthlyNT * (md as any[]).length)) * 100 : 0).toFixed(1)}%`,
+                  bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
+                  color: (() => { const p = monthlyNT * (md as any[]).length > 0 ? (totalEjecutadoFinal / (monthlyNT * (md as any[]).length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                },
+              ],
+            ],
+          },
+          layout: 'lightHorizontalLines',
+          margin: [0, 0, 0, 4],
+        },
 
         // ══════════════════════ PÁGINA 2 ══════════════════════
         { text: 'TABLA 1 . RESUMEN DE EJECUCION DE DE LOS RESULTADO DE LA NOTA TECNICA', style: 'tableTitle' },
