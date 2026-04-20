@@ -537,7 +537,7 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   { text: 'OBJETO DE LA EVALUACIÓN', ...HS },
-                  { text: 'Ejecución Financiera y Financiación', ...CS },
+                  { text: 'Seguimiento y evaluación de la ejecución financiera del contrato PGP frente a la Nota Técnica establecida', ...CS },
                   { text: 'PERIODO EVALUADO', ...HS },
                   { text: periodoLabel, ...CS },
                 ],
