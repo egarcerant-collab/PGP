@@ -719,8 +719,8 @@ export default function CertificadoTrimestral({
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-                  { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: supervisorName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true },
+                  { text: supervisorName || 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true },
                 ],
               },
               {
@@ -1181,7 +1181,7 @@ export default function CertificadoTrimestral({
         },
         {
           columns: [
-            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 }, { text: svName || 'DUSAKAWI EPSI', alignment: 'center', fontSize: 7, italics: true }] },
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] },
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
           margin: [0, 0, 0, 5],
