@@ -727,7 +727,7 @@ export default function CertificadoTrimestral({
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
                   { text: responsable, bold: true, alignment: 'center', fontSize: 7 },
-                  { text: 'Supervisora(o) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' },
+                  { text: 'Supervisor(a) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' },
                 ],
               },
             ],
@@ -1182,7 +1182,7 @@ export default function CertificadoTrimestral({
         {
           columns: [
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] },
-            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Supervisora(o) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Supervisor(a) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
           margin: [0, 0, 0, 5],
         },
