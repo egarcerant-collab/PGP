@@ -719,8 +719,8 @@ export default function CertificadoTrimestral({
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
-                  { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 },
-                  { text: supervisorName || '', alignment: 'center', fontSize: 7, italics: true },
+                  { text: supervisorName || '', bold: true, alignment: 'center', fontSize: 7 },
+                  { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true },
                 ],
               },
               {
@@ -1181,7 +1181,7 @@ export default function CertificadoTrimestral({
         },
         {
           columns: [
-            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: 'SUPERVISOR DEL CONTRATO', bold: true, alignment: 'center', fontSize: 7 }, { text: svName || '', alignment: 'center', fontSize: 7, italics: true }] },
+            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] },
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Dir. Nacional del Riesgo en Salud', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
           margin: [0, 0, 0, 5],
@@ -1257,8 +1257,8 @@ export default function CertificadoTrimestral({
             <Input value={responsable} onChange={e => setResponsable(e.target.value)} placeholder="Nombre del auditor..." className="border-blue-200 focus:border-blue-400" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-blue-700">Nombre Supervisor del Contrato</Label>
-            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del supervisor..." className="border-blue-200 focus:border-blue-400" />
+            <Label className="text-xs font-semibold text-blue-700">Coordinadora(o) de la Dirección del Riesgo en Salud</Label>
+            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del coordinador(a)..." className="border-blue-200 focus:border-blue-400" />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
