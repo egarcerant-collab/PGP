@@ -242,6 +242,16 @@ export default function CertificadoTrimestral({
   const [viewUnlocked, setViewUnlocked] = useState(false);
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
+  const [notaEFLocked, setNotaEFLocked] = useState(false);
+  const [notaEFPw, setNotaEFPw] = useState('');
+  const [notaEFPwInput, setNotaEFPwInput] = useState('');
+  const [notaEFPwError, setNotaEFPwError] = useState(false);
+  const [notaEFUnlocking, setNotaEFUnlocking] = useState(false);
+  const [notaAdLocked, setNotaAdLocked] = useState(false);
+  const [notaAdPw, setNotaAdPw] = useState('');
+  const [notaAdPwInput, setNotaAdPwInput] = useState('');
+  const [notaAdPwError, setNotaAdPwError] = useState(false);
+  const [notaAdUnlocking, setNotaAdUnlocking] = useState(false);
   const [valorCupsInesperadas, setValorCupsInesperadas] = useState(0);
   const [cantidadCupsInesperadas, setCantidadCupsInesperadas] = useState<string>('');
   const { toast } = useToast();
@@ -1320,28 +1330,114 @@ export default function CertificadoTrimestral({
 
         {/* Nota de ejecución financiera */}
         <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1">
-            <span>📊</span> Nota de ejecución financiera
-          </Label>
-          <textarea
-            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-            placeholder="Ej: La ejecución del período refleja un incremento del 12% respecto al trimestre anterior..."
-            value={notaEjecucionFinanciera}
-            onChange={e => setNotaEjecucionFinanciera(e.target.value)}
-          />
+          <div className="flex items-center justify-between">
+            <Label className="text-xs flex items-center gap-1"><span>📊</span> Nota de ejecución financiera</Label>
+            {notaEjecucionFinanciera.trim() && !notaEFLocked && (
+              <button
+                onClick={() => {
+                  const pw = prompt('Crea una contraseña para bloquear esta nota:');
+                  if (pw && pw.trim()) { setNotaEFPw(pw.trim()); setNotaEFLocked(true); }
+                }}
+                className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold border border-amber-300 rounded px-2 py-0.5"
+              >🔒 Bloquear</button>
+            )}
+            {notaEFLocked && (
+              <button
+                onClick={() => { setNotaEFUnlocking(true); setNotaEFPwInput(''); setNotaEFPwError(false); }}
+                className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold border border-blue-300 rounded px-2 py-0.5"
+              >🔓 Editar</button>
+            )}
+          </div>
+          {notaEFLocked ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 min-h-[64px] whitespace-pre-wrap">
+              {notaEFUnlocking ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="password"
+                    placeholder="Contraseña..."
+                    value={notaEFPwInput}
+                    onChange={e => { setNotaEFPwInput(e.target.value); setNotaEFPwError(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (notaEFPwInput === notaEFPw) { setNotaEFLocked(false); setNotaEFUnlocking(false); setNotaEFPw(''); }
+                        else setNotaEFPwError(true);
+                      }
+                    }}
+                    className={`border rounded px-2 py-1 text-xs flex-1 ${notaEFPwError ? 'border-red-500' : 'border-input'}`}
+                    autoFocus
+                  />
+                  <button onClick={() => { if (notaEFPwInput === notaEFPw) { setNotaEFLocked(false); setNotaEFUnlocking(false); setNotaEFPw(''); } else setNotaEFPwError(true); }} className="text-blue-600 text-xs font-semibold">OK</button>
+                  <button onClick={() => setNotaEFUnlocking(false)} className="text-muted-foreground text-xs">✕</button>
+                  {notaEFPwError && <span className="text-red-500 text-[10px]">Contraseña incorrecta</span>}
+                </div>
+              ) : (
+                <span className="text-amber-700 select-none">🔒 Nota bloqueada</span>
+              )}
+            </div>
+          ) : (
+            <textarea
+              className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+              placeholder="Ej: La ejecución del período refleja un incremento del 12% respecto al trimestre anterior..."
+              value={notaEjecucionFinanciera}
+              onChange={e => setNotaEjecucionFinanciera(e.target.value)}
+            />
+          )}
         </div>
 
         {/* Notas adicionales */}
         <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1">
-            <span>⚙️</span> Notas adicionales
-          </Label>
-          <textarea
-            className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-            placeholder="Ej: Favorabilidad alta..."
-            value={notaAdicional}
-            onChange={e => setNotaAdicional(e.target.value)}
-          />
+          <div className="flex items-center justify-between">
+            <Label className="text-xs flex items-center gap-1"><span>⚙️</span> Notas adicionales</Label>
+            {notaAdicional.trim() && !notaAdLocked && (
+              <button
+                onClick={() => {
+                  const pw = prompt('Crea una contraseña para bloquear esta nota:');
+                  if (pw && pw.trim()) { setNotaAdPw(pw.trim()); setNotaAdLocked(true); }
+                }}
+                className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold border border-amber-300 rounded px-2 py-0.5"
+              >🔒 Bloquear</button>
+            )}
+            {notaAdLocked && (
+              <button
+                onClick={() => { setNotaAdUnlocking(true); setNotaAdPwInput(''); setNotaAdPwError(false); }}
+                className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold border border-blue-300 rounded px-2 py-0.5"
+              >🔓 Editar</button>
+            )}
+          </div>
+          {notaAdLocked ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 min-h-[64px] whitespace-pre-wrap">
+              {notaAdUnlocking ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="password"
+                    placeholder="Contraseña..."
+                    value={notaAdPwInput}
+                    onChange={e => { setNotaAdPwInput(e.target.value); setNotaAdPwError(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (notaAdPwInput === notaAdPw) { setNotaAdLocked(false); setNotaAdUnlocking(false); setNotaAdPw(''); }
+                        else setNotaAdPwError(true);
+                      }
+                    }}
+                    className={`border rounded px-2 py-1 text-xs flex-1 ${notaAdPwError ? 'border-red-500' : 'border-input'}`}
+                    autoFocus
+                  />
+                  <button onClick={() => { if (notaAdPwInput === notaAdPw) { setNotaAdLocked(false); setNotaAdUnlocking(false); setNotaAdPw(''); } else setNotaAdPwError(true); }} className="text-blue-600 text-xs font-semibold">OK</button>
+                  <button onClick={() => setNotaAdUnlocking(false)} className="text-muted-foreground text-xs">✕</button>
+                  {notaAdPwError && <span className="text-red-500 text-[10px]">Contraseña incorrecta</span>}
+                </div>
+              ) : (
+                <span className="text-amber-700 select-none">🔒 Nota bloqueada</span>
+              )}
+            </div>
+          ) : (
+            <textarea
+              className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+              placeholder="Ej: Favorabilidad alta..."
+              value={notaAdicional}
+              onChange={e => setNotaAdicional(e.target.value)}
+            />
+          )}
         </div>
 
         <div className="flex gap-2">
