@@ -405,7 +405,7 @@ export default function CertificadoTrimestral({
         CIUDAD_DEPARTAMENTO[ciudadRaw] ||
         'LA GUAJIRA'
       ).trim().toUpperCase();
-      const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRE' : periodType === 'bimensual' ? 'BIMESTRE' : 'MES';
+      const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
       const contratoNum = contrato || selectedPrestador.CONTRATO || 'N/A';
       const periodo = selectedGroup.label;
 
@@ -501,7 +501,7 @@ export default function CertificadoTrimestral({
                   { text: new Date().toLocaleDateString('es-CO') + ' 12:00 a. m.', ...CS },
                 ],
                 [
-                  { text: 'EMPRESA', ...HS },
+                  { text: 'PRESTADOR IPS', ...HS },
                   { text: empresa, ...CS },
                   { text: 'NIT', ...HS },
                   { text: nit, ...CS },
@@ -515,19 +515,19 @@ export default function CertificadoTrimestral({
                 [
                   { text: 'Nº CONTRATO', ...HS },
                   { text: contratoNum, ...CS },
-                  { text: 'VIGENCIA', ...HS },
+                  { text: 'VIGENCIA CONTRACTUAL', ...HS },
                   { text: `${fechaInicio} - ${fechaFin}`, ...CS },
                 ],
                 [
-                  { text: 'PUNTOS A TRATAR:', ...HS },
-                  { text: '1. RESULTADO DE LA EVALUACIÓN', ...CS },
+                  { text: 'OBJETO DE LA EVALUACIÓN', ...HS },
+                  { text: 'Ejecución Financiera y Financiación', ...CS },
                   { text: 'PERIODO EVALUADO', ...HS },
                   { text: periodoLabel, ...CS },
                 ],
                 [
                   { text: 'RESPONSABLE', ...HS },
                   { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS },
-                  { text: 'MESES', ...HS },
+                  { text: 'CORTE DE LA INFORMACIÓN', ...HS },
                   { text: periodo, ...CS },
                 ],
               ],
@@ -904,7 +904,7 @@ export default function CertificadoTrimestral({
       const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
-      const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRE' : periodType === 'bimensual' ? 'BIMESTRE' : 'MES';
+      const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
       const ciudadRaw = String(selectedPrestador.CIUDAD || (selectedPrestador as Record<string,string>)['MUNICIPIO'] || 'RIOHACHA').trim().toUpperCase();
       const depto = String(
         selectedPrestador.DEPARTAMENTO ||
@@ -1005,7 +1005,7 @@ export default function CertificadoTrimestral({
         content: [
           { table: { widths: ['*','auto','auto','auto','auto'], body: [[{ text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },{ text: 'Código: DI-MT-SD-F-14', fontSize: 6.5, alignment: 'center' },{ text: 'Versión: 01', fontSize: 6.5, alignment: 'center' },{ text: 'Emisión: 21/02/2023', fontSize: 6.5, alignment: 'center' },{ text: 'Vigencia: 22/02/2023', fontSize: 6.5, alignment: 'center' }]] }, layout: 'noBorders', margin: [0,0,0,2] },
           { text: 'INFORME DEL COMPONENTE DIRECCIÓN DEL RIESGO NACIONAL EN SALUD- CONTRATOS PGP', fontSize: 8.5, bold: true, alignment: 'center', margin: [0,0,0,4] },
-          { table: { widths: ['auto','*','auto','*'], body: [[{ text: 'INFORME Nº', ...HSB },{ text: inf.numero||'', ...CSB },{ text: 'FECHA', ...HSB },{ text: inf.fecha||'', ...CSB }],[{ text: 'EMPRESA', ...HSB },{ text: inf.prestador||'', ...CSB },{ text: 'NIT', ...HSB },{ text: inf.nit||'', ...CSB }],[{ text: 'MUNICIPIO', ...HSB },{ text: (inf.municipio||'').toUpperCase(), ...CSB },{ text: 'DEPARTAMENTO', ...HSB },{ text: (inf.departamento||'').toUpperCase(), ...CSB }],[{ text: 'Nº CONTRATO', ...HSB },{ text: inf.contrato||'', ...CSB },{ text: 'TIPO PERÍODO', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'RESPONSABLE', ...HSB },{ text: inf.responsable||'', ...CSB },{ text: 'MESES', ...HSB },{ text: inf.periodo||'', ...CSB }]] }, margin: [0,0,0,8] },
+          { table: { widths: ['auto','*','auto','*'], body: [[{ text: 'INFORME Nº', ...HSB },{ text: inf.numero||'', ...CSB },{ text: 'FECHA', ...HSB },{ text: inf.fecha||'', ...CSB }],[{ text: 'PRESTADOR IPS', ...HSB },{ text: inf.prestador||'', ...CSB },{ text: 'NIT', ...HSB },{ text: inf.nit||'', ...CSB }],[{ text: 'MUNICIPIO', ...HSB },{ text: (inf.municipio||'').toUpperCase(), ...CSB },{ text: 'DEPARTAMENTO', ...HSB },{ text: (inf.departamento||'').toUpperCase(), ...CSB }],[{ text: 'Nº CONTRATO', ...HSB },{ text: inf.contrato||'', ...CSB },{ text: 'VIGENCIA CONTRACTUAL', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'OBJETO DE LA EVALUACIÓN', ...HSB },{ text: 'Ejecución Financiera y Financiación', ...CSB },{ text: 'PERIODO EVALUADO', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'RESPONSABLE', ...HSB },{ text: inf.responsable||'', ...CSB },{ text: 'CORTE DE LA INFORMACIÓN', ...HSB },{ text: inf.periodo||'', ...CSB }]] }, margin: [0,0,0,8] },
           { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0,4,0,2] },
           { table: { widths: ['*',130], body: [[{ text: 'CONCEPTO', ...TS2B, alignment: 'center' },{ text: 'VALOR', ...TS2B, alignment: 'right' }],[{ text: 'VALOR NT DEL PERÍODO', ...CSB, bold: true },{ text: fmtB(inf.ntPeriodo), ...CSB, alignment: 'right' }],[{ text: 'FRANJA INFERIOR (90%)', ...CSB },{ text: fmtB(minPB), ...CSB, alignment: 'right' }],[{ text: 'FRANJA SUPERIOR (110%)', ...CSB },{ text: fmtB(maxPB), ...CSB, alignment: 'right' }],[{ text: 'TOTAL EJECUTADO', ...CSB, bold: true },{ text: fmtB(inf.totalEjecutado), ...CSB, alignment: 'right', bold: true }],[{ text: 'VALOR A DESCONTAR', ...CSB },{ text: fmtB(inf.descontar), ...CSB, alignment: 'right' }],[{ text: 'VALOR A RECONOCER', ...CSB },{ text: fmtB(inf.reconocer), ...CSB, alignment: 'right' }],[{ text: 'TOTAL ANTICIPOS PAGADOS', ...CSB },{ text: fmtB(inf.totalAnticipos), ...CSB, alignment: 'right' }],[{ text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },{ text: fmtB(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' }]] }, layout: 'lightHorizontalLines', margin: [0,0,0,16] },
         ],
@@ -1093,11 +1093,11 @@ export default function CertificadoTrimestral({
             widths: ['auto', '*', 'auto', '*'],
             body: [
               [{ text: 'INFORME Nº', ...HS }, { text: inf.numero || '', ...CS }, { text: 'FECHA', ...HS }, { text: inf.fecha ? new Date(inf.fecha + 'T12:00:00').toLocaleDateString('es-CO') + ' 12:00 a. m.' : new Date().toLocaleDateString('es-CO') + ' 12:00 a. m.', ...CS }],
-              [{ text: 'EMPRESA', ...HS }, { text: empresa, ...CS }, { text: 'NIT', ...HS }, { text: empresaNit, ...CS }],
+              [{ text: 'PRESTADOR IPS', ...HS }, { text: empresa, ...CS }, { text: 'NIT', ...HS }, { text: empresaNit, ...CS }],
               [{ text: 'MUNICIPIO', ...HS }, { text: municipio, ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: depto, ...CS }],
-              [{ text: 'Nº CONTRATO', ...HS }, { text: contratoNum, ...CS }, { text: 'VIGENCIA', ...HS }, { text: `${fechaInicio} - ${fechaFin}`, ...CS }],
-              [{ text: 'PUNTOS A TRATAR:', ...HS }, { text: '1. RESULTADO DE LA EVALUACIÓN', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
-              [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'MESES', ...HS }, { text: periodo, ...CS }],
+              [{ text: 'Nº CONTRATO', ...HS }, { text: contratoNum, ...CS }, { text: 'VIGENCIA CONTRACTUAL', ...HS }, { text: `${fechaInicio} - ${fechaFin}`, ...CS }],
+              [{ text: 'OBJETO DE LA EVALUACIÓN', ...HS }, { text: 'Ejecución Financiera y Financiación', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
+              [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'CORTE DE LA INFORMACIÓN', ...HS }, { text: periodo, ...CS }],
             ],
           },
           margin: [0, 0, 0, 3],
