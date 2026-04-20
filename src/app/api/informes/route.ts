@@ -125,18 +125,34 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/informes  — actualiza las notas de un informe existente
+// PATCH /api/informes  — actualiza notas y/o campos básicos de un informe existente
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { numero, notaEjecucionFinanciera, notaAdicional } = body;
+    const { numero, notaEjecucionFinanciera, notaAdicional, updateFields } = body;
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
 
-    const { data: existing } = await supabase.from('informes').select('pdf_data').eq('numero', numero).maybeSingle();
-    const pdfData = { ...(existing?.pdf_data || {}), notaEjecucionFinanciera: notaEjecucionFinanciera || '', notaAdicional: notaAdicional || '' };
+    if (updateFields) {
+      // Actualizar campos principales del informe
+      const fields: Record<string, any> = {};
+      if (body.prestador  !== undefined) fields.prestador   = body.prestador;
+      if (body.periodo    !== undefined) fields.periodo     = body.periodo;
+      if (body.tipoPeriodo!== undefined) fields.tipo_periodo= body.tipoPeriodo;
+      if (body.valorFinal !== undefined) fields.valor_final = body.valorFinal;
+      if (body.nit        !== undefined) fields.nit         = body.nit;
+      if (body.contrato   !== undefined) fields.contrato    = body.contrato;
+      if (body.responsable!== undefined) fields.responsable = body.responsable;
+      if (body.fecha      !== undefined) fields.fecha       = body.fecha;
 
-    const { error } = await supabase.from('informes').update({ pdf_data: pdfData }).eq('numero', numero);
-    if (error) throw error;
+      const { error } = await supabase.from('informes').update(fields).eq('numero', numero);
+      if (error) throw error;
+    } else {
+      // Actualizar solo las notas (pdf_data)
+      const { data: existing } = await supabase.from('informes').select('pdf_data').eq('numero', numero).maybeSingle();
+      const pdfData = { ...(existing?.pdf_data || {}), notaEjecucionFinanciera: notaEjecucionFinanciera || '', notaAdicional: notaAdicional || '' };
+      const { error } = await supabase.from('informes').update({ pdf_data: pdfData }).eq('numero', numero);
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

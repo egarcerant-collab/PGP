@@ -247,6 +247,9 @@ export default function CertificadoTrimestral({
   const [viewPwInput, setViewPwInput] = useState('');
   const [viewPwError, setViewPwError] = useState(false);
   const [viewUnlocked, setViewUnlocked] = useState(false);
+  const [viewEditing, setViewEditing] = useState(false);
+  const [viewEditData, setViewEditData] = useState<any>({});
+  const [viewSaving, setViewSaving] = useState(false);
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
   const [notaEFLocked, setNotaEFLocked] = useState(false);
@@ -1699,7 +1702,7 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               <td className="px-3 py-1.5">
                                 <div className="flex items-center gap-1.5">
-                                  <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }} className="text-blue-400 hover:text-blue-600" title="Ver">👁️</button>
+                                  <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); setViewEditing(false); setViewEditData({}); }} className="text-blue-400 hover:text-blue-600" title="Ver / Editar">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
                                   <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
                                   <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
@@ -1800,11 +1803,11 @@ export default function CertificadoTrimestral({
         {/* Modal Ver Informe con contraseña */}
         {viewingInf && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl p-6 w-96 space-y-4">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-[420px] space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold text-base">📋 Informe N° {viewingInf.numero}</h3>
               {!viewUnlocked ? (
                 <>
-                  <p className="text-sm text-muted-foreground">Ingresa la contraseña para ver los detalles.</p>
+                  <p className="text-sm text-muted-foreground">Ingresa la contraseña para ver y editar los detalles.</p>
                   <Input
                     type="password"
                     placeholder="Contraseña"
@@ -1812,8 +1815,11 @@ export default function CertificadoTrimestral({
                     onChange={e => { setViewPwInput(e.target.value); setViewPwError(false); }}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
-                        if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
-                        else setViewPwError(true);
+                        if (viewPwInput === '123456') {
+                          setViewUnlocked(true); setViewPwError(false);
+                          setViewEditing(false);
+                          setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                        } else setViewPwError(true);
                       }
                     }}
                     className={viewPwError ? 'border-red-500' : ''}
@@ -1823,12 +1829,93 @@ export default function CertificadoTrimestral({
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setViewingInf(null)}>Cancelar</Button>
                     <Button size="sm" onClick={() => {
-                      if (viewPwInput === '123456') { setViewUnlocked(true); setViewPwError(false); }
-                      else setViewPwError(true);
+                      if (viewPwInput === '123456') {
+                        setViewUnlocked(true); setViewPwError(false);
+                        setViewEditing(false);
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                      } else setViewPwError(true);
                     }}>Abrir</Button>
                   </div>
                 </>
+              ) : viewEditing ? (
+                /* ── MODO EDICIÓN ── */
+                <>
+                  <p className="text-xs text-amber-600 font-medium">✏️ Editando campos del informe</p>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Prestador</Label>
+                      <Input value={viewEditData.prestador || ''} onChange={e => setViewEditData((p: any) => ({ ...p, prestador: e.target.value }))} className="text-sm" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Período</Label>
+                        <Input value={viewEditData.periodo || ''} onChange={e => setViewEditData((p: any) => ({ ...p, periodo: e.target.value }))} className="text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
+                        <select value={viewEditData.tipoPeriodo || ''} onChange={e => setViewEditData((p: any) => ({ ...p, tipoPeriodo: e.target.value }))} className="w-full border rounded-md px-2 py-1.5 text-sm">
+                          <option value="TRIMESTRAL">TRIMESTRAL</option>
+                          <option value="BIMENSUAL">BIMENSUAL</option>
+                          <option value="MENSUAL">MENSUAL</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
+                      <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">NIT</Label>
+                        <Input value={viewEditData.nit || ''} onChange={e => setViewEditData((p: any) => ({ ...p, nit: e.target.value }))} className="text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">N° Contrato</Label>
+                        <Input value={viewEditData.contrato || ''} onChange={e => setViewEditData((p: any) => ({ ...p, contrato: e.target.value }))} className="text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Auditor Concurrente</Label>
+                      <Input value={viewEditData.responsable || ''} onChange={e => setViewEditData((p: any) => ({ ...p, responsable: e.target.value }))} className="text-sm" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Fecha</Label>
+                      <Input type="date" value={viewEditData.fecha || ''} onChange={e => setViewEditData((p: any) => ({ ...p, fecha: e.target.value }))} className="text-sm" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end flex-wrap">
+                    <Button variant="outline" size="sm" onClick={() => setViewEditing(false)}>Cancelar</Button>
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={viewSaving}
+                      onClick={async () => {
+                        setViewSaving(true);
+                        try {
+                          const res = await fetch('/api/informes', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ numero: viewingInf.numero, ...viewEditData, updateFields: true }),
+                          });
+                          if (!res.ok) throw new Error('Error al guardar');
+                          // Actualizar historial local
+                          setHistorial(prev => prev.map(i => i.numero === viewingInf.numero ? { ...i, ...viewEditData } : i));
+                          // Actualizar también el selectedPrestadorGroup si está abierto
+                          if (selectedPrestadorGroup) {
+                            setSelectedPrestadorGroup(prev => prev ? { ...prev, infs: prev.infs.map(i => i.numero === viewingInf.numero ? { ...i, ...viewEditData } : i) } : null);
+                          }
+                          setViewingInf((prev: any) => ({ ...prev, ...viewEditData }));
+                          setViewEditing(false);
+                          toast({ title: `Informe N° ${viewingInf.numero} actualizado` });
+                        } catch {
+                          toast({ title: 'Error al guardar', variant: 'destructive' });
+                        } finally {
+                          setViewSaving(false);
+                        }
+                      }}>
+                      {viewSaving ? '💾 Guardando...' : '💾 Guardar cambios'}
+                    </Button>
+                  </div>
+                </>
               ) : (
+                /* ── MODO VISTA ── */
                 <>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Prestador</span><span className="font-semibold">{viewingInf.prestador}</span></div>
@@ -1841,6 +1928,13 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
+                    <Button size="sm" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                      onClick={() => {
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                        setViewEditing(true);
+                      }}>
+                      ✏️ Editar
+                    </Button>
                     <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
                       onClick={() => handleGenerateFromRecord(viewingInf)}
                       title="Descargar PDF del certificado">
