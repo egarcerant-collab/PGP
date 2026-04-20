@@ -232,7 +232,7 @@ export default function CertificadoTrimestral({
 
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
-  const [expandedPrestadores, setExpandedPrestadores] = useState<Set<string>>(new Set());
+  const [selectedPrestadorGroup, setSelectedPrestadorGroup] = useState<{ name: string; infs: any[] } | null>(null);
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
   const [viewingInf, setViewingInf] = useState<any | null>(null);
   const [pwInput, setPwInput] = useState('');
@@ -1402,74 +1402,27 @@ export default function CertificadoTrimestral({
                     </thead>
                     <tbody>
                       {Object.entries(grupos).map(([prestador, infs]: [string, any[]]) => {
-                        const isOpen = expandedPrestadores.has(prestador);
-                        const toggle = () => setExpandedPrestadores(prev => {
-                          const next = new Set(prev);
-                          isOpen ? next.delete(prestador) : next.add(prestador);
-                          return next;
-                        });
                         const auditores = [...new Set(infs.map((i: any) => i.responsable).filter(Boolean))].join(', ');
                         return (
-                          <>
-                            {/* Fila del prestador */}
-                            <tr
-                              key={`g-${prestador}`}
-                              className="border-t border-border bg-blue-50/60 hover:bg-blue-100/60 cursor-pointer select-none"
-                              onClick={toggle}
-                            >
-                              <td className="px-3 py-2 text-center text-blue-500 font-bold">{isOpen ? '▾' : '▸'}</td>
-                              <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={prestador}>{prestador}</td>
-                              <td className="px-3 py-2">
-                                <div className="flex flex-wrap gap-1">
-                                  {infs.map((i: any) => (
-                                    <span key={i.numero} className="inline-block bg-green-100 text-green-800 border border-green-200 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
-                                      {i.periodo} ({i.tipoPeriodo})
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 text-center font-bold text-blue-700">{infs.length}</td>
-                              <td className="px-3 py-2 text-blue-700 truncate max-w-[160px]" title={auditores}>{auditores || '—'}</td>
-                            </tr>
-
-                            {/* Filas de informes (desplegadas) */}
-                            {isOpen && infs.map((inf: any) => (
-                              <tr key={inf.numero} className="border-t border-border/40 bg-white hover:bg-muted/20">
-                                <td className="px-3 py-1.5 text-center text-muted-foreground">└</td>
-                                <td className="px-3 py-1.5">
-                                  <span className="font-mono font-bold text-blue-700 mr-2">{inf.numero}</span>
-                                  <span className="text-muted-foreground">{inf.fecha}</span>
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <span className="font-medium">{inf.periodo}</span>
-                                  <span className="ml-1 text-muted-foreground">· {inf.tipoPeriodo}</span>
-                                </td>
-                                <td className="px-3 py-1.5 text-right">
-                                  <div className="text-blue-700 font-semibold">{fmtCOP(inf.totalEjecutado)}</div>
-                                  <div className="text-green-700 font-semibold">{fmtCOP(inf.valorFinal)}</div>
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }}
-                                      className="text-blue-400 hover:text-blue-600 transition-colors"
-                                      title="Ver informe"
-                                    >👁️</button>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); handleGenerateFromRecord(inf); }}
-                                      className="text-purple-400 hover:text-purple-600 transition-colors"
-                                      title="Descargar PDF"
-                                    >📄</button>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }}
-                                      className="text-red-400 hover:text-red-600 transition-colors"
-                                      title="Eliminar informe"
-                                    >🗑️</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </>
+                          <tr
+                            key={`g-${prestador}`}
+                            className="border-t border-border bg-blue-50/60 hover:bg-blue-100/80 cursor-pointer select-none"
+                            onClick={() => setSelectedPrestadorGroup({ name: prestador, infs: infs as any[] })}
+                          >
+                            <td className="px-3 py-2 text-center text-blue-400 font-bold">↗</td>
+                            <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={prestador}>{prestador}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                {infs.map((i: any) => (
+                                  <span key={i.numero} className="inline-block bg-green-100 text-green-800 border border-green-200 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+                                    {i.periodo}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center font-bold text-blue-700">{infs.length}</td>
+                            <td className="px-3 py-2 text-blue-700 truncate max-w-[160px]" title={auditores}>{auditores || '—'}</td>
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -1477,6 +1430,71 @@ export default function CertificadoTrimestral({
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* Modal Prestador — informes del prestador */}
+        {selectedPrestadorGroup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div>
+                  <h3 className="font-bold text-base text-slate-800">{selectedPrestadorGroup.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">{selectedPrestadorGroup.infs.length} informe{selectedPrestadorGroup.infs.length !== 1 ? 's' : ''} auditados</p>
+                </div>
+                <button onClick={() => setSelectedPrestadorGroup(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
+              </div>
+              {/* Chips de meses */}
+              <div className="px-6 py-3 border-b border-border/50 flex flex-wrap gap-1.5">
+                {selectedPrestadorGroup.infs.map((i: any) => (
+                  <span key={i.numero} className="inline-block bg-green-100 text-green-800 border border-green-200 rounded-full px-2.5 py-1 text-[11px] font-semibold">
+                    ✓ {i.periodo} · {i.tipoPeriodo}
+                  </span>
+                ))}
+              </div>
+              {/* Tabla de informes */}
+              <div className="overflow-auto flex-1 px-6 py-3">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">N°</th>
+                      <th className="px-3 py-2 text-left font-semibold">Período</th>
+                      <th className="px-3 py-2 text-left font-semibold">Tipo</th>
+                      <th className="px-3 py-2 text-right font-semibold">Valor Ejecutado</th>
+                      <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
+                      <th className="px-3 py-2 text-left font-semibold">Auditor</th>
+                      <th className="px-3 py-2 text-left font-semibold">Fecha</th>
+                      <th className="px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedPrestadorGroup.infs.map((inf: any) => (
+                      <tr key={inf.numero} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-3 py-2 font-mono font-bold text-blue-700">{inf.numero}</td>
+                        <td className="px-3 py-2 font-medium">{inf.periodo}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{inf.tipoPeriodo}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-blue-700">
+                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.totalEjecutado)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold text-green-700">
+                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
+                        </td>
+                        <td className="px-3 py-2 text-blue-700 truncate max-w-[140px]" title={inf.responsable}>{inf.responsable || '—'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{inf.fecha}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }} className="text-blue-400 hover:text-blue-600" title="Ver">👁️</button>
+                            <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="Descargar PDF">📄</button>
+                            <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
