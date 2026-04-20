@@ -1433,70 +1433,103 @@ export default function CertificadoTrimestral({
           </div>
         )}
 
-        {/* Modal Prestador — informes del prestador */}
-        {selectedPrestadorGroup && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                <div>
-                  <h3 className="font-bold text-base text-slate-800">{selectedPrestadorGroup.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{selectedPrestadorGroup.infs.length} informe{selectedPrestadorGroup.infs.length !== 1 ? 's' : ''} auditados</p>
+        {/* Modal Prestador — informes agrupados por trimestre */}
+        {selectedPrestadorGroup && (() => {
+          const MONTH_ORDER: Record<string, number> = {
+            ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,
+            JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12,
+          };
+          const TRIMESTRES = [
+            { label: 'Trimestre 1', meses: ['ENERO','FEBRERO','MARZO'],    color: 'bg-blue-50 border-blue-200',   badge: 'bg-blue-100 text-blue-800 border-blue-200' },
+            { label: 'Trimestre 2', meses: ['ABRIL','MAYO','JUNIO'],        color: 'bg-violet-50 border-violet-200', badge: 'bg-violet-100 text-violet-800 border-violet-200' },
+            { label: 'Trimestre 3', meses: ['JULIO','AGOSTO','SEPTIEMBRE'], color: 'bg-amber-50 border-amber-200',  badge: 'bg-amber-100 text-amber-800 border-amber-200' },
+            { label: 'Trimestre 4', meses: ['OCTUBRE','NOVIEMBRE','DICIEMBRE'], color: 'bg-rose-50 border-rose-200', badge: 'bg-rose-100 text-rose-800 border-rose-200' },
+          ];
+          // Asigna cada informe a un trimestre según el primer mes del período
+          const getTrimestreIdx = (periodo: string) => {
+            const firstMonth = periodo.split('-')[0].trim().toUpperCase();
+            const monthNum = MONTH_ORDER[firstMonth] || 0;
+            return Math.floor((monthNum - 1) / 3); // 0-3
+          };
+          const fmtCOP2 = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
+          const byTrimestre = TRIMESTRES.map((t, idx) => ({
+            ...t,
+            infs: selectedPrestadorGroup.infs.filter((i: any) => getTrimestreIdx(i.periodo) === idx)
+              .sort((a: any, b: any) => (MONTH_ORDER[a.periodo.split('-')[0].trim().toUpperCase()] || 0) - (MONTH_ORDER[b.periodo.split('-')[0].trim().toUpperCase()] || 0)),
+          })).filter(t => t.infs.length > 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                  <div>
+                    <h3 className="font-bold text-base text-slate-800">{selectedPrestadorGroup.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{selectedPrestadorGroup.infs.length} informe{selectedPrestadorGroup.infs.length !== 1 ? 's' : ''} · {byTrimestre.length} trimestre{byTrimestre.length !== 1 ? 's' : ''} auditado{byTrimestre.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <button onClick={() => setSelectedPrestadorGroup(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
                 </div>
-                <button onClick={() => setSelectedPrestadorGroup(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
-              </div>
-              {/* Chips de meses */}
-              <div className="px-6 py-3 border-b border-border/50 flex flex-wrap gap-1.5">
-                {selectedPrestadorGroup.infs.map((i: any) => (
-                  <span key={i.numero} className="inline-block bg-green-100 text-green-800 border border-green-200 rounded-full px-2.5 py-1 text-[11px] font-semibold">
-                    ✓ {i.periodo} · {i.tipoPeriodo}
-                  </span>
-                ))}
-              </div>
-              {/* Tabla de informes */}
-              <div className="overflow-auto flex-1 px-6 py-3">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold">N°</th>
-                      <th className="px-3 py-2 text-left font-semibold">Período</th>
-                      <th className="px-3 py-2 text-left font-semibold">Tipo</th>
-                      <th className="px-3 py-2 text-right font-semibold">Valor Ejecutado</th>
-                      <th className="px-3 py-2 text-right font-semibold">Valor Final</th>
-                      <th className="px-3 py-2 text-left font-semibold">Auditor</th>
-                      <th className="px-3 py-2 text-left font-semibold">Fecha</th>
-                      <th className="px-3 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedPrestadorGroup.infs.map((inf: any) => (
-                      <tr key={inf.numero} className="border-t border-border hover:bg-muted/30">
-                        <td className="px-3 py-2 font-mono font-bold text-blue-700">{inf.numero}</td>
-                        <td className="px-3 py-2 font-medium">{inf.periodo}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{inf.tipoPeriodo}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-blue-700">
-                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.totalEjecutado)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold text-green-700">
-                          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(inf.valorFinal)}
-                        </td>
-                        <td className="px-3 py-2 text-blue-700 truncate max-w-[140px]" title={inf.responsable}>{inf.responsable || '—'}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{inf.fecha}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }} className="text-blue-400 hover:text-blue-600" title="Ver">👁️</button>
-                            <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="Descargar PDF">📄</button>
-                            <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                {/* Contenido agrupado por trimestre */}
+                <div className="overflow-auto flex-1 px-6 py-4 space-y-4">
+                  {byTrimestre.map(trim => (
+                    <div key={trim.label} className={`rounded-lg border ${trim.color} overflow-hidden`}>
+                      {/* Cabecera trimestre */}
+                      <div className={`px-4 py-2 flex items-center gap-3 border-b ${trim.color}`}>
+                        <span className="font-bold text-xs text-slate-700">{trim.label}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {trim.meses.map(m => {
+                            const auditado = trim.infs.some((i: any) => i.periodo.toUpperCase().includes(m));
+                            return (
+                              <span key={m} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${auditado ? trim.badge : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                                {auditado ? '✓' : '·'} {m.substring(0,3)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {/* Tabla informes del trimestre */}
+                      <table className="w-full text-xs bg-white">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="px-3 py-1.5 text-left font-semibold">N°</th>
+                            <th className="px-3 py-1.5 text-left font-semibold">Período</th>
+                            <th className="px-3 py-1.5 text-left font-semibold">Tipo</th>
+                            <th className="px-3 py-1.5 text-right font-semibold">Valor Ejecutado</th>
+                            <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
+                            <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
+                            <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
+                            <th className="px-3 py-1.5"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trim.infs.map((inf: any) => (
+                            <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
+                              <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
+                              <td className="px-3 py-1.5 font-medium">{inf.periodo}</td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-blue-700">{fmtCOP2(inf.totalEjecutado)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
+                              <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
+                              <td className="px-3 py-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }} className="text-blue-400 hover:text-blue-600" title="Ver">👁️</button>
+                                  <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
+                                  <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Modal Ver Informe con contraseña */}
         {viewingInf && (
