@@ -233,6 +233,13 @@ export default function CertificadoTrimestral({
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [selectedPrestadorGroup, setSelectedPrestadorGroup] = useState<{ name: string; infs: any[] } | null>(null);
+  const [reopenInf, setReopenInf] = useState<any | null>(null);
+  const [reopenPwInput, setReopenPwInput] = useState('');
+  const [reopenPwError, setReopenPwError] = useState(false);
+  const [reopenUnlocked, setReopenUnlocked] = useState(false);
+  const [reopenNotaEF, setReopenNotaEF] = useState('');
+  const [reopenNotaAd, setReopenNotaAd] = useState('');
+  const [reopenSaving, setReopenSaving] = useState(false);
   const [deletingNum, setDeletingNum] = useState<string | null>(null);
   const [viewingInf, setViewingInf] = useState<any | null>(null);
   const [pwInput, setPwInput] = useState('');
@@ -1612,6 +1619,7 @@ export default function CertificadoTrimestral({
                                 <div className="flex items-center gap-1.5">
                                   <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); }} className="text-blue-400 hover:text-blue-600" title="Ver">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
+                                  <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
                                   <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
                                 </div>
                               </td>
@@ -1626,6 +1634,86 @@ export default function CertificadoTrimestral({
             </div>
           );
         })()}
+
+        {/* Modal Reabrir notas de informe */}
+        {reopenInf && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg space-y-4 p-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-base">🔓 Reabrir Informe N° {reopenInf.numero}</h3>
+                <button onClick={() => setReopenInf(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold">×</button>
+              </div>
+              <p className="text-xs text-muted-foreground">{reopenInf.prestador} · {reopenInf.periodo}</p>
+
+              {!reopenUnlocked ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Ingresa la contraseña para editar las notas de este informe.</p>
+                  <Input
+                    type="password"
+                    placeholder="Contraseña"
+                    value={reopenPwInput}
+                    onChange={e => { setReopenPwInput(e.target.value); setReopenPwError(false); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { if (reopenPwInput === '123456') { setReopenUnlocked(true); } else setReopenPwError(true); } }}
+                    className={reopenPwError ? 'border-red-500' : ''}
+                    autoFocus
+                  />
+                  {reopenPwError && <p className="text-xs text-red-500">Contraseña incorrecta</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={() => { if (reopenPwInput === '123456') { setReopenUnlocked(true); } else setReopenPwError(true); }} className="flex-1">Desbloquear</Button>
+                    <Button variant="outline" onClick={() => setReopenInf(null)} className="flex-1">Cancelar</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1"><span>📊</span> Nota de ejecución financiera</Label>
+                    <textarea
+                      className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-xs resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Nota de ejecución financiera..."
+                      value={reopenNotaEF}
+                      onChange={e => setReopenNotaEF(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1"><span>⚙️</span> Notas adicionales</Label>
+                    <textarea
+                      className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-xs resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Notas adicionales..."
+                      value={reopenNotaAd}
+                      onChange={e => setReopenNotaAd(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={async () => {
+                        setReopenSaving(true);
+                        try {
+                          await fetch('/api/informes', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ numero: reopenInf.numero, notaEjecucionFinanciera: reopenNotaEF, notaAdicional: reopenNotaAd }),
+                          });
+                          toast({ title: `✓ Notas del informe N° ${reopenInf.numero} actualizadas` });
+                          loadHistorial();
+                          setReopenInf(null);
+                        } catch {
+                          toast({ title: 'Error al guardar', variant: 'destructive' });
+                        } finally {
+                          setReopenSaving(false);
+                        }
+                      }}
+                      disabled={reopenSaving}
+                      className="flex-1"
+                    >
+                      {reopenSaving ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : '💾'} Guardar cambios
+                    </Button>
+                    <Button variant="outline" onClick={() => setReopenInf(null)} className="flex-1">Cancelar</Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Modal Ver Informe con contraseña */}
         {viewingInf && (

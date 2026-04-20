@@ -125,6 +125,25 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH /api/informes  — actualiza las notas de un informe existente
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { numero, notaEjecucionFinanciera, notaAdicional } = body;
+    if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
+
+    const { data: existing } = await supabase.from('informes').select('pdf_data').eq('numero', numero).maybeSingle();
+    const pdfData = { ...(existing?.pdf_data || {}), notaEjecucionFinanciera: notaEjecucionFinanciera || '', notaAdicional: notaAdicional || '' };
+
+    const { error } = await supabase.from('informes').update({ pdf_data: pdfData }).eq('numero', numero);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ message: e.message }, { status: 500 });
+  }
+}
+
 // DELETE /api/informes?numero=001  — elimina un informe por número
 export async function DELETE(request: Request) {
   try {
