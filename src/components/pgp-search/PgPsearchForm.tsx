@@ -240,7 +240,9 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
 const calculateSummaryData = (data: PgpRow[], numMeses = 12): SummaryData | null => {
   if (data.length === 0) return null;
   const totalCostoMes = data.reduce((acc, row) => {
-    const costo = getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes']));
+    // Incluye 'costoMes' y 'costo_mes' para CUPS adicionales guardadas en Supabase
+    // NO incluir 'valor total' — es el total del período, no mensual
+    const costo = getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes']));
     return acc + costo;
   }, 0);
   return {

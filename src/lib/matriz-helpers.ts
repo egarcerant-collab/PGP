@@ -114,7 +114,8 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
 
       const cantidadEsperada = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['frecuencia eventos mes', 'frecuencia', 'frecuencia_mes'])) : 0;
       const unitValue = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo'])) : 0;
-      const valorEsperado = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['costo evento mes (valor mes)', 'costo evento mes', 'valor total', 'valor_total'])) : (cantidadEsperada * unitValue);
+      // NO incluir 'valor total'/'valor_total' — son totales del período, no valores mensuales
+      const valorEsperado = pgpRow ? getNumericValue(findColumnValue(pgpRow, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes'])) || (cantidadEsperada * unitValue) : (cantidadEsperada * unitValue);
 
       const cantidadEjecutada = monthCupData?.total || 0;
       const valorEjecutado = cantidadEjecutada * unitValue;

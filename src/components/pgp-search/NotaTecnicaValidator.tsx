@@ -29,19 +29,24 @@ interface NtRowDisplay {
 function extractDisplayRow(row: PgpRow): NtRowDisplay {
   const cup = String(findColumnValue(row, ['cups', 'cup/cum', 'id resolucion 3100', 'código', 'cup', 'codigo']) ?? '').trim().toUpperCase();
   const descripcion = String(findColumnValue(row, ['descripcion', 'descripcion cups', 'descripcion id resolucion', 'nombre', 'servicio']) ?? 'Sin descripción').trim();
-  const frecuencia = Number(findColumnValue(row, ['frecuencia eventos mes', 'frecuencia', 'frecuencia_mes']) ?? 0);
-  const valorUnitario = Number(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']) ?? 0);
-  const costoMes = Number(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'valor total', 'valor_total']) ?? (frecuencia * valorUnitario));
+  const frecuencia = Number(findColumnValue(row, ['frecuencia eventos mes', 'frecuencia', 'frecuencia_mes', 'frecuencia']) ?? 0);
+  const valorUnitario = Number(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'valorUnitario', 'costo']) ?? 0);
+  // NOTA: NO incluir 'valor total' ni 'valor_total' — son totales del período, no mensuales
+  const costoMesRaw = findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes']);
+  const costoMes = Number(costoMesRaw ?? (frecuencia * valorUnitario));
   return { cup, descripcion, frecuencia, valorUnitario, costoMes };
 }
 
 function extractExportRow(row: PgpRow) {
+  const frecuencia = Number(findColumnValue(row, ['frecuencia eventos mes', 'frecuencia', 'frecuencia_mes', 'frecuencia']) ?? 0);
+  const valorUnitario = Number(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'valorUnitario', 'costo']) ?? 0);
+  const costoMesRaw = findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes']);
   return {
     cups: String(findColumnValue(row, ['cups', 'cup/cum', 'id resolucion 3100', 'código', 'cup', 'codigo']) ?? '').trim().toUpperCase(),
     descripcion: String(findColumnValue(row, ['descripcion', 'descripcion cups', 'nombre', 'servicio']) ?? '').trim(),
-    frecuencia: Number(findColumnValue(row, ['frecuencia eventos mes', 'frecuencia', 'frecuencia_mes']) ?? 0),
-    valorUnitario: Number(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']) ?? 0),
-    costoMes: Number(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'valor total', 'valor_total']) ?? 0),
+    frecuencia,
+    valorUnitario,
+    costoMes: Number(costoMesRaw ?? (frecuencia * valorUnitario)),
   };
 }
 
