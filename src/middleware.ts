@@ -28,7 +28,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith('/login');
-  const isPublic = isLoginPage;
+  const isExcelExport = request.nextUrl.pathname.startsWith('/excel-export');
+  const isPublic = isLoginPage || isExcelExport;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

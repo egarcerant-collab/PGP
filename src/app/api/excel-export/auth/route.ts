@@ -1,16 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const EXCEL_EXPORT_PASSWORD = process.env.EXCEL_EXPORT_PASSWORD || '123456';
 const EXCEL_EXPORT_COOKIE = 'excel_export_auth';
+
+const noStoreHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
 
 export async function GET(request: NextRequest) {
   const isAuthenticated = request.cookies.get(EXCEL_EXPORT_COOKIE)?.value === '1';
 
   if (!isAuthenticated) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
+    return NextResponse.json(
+      { authenticated: false },
+      { status: 401, headers: noStoreHeaders }
+    );
   }
 
-  return NextResponse.json({ authenticated: true });
+  return NextResponse.json(
+    { authenticated: true },
+    { status: 200, headers: noStoreHeaders }
+  );
 }
 
 export async function POST(request: Request) {

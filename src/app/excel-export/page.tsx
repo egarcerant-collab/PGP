@@ -98,17 +98,33 @@ export default function ExcelExportPage() {
   const [selectedProvider, setSelectedProvider] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     const checkAuth = async () => {
       setIsCheckingAuth(true);
       try {
-        const response = await fetch('/api/excel-export/auth', { cache: 'no-store' });
-        setIsAuthenticated(response.ok);
+        const response = await fetch('/api/excel-export/auth', {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (cancelled) return;
+        // Solo autenticado si respuesta 200 Y el body confirma authenticated:true
+        if (response.ok) {
+          const data = await response.json().catch(() => ({}));
+          setIsAuthenticated(Boolean(data?.authenticated));
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        if (!cancelled) setIsAuthenticated(false);
       } finally {
-        setIsCheckingAuth(false);
+        if (!cancelled) setIsCheckingAuth(false);
       }
     };
 
     checkAuth();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -118,7 +134,19 @@ export default function ExcelExportPage() {
       setLoadingRows(true);
       setLoadError('');
       try {
-        const response = await fetch('/api/excel-export/data', { cache: 'no-store' });
+        const response = await fetch('/api/excel-export/data', {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
+        // Si la cookie expiró / el backend invalidó la sesión -> volver a login
+        if (response.status === 401) {
+          setIsAuthenticated(false);
+          setPayload(null);
+          setSelectedProvider('');
+          return;
+        }
+
         const data = await response.json();
 
         if (!response.ok) {
