@@ -25,10 +25,16 @@ type ProviderRow = {
   departamento: string;
   fecha_inicio: string;
   fecha_fin: string;
-  meses: string;
-  franja_riesgo_inferior: string;
-  valor_contrato: string;
-  franja_riesgo_superior: string;
+  meses: number;
+  valor_mensual: number;
+  valor_total: number;
+  franja_riesgo_inferior: number;
+  franja_riesgo_superior: number;
+  // Compatibilidad / depuración
+  valor_mensual_texto?: string;
+  meses_texto?: string;
+  // Se mantienen alias antiguos por si se reciben del request
+  valor_contrato?: string | number;
 };
 
 function isExcelExportAuthenticated(request: NextRequest) {
@@ -231,15 +237,37 @@ function fillDatosContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
   // C16 régimen, C17 enfoque diferencial — no disponibles, dejamos los defaults de la plantilla
 
   // PARÁMETROS FINANCIEROS
-  const valorContrato = parseNumberLoose(row.valor_contrato);
-  if (valorContrato !== null) {
-    ws.getCell('C20').value = valorContrato;
+  // Del Google Sheet: M = VALOR CONTRATO MENSUAL, K = MESES
+  // VALOR TOTAL DEL CONTRATO = mensual × meses
+  const mensual = typeof row.valor_mensual === 'number'
+    ? row.valor_mensual
+    : parseNumberLoose((row as any).valor_mensual ?? (row as any).valor_mensual_texto) ?? 0;
+  const mesesNum = typeof row.meses === 'number'
+    ? row.meses
+    : parseNumberLoose((row as any).meses ?? (row as any).meses_texto) ?? 0;
+  // Si viene pre-calculado lo usamos; si no, lo calculamos aquí (mensual × meses)
+  const totalFromRow = typeof row.valor_total === 'number' ? row.valor_total : 0;
+  const totalAnual = totalFromRow > 0 ? totalFromRow : (mensual > 0 && mesesNum > 0 ? mensual * mesesNum : 0);
+
+  if (totalAnual > 0) {
+    ws.getCell('C20').value = totalAnual;
     ws.getCell('C20').numFmt = '"$"#,##0.00';
   }
 
-  // Franjas: si vienen como porcentajes (0.9 / 1.1) respetamos, si vienen como números se usan
-  const franjaInf = parseNumberLoose(row.franja_riesgo_inferior);
-  const franjaSup = parseNumberLoose(row.franja_riesgo_superior);
+  // C21 es el "Valor mensual proyectado" (formula original = C20/12).
+  // Si el contrato tiene meses != 12 o queremos precisión exacta, escribimos el valor mensual real.
+  if (mensual > 0) {
+    const c21 = ws.getCell('C21');
+    c21.value = mensual;
+    c21.numFmt = '"$"#,##0.00';
+  }
+
+  // Franjas porcentuales (C26 = 0.9 / C27 = 1.1). El template ya las tiene,
+  // pero si el Google Sheet indica otras, las respetamos cuando estén expresadas como porcentaje.
+  const franjaInf = typeof row.franja_riesgo_inferior === 'number' ? row.franja_riesgo_inferior : null;
+  const franjaSup = typeof row.franja_riesgo_superior === 'number' ? row.franja_riesgo_superior : null;
+  // Sólo sobrescribimos el porcentaje si lo recibimos como fracción (< 2) — nuestros cálculos
+  // ahora entregan el valor absoluto de la franja, no un porcentaje, así que NO tocamos C26/C27.
   if (franjaInf !== null && franjaInf > 0 && franjaInf < 2) {
     ws.getCell('C26').value = franjaInf;
     ws.getCell('C26').numFmt = '0.00%';

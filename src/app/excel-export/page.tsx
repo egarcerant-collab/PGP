@@ -34,11 +34,33 @@ type ProviderRow = {
   departamento: string;
   fecha_inicio: string;
   fecha_fin: string;
-  meses: string;
-  franja_riesgo_inferior: string;
-  valor_contrato: string;
-  franja_riesgo_superior: string;
+  meses: number;
+  valor_mensual: number;
+  valor_total: number;
+  franja_riesgo_inferior: number;
+  franja_riesgo_superior: number;
+  valor_mensual_texto?: string;
+  meses_texto?: string;
 };
+
+const currencyCO = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const percentCO = new Intl.NumberFormat('es-CO', {
+  style: 'percent',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const fmtCurrency = (value: number) =>
+  Number.isFinite(value) && value !== 0 ? currencyCO.format(value) : '—';
+
+const fmtPercent = (value: number) =>
+  Number.isFinite(value) ? percentCO.format(value) : '—';
 
 type ExecutionSummary = {
   prestador: string;
@@ -350,10 +372,11 @@ export default function ExcelExportPage() {
                         'DEPARTAMENTO',
                         'FECHA INICIO',
                         'FECHA FIN',
+                        'VALOR MENSUAL',
                         'MESES',
-                        'FRANJA RIESGO INFERIOR',
-                        'VALOR CONTRATO',
-                        'FRANJA RIESGO SUPERIOR',
+                        'VALOR TOTAL CONTRATO',
+                        'FRANJA RIESGO INFERIOR (90%)',
+                        'FRANJA RIESGO SUPERIOR (110%)',
                       ].map((head) => (
                         <TableHead key={head} className="text-white whitespace-nowrap">
                           {head}
@@ -387,10 +410,11 @@ export default function ExcelExportPage() {
                         <TableCell>{row.departamento || '—'}</TableCell>
                         <TableCell>{row.fecha_inicio || '—'}</TableCell>
                         <TableCell>{row.fecha_fin || '—'}</TableCell>
+                        <TableCell className="whitespace-nowrap">{fmtCurrency(row.valor_mensual)}</TableCell>
                         <TableCell>{row.meses || '—'}</TableCell>
-                        <TableCell>{row.franja_riesgo_inferior || '—'}</TableCell>
-                        <TableCell>{row.valor_contrato || '—'}</TableCell>
-                        <TableCell>{row.franja_riesgo_superior || '—'}</TableCell>
+                        <TableCell className="whitespace-nowrap font-semibold">{fmtCurrency(row.valor_total)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{fmtCurrency(row.franja_riesgo_inferior)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{fmtCurrency(row.franja_riesgo_superior)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -399,6 +423,65 @@ export default function ExcelExportPage() {
             )}
           </CardContent>
         </Card>
+
+        {selectedRows.length > 0 && selectedExecutionSummary.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Ejecución vs. Valor Esperado</CardTitle>
+              <CardDescription>
+                Porcentaje de ejecución calculado como (Valor Ejecutado / Valor Esperado) × 100%.
+                El valor esperado corresponde a: valor mensual × número de informes mensuales cargados.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow style={{ backgroundColor: NAVY }}>
+                      {[
+                        'CONTRATO',
+                        'INFORMES',
+                        'VALOR MENSUAL',
+                        'VALOR ESPERADO',
+                        'VALOR EJECUTADO',
+                        '% EJECUCIÓN',
+                        'VALOR FINAL',
+                        'DESCONTAR',
+                        'RECONOCER',
+                      ].map((head) => (
+                        <TableHead key={head} className="text-white whitespace-nowrap">
+                          {head}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedExecutionSummary.map((item, index) => {
+                      const mensual = selectedRows[0]?.valor_mensual || 0;
+                      const esperado = mensual * (item.informes || 0);
+                      const pct = esperado > 0 ? item.total_ejecutado / esperado : 0;
+                      return (
+                        <TableRow key={`${item.contrato}-${index}`}>
+                          <TableCell>{item.contrato || '—'}</TableCell>
+                          <TableCell>{item.informes}</TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(mensual)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(esperado)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(item.total_ejecutado)}</TableCell>
+                          <TableCell className="whitespace-nowrap font-semibold">
+                            {esperado > 0 ? fmtPercent(pct) : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(item.total_valor_final)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(item.total_descontar)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{fmtCurrency(item.total_reconocer)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

@@ -23,10 +23,15 @@ export type ProviderRow = {
   departamento: string;
   fecha_inicio: string;
   fecha_fin: string;
-  meses: string;
-  franja_riesgo_inferior: string;
-  valor_contrato: string;
-  franja_riesgo_superior: string;
+  // Campos financieros normalizados (numéricos)
+  meses: number;                    // Columna K del Google Sheet
+  valor_mensual: number;            // Columna M (VALOR CONTRATO MENSUAL)
+  valor_total: number;              // Calculado: valor_mensual * meses
+  franja_riesgo_inferior: number;   // Calculado: valor_total * 0.90
+  franja_riesgo_superior: number;   // Calculado: valor_total * 1.10
+  // Texto original para depuración / compatibilidad
+  valor_mensual_texto: string;
+  meses_texto: string;
 };
 
 type ExecutionSummary = {
@@ -67,13 +72,28 @@ function toNumber(value: unknown): number {
   const text = toText(value);
   if (!text) return 0;
 
-  const normalized = text
-    .replace(/\$/g, '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .replace(/[^\d.-]/g, '');
-
+  // Heurística robusta para formatos US ("1,234.56") y ES/CO ("1.234,56")
+  const cleaned = text.replace(/\$/g, '').replace(/\s/g, '');
+  let normalized = cleaned;
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      // coma decimal (ES/CO) -> quita puntos, coma -> punto
+      normalized = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      // punto decimal (US) -> quita comas
+      normalized = cleaned.replace(/,/g, '');
+    }
+  } else if (lastComma >= 0) {
+    const tail = cleaned.length - 1 - lastComma;
+    if (tail <= 2 && cleaned.split(',').length === 2) {
+      normalized = cleaned.replace(',', '.');
+    } else {
+      normalized = cleaned.replace(/,/g, '');
+    }
+  }
+  normalized = normalized.replace(/[^\d.-]/g, '');
   if (!normalized) return 0;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -118,26 +138,38 @@ function parseProvidersFromCsv(csvText: string): ProviderRow[] {
   });
 
   return normalizedRows
-    .map((row): ProviderRow => ({
-      nit: toText(pickValue(row, ['NIT'])),
-      prestador: toText(pickValue(row, ['PRESTADOR'])),
-      id_zona: toText(pickValue(row, ['ID_DE_ZONA'])),
-      web: toText(pickValue(row, ['WEB'])),
-      poblacion: toText(pickValue(row, ['POBLACION'])),
-      contrato: toText(pickValue(row, ['CONTRATO'])),
-      ciudad: toText(pickValue(row, ['CIUDAD'])),
-      departamento: toText(pickValue(row, ['DEPARTAMENTO'])),
-      fecha_inicio: toText(pickValue(row, ['FECHA_INICIO_DE_CONTRATO', 'FECHA_INICIO'])),
-      fecha_fin: toText(pickValue(row, ['FECHA_FIN_DE_CONTRATO', 'FECHA_FIN'])),
-      meses: toText(pickValue(row, ['MESES'])),
-      franja_riesgo_inferior: toText(
-        pickValue(row, ['FRANJA_DE_RIESGO_INFERIOR_90', 'FRANJA_RIESGO_INFERIOR'])
-      ),
-      valor_contrato: toText(pickValue(row, ['VALOR_CONTRATO'])),
-      franja_riesgo_superior: toText(
-        pickValue(row, ['FRANJA_DE_RIESGO_SUPERIOR_110', 'FRANJA_RIESGO_SUPERIOR'])
-      ),
-    }))
+    .map((row): ProviderRow => {
+      // Columna K (MESES) y M (VALOR CONTRATO MENSUAL) del Google Sheet
+      const mesesTexto = toText(pickValue(row, ['MESES']));
+      const valorMensualTexto = toText(
+        pickValue(row, ['VALOR_CONTRATO_MENSUAL', 'VALOR_MENSUAL', 'VALOR_CONTRATO'])
+      );
+      const meses = toNumber(mesesTexto) || 0;
+      const valor_mensual = toNumber(valorMensualTexto) || 0;
+      const valor_total = valor_mensual * meses;
+      const franja_riesgo_inferior = valor_total * 0.9;
+      const franja_riesgo_superior = valor_total * 1.1;
+
+      return {
+        nit: toText(pickValue(row, ['NIT'])),
+        prestador: toText(pickValue(row, ['PRESTADOR'])),
+        id_zona: toText(pickValue(row, ['ID_DE_ZONA'])),
+        web: toText(pickValue(row, ['WEB'])),
+        poblacion: toText(pickValue(row, ['POBLACION'])),
+        contrato: toText(pickValue(row, ['CONTRATO'])),
+        ciudad: toText(pickValue(row, ['CIUDAD'])),
+        departamento: toText(pickValue(row, ['DEPARTAMENTO'])),
+        fecha_inicio: toText(pickValue(row, ['FECHA_INICIO_DE_CONTRATO', 'FECHA_INICIO'])),
+        fecha_fin: toText(pickValue(row, ['FECHA_FIN_DE_CONTRATO', 'FECHA_FIN'])),
+        meses,
+        valor_mensual,
+        valor_total,
+        franja_riesgo_inferior,
+        franja_riesgo_superior,
+        valor_mensual_texto: valorMensualTexto,
+        meses_texto: mesesTexto,
+      };
+    })
     .filter((row) => row.prestador && row.contrato)
     .sort((a, b) => a.prestador.localeCompare(b.prestador, 'es', { sensitivity: 'base' }));
 }
