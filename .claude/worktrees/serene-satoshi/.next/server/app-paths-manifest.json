@@ -1,0 +1,9 @@
+{
+  "/api/auth/logout/route": "app/api/auth/logout/route.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/api/cups-adicionales/route": "app/api/cups-adicionales/route.js",
+  "/api/cups-excepciones/route": "app/api/cups-excepciones/route.js",
+  "/api/list-audits/route": "app/api/list-audits/route.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js"
+}
