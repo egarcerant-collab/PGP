@@ -28,7 +28,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith('/login');
-  const isPublic = isLoginPage;
+  const isExcelExport = request.nextUrl.pathname.startsWith('/excel-export');
+  const isPublic = isLoginPage || isExcelExport;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -42,7 +43,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Proteger /admin — solo superadmin
   if (user && request.nextUrl.pathname.startsWith('/admin')) {
     const { data: profile } = await supabase
       .from('profiles')
