@@ -278,6 +278,38 @@ function fillDatosContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
   }
 }
 
+// Pone D=0 y limpia E para los meses que quedan fuera del período contractual.
+// Fila 5 = Enero (mes 0), fila 16 = Diciembre (mes 11).
+function fillMesesFueraContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
+  const fInicio = parseDateLoose(row.fecha_inicio);
+  const fFin = parseDateLoose(row.fecha_fin);
+  if (!fInicio || !fFin) return;
+
+  const mesInicio = fInicio.getMonth(); // 0 = enero
+  const mesFin = fFin.getMonth();       // 0 = enero
+  const yearInicio = fInicio.getFullYear();
+  const yearFin = fFin.getFullYear();
+
+  for (let m = 0; m < 12; m++) {
+    const fila = m + 5;
+    let enContrato: boolean;
+    if (yearInicio === yearFin) {
+      enContrato = m >= mesInicio && m <= mesFin;
+    } else {
+      // Contrato cruza año: válido desde mesInicio (año inicio) hasta mesFin (año fin)
+      enContrato = m >= mesInicio || m <= mesFin;
+    }
+    if (!enContrato) {
+      const cellD = ws.getCell(`D${fila}`);
+      cellD.value = 0;
+      cellD.numFmt = '"$"#,##0.00';
+      const cellE = ws.getCell(`E${fila}`);
+      cellE.value = 0;
+      cellE.numFmt = '"$"#,##0.00';
+    }
+  }
+}
+
 function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]) {
   const mensuales = informes.filter(
     (r) => normalizeKey(r.tipo_periodo || '') === 'MENSUAL'
@@ -365,6 +397,8 @@ export async function POST(request: NextRequest) {
     const informes = await fetchInformesByPrestador(mainRow.prestador, mainRow.contrato);
     const wsMensual = workbook.getWorksheet('04_Seguimiento_Mensual');
     if (wsMensual) {
+      // Primero zerear meses fuera del período contractual (ej. contratos de 11 meses)
+      fillMesesFueraContrato(wsMensual, mainRow);
       fillSeguimientoMensual(wsMensual, informes);
     }
 
