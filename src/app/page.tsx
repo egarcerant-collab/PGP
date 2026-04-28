@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
   Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
-  Users, LogOut, ClipboardCheck,
+  Users, LogOut, ClipboardCheck, FileSpreadsheet,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,11 @@ const NAV: NavItem[] = [
   { id: "cierre",     label: "Generación de Certificados", icon: ClipboardCheck, group: "analisis", requiresData: true },
 ];
 
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 480;
+const SIDEBAR_DEFAULT = 280;
+const SIDEBAR_STORAGE_KEY = "pgp_sidebar_width";
+
 export default function Home() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string; email: string } | null>(null);
@@ -79,6 +84,48 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedNumero, setSavedNumero] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(SIDEBAR_DEFAULT);
+  const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      const parsed = stored ? Number.parseInt(stored, 10) : SIDEBAR_DEFAULT;
+      if (!Number.isNaN(parsed)) {
+        setSidebarWidth(Math.min(Math.max(parsed, SIDEBAR_MIN), SIDEBAR_MAX));
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const nextWidth = Math.min(Math.max(event.clientX, SIDEBAR_MIN), SIDEBAR_MAX);
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (!isResizingRef.current) return;
+      isResizingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try { window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarWidth)); } catch {}
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [sidebarWidth]);
+
+  const startResizing = (event: React.MouseEvent) => {
+    event.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -165,7 +212,10 @@ export default function Home() {
     <div className="flex h-screen bg-background overflow-hidden">
 
       {/* ── SIDEBAR ── */}
-      <aside className="w-[220px] shrink-0 flex flex-col border-r border-border bg-card">
+      <aside
+        className="shrink-0 flex flex-col border-r border-border bg-card relative"
+        style={{ width: `${sidebarWidth}px` }}
+      >
 
         {/* Logo */}
         <div className="h-14 px-4 flex items-center gap-3 border-b border-border shrink-0">
@@ -195,6 +245,13 @@ export default function Home() {
                   <span className="truncate">{item.label}</span>
                 </button>
               ))}
+              <button
+                onClick={() => router.push('/excel-export')}
+                className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+              >
+                <FileSpreadsheet className="h-4 w-4 shrink-0 mt-0.5" />
+                <span className="leading-snug break-words">Seguimiento Mensual De Ejecución Financiera .XLS</span>
+              </button>
             </div>
           </div>
 
@@ -301,6 +358,17 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={startResizing}
+          onDoubleClick={() => {
+            setSidebarWidth(SIDEBAR_DEFAULT);
+            try { window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(SIDEBAR_DEFAULT)); } catch {}
+          }}
+          title="Arrastra para redimensionar · Doble clic para restablecer"
+          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
+        />
       </aside>
 
       {/* ── MAIN ── */}
