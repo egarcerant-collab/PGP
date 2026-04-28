@@ -29,19 +29,20 @@ async function checkSuperAdmin(request: Request) {
 }
 
 function hasServiceRole() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    '';
   return Boolean(key) && key !== 'REEMPLAZAR_CON_SERVICE_ROLE_KEY';
 }
+
+const missingAdminKeyError = 'Falta configurar la clave privada de Supabase en Vercel para administrar usuarios de Supabase Auth.';
 
 export async function GET(request: Request) {
   const user = await checkSuperAdmin(request);
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-  if (!hasServiceRole()) {
-    return NextResponse.json(
-      { error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY para administrar usuarios de Supabase Auth.' },
-      { status: 500 }
-    );
-  }
+  if (!hasServiceRole()) return NextResponse.json({ error: missingAdminKeyError }, { status: 500 });
 
   const admin = createSupabaseAdminClient();
   const { data: profiles, error: profileError } = await admin
@@ -75,9 +76,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await checkSuperAdmin(request);
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-  if (!hasServiceRole()) {
-    return NextResponse.json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY para crear usuarios.' }, { status: 500 });
-  }
+  if (!hasServiceRole()) return NextResponse.json({ error: missingAdminKeyError }, { status: 500 });
 
   const { email, password, nombre, rol } = await request.json();
   if (!email || !password || !nombre || !rol) {
@@ -116,9 +115,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   const user = await checkSuperAdmin(request);
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-  if (!hasServiceRole()) {
-    return NextResponse.json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY para actualizar usuarios.' }, { status: 500 });
-  }
+  if (!hasServiceRole()) return NextResponse.json({ error: missingAdminKeyError }, { status: 500 });
 
   const { id, nombre, rol, activo, password } = await request.json();
   if (!id) return NextResponse.json({ error: 'Falta ID' }, { status: 400 });
@@ -149,9 +146,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const user = await checkSuperAdmin(request);
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-  if (!hasServiceRole()) {
-    return NextResponse.json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY para eliminar usuarios.' }, { status: 500 });
-  }
+  if (!hasServiceRole()) return NextResponse.json({ error: missingAdminKeyError }, { status: 500 });
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
