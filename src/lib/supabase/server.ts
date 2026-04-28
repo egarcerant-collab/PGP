@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxohacipmnmqyef.supabase.co';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
+const SUPABASE_ADMIN_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  '';
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -28,7 +33,7 @@ export async function createSupabaseServerClient() {
 export function createSupabaseAdminClient() {
   return createClient(
     SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
+    SUPABASE_ADMIN_KEY || SUPABASE_ANON_KEY,
     {
       auth: {
         autoRefreshToken: false,
