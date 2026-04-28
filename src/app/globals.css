@@ -70,4 +70,21 @@
   .institutional-input {
     @apply w-full rounded-sm border border-[#c9dec3] bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-[#62bf4f] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#62bf4f];
   }
+
+  main .max-w-2xl:has(button[aria-haspopup="menu"]) {
+    width: 100%;
+    max-width: 64rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  main div:has(> img[alt="Dusakawi EPSI"]) {
+    width: 7rem !important;
+    border-radius: 0.25rem !important;
+    background: #fff url('/imagenes%20pdf/logo-dusakawi.png') center / contain no-repeat;
+  }
+
+  main div:has(> img[alt="Dusakawi EPSI"]) > img {
+    opacity: 0;
+  }
 }
