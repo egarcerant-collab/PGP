@@ -4,87 +4,64 @@
 
 @layer base {
   :root {
-    --background: 105 25% 97%;
-    --foreground: 216 30% 12%;
+    --background: 220 20% 97%;
+    --foreground: 220 15% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 216 30% 12%;
+    --card-foreground: 220 15% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 216 30% 12%;
-    --primary: 109 48% 53%;
+    --popover-foreground: 220 15% 10%;
+    --primary: 221 65% 38%;          /* Azul institucional */
     --primary-foreground: 0 0% 100%;
-    --secondary: 104 25% 93%;
-    --secondary-foreground: 144 35% 20%;
-    --muted: 104 25% 93%;
-    --muted-foreground: 150 13% 35%;
-    --accent: 53 83% 65%;
-    --accent-foreground: 144 35% 18%;
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 220 15% 20%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 174 60% 35%;           /* Teal */
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 108 26% 83%;
-    --input: 108 26% 83%;
-    --ring: 109 48% 53%;
-    --radius: 0.5rem;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 221 65% 38%;
+    --radius: 0.625rem;
 
-    --chart-1: 109 48% 53%;
-    --chart-2: 53 83% 65%;
-    --chart-3: 191 66% 53%;
-    --chart-4: 144 40% 35%;
-    --chart-5: 34 90% 57%;
+    --chart-1: 221 65% 38%;
+    --chart-2: 174 60% 35%;
+    --chart-3: 43 90% 50%;
+    --chart-4: 340 75% 55%;
+    --chart-5: 262 60% 55%;
   }
 
   .dark {
-    --background: 144 25% 9%;
-    --foreground: 105 20% 95%;
-    --card: 144 22% 12%;
-    --card-foreground: 105 20% 95%;
-    --popover: 144 22% 12%;
-    --popover-foreground: 105 20% 95%;
-    --primary: 109 48% 56%;
-    --primary-foreground: 144 35% 12%;
-    --secondary: 144 15% 18%;
-    --secondary-foreground: 105 20% 86%;
-    --muted: 144 15% 18%;
-    --muted-foreground: 105 12% 65%;
-    --accent: 53 83% 65%;
-    --accent-foreground: 144 35% 12%;
+    --background: 222 20% 9%;
+    --foreground: 220 10% 95%;
+    --card: 222 20% 12%;
+    --card-foreground: 220 10% 95%;
+    --popover: 222 20% 12%;
+    --popover-foreground: 220 10% 95%;
+    --primary: 221 65% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 15% 18%;
+    --secondary-foreground: 220 10% 80%;
+    --muted: 222 15% 18%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 174 55% 42%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
-    --border: 144 15% 20%;
-    --input: 144 15% 20%;
-    --ring: 109 48% 56%;
+    --border: 222 15% 20%;
+    --input: 222 15% 20%;
+    --ring: 221 65% 56%;
 
-    --chart-1: 109 48% 56%;
-    --chart-2: 53 83% 65%;
-    --chart-3: 191 66% 53%;
-    --chart-4: 144 40% 45%;
-    --chart-5: 34 90% 60%;
+    --chart-1: 221 65% 56%;
+    --chart-2: 174 55% 42%;
+    --chart-3: 43 80% 55%;
+    --chart-4: 340 70% 60%;
+    --chart-5: 262 55% 60%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground font-body antialiased; }
-}
-
-@layer components {
-  .institutional-input {
-    @apply w-full rounded-sm border border-[#c9dec3] bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-[#62bf4f] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#62bf4f];
-  }
-
-  main .max-w-2xl:has(button[aria-haspopup="menu"]) {
-    width: 100%;
-    max-width: 64rem;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  main div:has(> img[alt="Dusakawi EPSI"]) {
-    width: 7rem !important;
-    border-radius: 0.25rem !important;
-    background: #fff url('/imagenes%20pdf/logo-dusakawi.png') center / contain no-repeat;
-  }
-
-  main div:has(> img[alt="Dusakawi EPSI"]) > img {
-    opacity: 0;
-  }
 }

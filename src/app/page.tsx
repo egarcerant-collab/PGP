@@ -57,11 +57,6 @@ const NAV: NavItem[] = [
   { id: "cierre",     label: "Generación de Certificados", icon: ClipboardCheck, group: "analisis", requiresData: true },
 ];
 
-const SIDEBAR_MIN = 200;
-const SIDEBAR_MAX = 480;
-const SIDEBAR_DEFAULT = 280;
-const SIDEBAR_STORAGE_KEY = "pgp_sidebar_width";
-
 export default function Home() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: string; email: string } | null>(null);
@@ -84,34 +79,39 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedNumero, setSavedNumero] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+
+  // Sidebar resizable state (persisted in localStorage)
+  const SIDEBAR_MIN = 200;
+  const SIDEBAR_MAX = 480;
+  const SIDEBAR_DEFAULT = 280;
   const [sidebarWidth, setSidebarWidth] = useState<number>(SIDEBAR_DEFAULT);
   const isResizingRef = useRef(false);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
-      const parsed = stored ? Number.parseInt(stored, 10) : SIDEBAR_DEFAULT;
-      if (!Number.isNaN(parsed)) {
-        setSidebarWidth(Math.min(Math.max(parsed, SIDEBAR_MIN), SIDEBAR_MAX));
+      const stored = localStorage.getItem('pgp_sidebar_width');
+      if (stored) {
+        const n = parseInt(stored, 10);
+        if (!isNaN(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) {
+          setSidebarWidth(n);
+        }
       }
     } catch {}
   }, []);
 
   useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingRef.current) return;
-      const nextWidth = Math.min(Math.max(event.clientX, SIDEBAR_MIN), SIDEBAR_MAX);
-      setSidebarWidth(nextWidth);
+      const newWidth = Math.min(Math.max(e.clientX, SIDEBAR_MIN), SIDEBAR_MAX);
+      setSidebarWidth(newWidth);
     };
-
     const handleMouseUp = () => {
       if (!isResizingRef.current) return;
       isResizingRef.current = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      try { window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarWidth)); } catch {}
+      try { localStorage.setItem('pgp_sidebar_width', String(sidebarWidth)); } catch {}
     };
-
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
@@ -120,8 +120,8 @@ export default function Home() {
     };
   }, [sidebarWidth]);
 
-  const startResizing = (event: React.MouseEvent) => {
-    event.preventDefault();
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
     isResizingRef.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -364,7 +364,7 @@ export default function Home() {
           onMouseDown={startResizing}
           onDoubleClick={() => {
             setSidebarWidth(SIDEBAR_DEFAULT);
-            try { window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(SIDEBAR_DEFAULT)); } catch {}
+            try { localStorage.setItem('pgp_sidebar_width', String(SIDEBAR_DEFAULT)); } catch {}
           }}
           title="Arrastra para redimensionar · Doble clic para restablecer"
           className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
