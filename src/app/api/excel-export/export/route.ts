@@ -164,57 +164,150 @@ async function fetchInformesByPrestador(prestador: string, contrato: string): Pr
 }
 
 function setupFallbackWorkbook(workbook: ExcelJS.Workbook) {
+  const titleFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF1F4E78' } };
+  const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD9EAF3' } };
+  const totalFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE2F0D9' } };
+
+  const wsInstrucciones = workbook.addWorksheet('01_Instrucciones');
+  wsInstrucciones.mergeCells('A1:F1');
+  wsInstrucciones.getCell('A1').value = 'SEGUIMIENTO PGP - INSTRUCCIONES';
+  wsInstrucciones.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsInstrucciones.getCell('A1').alignment = { horizontal: 'center' };
+  wsInstrucciones.getCell('A1').fill = titleFill;
+  [['A3', '1. Verifica los datos del contrato en la hoja 02_Datos_Contrato.'], ['A4', '2. Revisa la nota técnica en la hoja 03_Nota_Tecnica.'], ['A5', '3. Registra y valida la ejecución en la hoja 04_Seguimiento_Mensual.'], ['A6', '4. Usa las hojas 05, 06 y 07 para seguimiento trimestral, cierre anual y alertas.']]
+    .forEach(([addr, text]) => { wsInstrucciones.getCell(addr).value = text; wsInstrucciones.getCell(addr).alignment = { wrapText: true }; });
+  wsInstrucciones.columns = [{ width: 5 }, { width: 18 }, { width: 25 }, { width: 25 }, { width: 20 }, { width: 20 }];
+
   const wsDatos = workbook.addWorksheet('02_Datos_Contrato');
   wsDatos.mergeCells('A1:C1');
   wsDatos.getCell('A1').value = 'DATOS DEL CONTRATO';
   wsDatos.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 13 };
   wsDatos.getCell('A1').alignment = { horizontal: 'center' };
-  wsDatos.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
+  wsDatos.getCell('A1').fill = titleFill;
   [[4, 'Contrato'], [6, 'Fecha inicio'], [7, 'Fecha fin'], [8, 'Prestador'], [9, 'NIT'], [13, 'Departamento'], [14, 'Ciudad'], [15, 'Población'], [20, 'Valor total'], [21, 'Valor mensual']]
-    .forEach(([row, label]) => {
-      wsDatos.getCell(Number(row), 1).value = label;
-      wsDatos.getCell(Number(row), 1).font = { bold: true };
-    });
+    .forEach(([row, label]) => { wsDatos.getCell(Number(row), 1).value = label; wsDatos.getCell(Number(row), 1).font = { bold: true }; });
   wsDatos.columns = [{ width: 24 }, { width: 4 }, { width: 42 }];
 
-  const ws = workbook.addWorksheet('04_Seguimiento_Mensual');
-  ws.mergeCells('A1:I1');
-  ws.getCell('A1').value = 'SEGUIMIENTO MENSUAL DE EJECUCIÓN FINANCIERA';
-  ws.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
-  ws.getCell('A1').alignment = { horizontal: 'center' };
-  ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
-  ws.mergeCells('A2:I2');
-  ws.getCell('A2').value = 'El valor proyectado se calcula según la vigencia real del contrato.';
-  const headers = ['#', 'Mes', 'Valor proyectado ($)', 'Valor ejecutado ($)', 'Desviación ($)', '% cumplimiento', 'Estado franja', 'Ejecutado acumulado ($)', 'Observaciones / acciones'];
-  headers.forEach((header, index) => {
-    const cell = ws.getCell(4, index + 1);
+  const wsNota = workbook.addWorksheet('03_Nota_Tecnica');
+  wsNota.mergeCells('A1:I1');
+  wsNota.getCell('A1').value = 'NOTA TÉCNICA PGP';
+  wsNota.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsNota.getCell('A1').alignment = { horizontal: 'center' };
+  wsNota.getCell('A1').fill = titleFill;
+  ['CUPS', 'Descripción', 'Frecuencia', 'Valor unitario', 'Valor mensual', 'Tipo servicio', 'Observación'].forEach((header, idx) => {
+    const cell = wsNota.getCell(3, idx + 1);
+    cell.value = header;
+    cell.font = { bold: true };
+    cell.fill = headerFill;
+    cell.alignment = { horizontal: 'center', wrapText: true };
+  });
+  wsNota.columns = [{ width: 16 }, { width: 42 }, { width: 14 }, { width: 18 }, { width: 18 }, { width: 20 }, { width: 40 }, { width: 12 }, { width: 12 }];
+
+  const wsMensual = workbook.addWorksheet('04_Seguimiento_Mensual');
+  wsMensual.mergeCells('A1:J1');
+  wsMensual.getCell('A1').value = 'SEGUIMIENTO MENSUAL DE EJECUCIÓN FINANCIERA';
+  wsMensual.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsMensual.getCell('A1').alignment = { horizontal: 'center' };
+  wsMensual.getCell('A1').fill = titleFill;
+  wsMensual.getCell('A2').value = 'Registre mensualmente el valor EJECUTADO. El valor proyectado se calcula según la vigencia real del contrato.';
+  wsMensual.mergeCells('A2:J2');
+  wsMensual.getCell('A2').font = { italic: true, color: { argb: 'FF4B5563' } };
+
+  [[1, '#'], [3, 'Mes'], [4, 'Valor proyectado ($)'], [5, 'Valor ejecutado ($)'], [6, 'Desviación ($)'], [7, '% cumplimiento'], [8, 'Estado franja'], [9, 'Ejecutado acumulado ($)'], [10, 'Observaciones / acciones']].forEach(([column, header]) => {
+    const cell = wsMensual.getCell(4, Number(column));
     cell.value = header;
     cell.font = { bold: true };
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAF3' } };
+    cell.fill = headerFill;
   });
+
   ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].forEach((month, index) => {
     const rowNumber = index + 5;
-    const row = ws.getRow(rowNumber);
+    const row = wsMensual.getRow(rowNumber);
     row.getCell(1).value = index + 1;
-    row.getCell(2).value = month;
-    row.getCell(4).value = 0;
-    row.getCell(5).value = { formula: `D${rowNumber}-C${rowNumber}` };
-    row.getCell(6).value = { formula: `IF(C${rowNumber}=0,"-",D${rowNumber}/C${rowNumber})` };
-    row.getCell(7).value = { formula: `IF(D${rowNumber}=0,"Sin registro",IF(F${rowNumber}<0.9,"Fuera - subejecución",IF(F${rowNumber}>1.1,"Fuera - sobreejecución","Dentro de franja")))` };
-    row.getCell(8).value = { formula: `SUM(D$5:D${rowNumber})` };
-    [3, 4, 5, 8].forEach((col) => { row.getCell(col).numFmt = '"$"#,##0.00'; });
-    row.getCell(6).numFmt = '0.0%';
+    row.getCell(3).value = month;
+    row.getCell(5).value = 0;
+    row.getCell(6).value = { formula: `E${rowNumber}-D${rowNumber}` };
+    row.getCell(7).value = { formula: `IF(D${rowNumber}=0,"-",E${rowNumber}/D${rowNumber})` };
+    row.getCell(8).value = { formula: `IF(E${rowNumber}=0,"Sin registro",IF(G${rowNumber}<0.9,"Fuera - subejecución",IF(G${rowNumber}>1.1,"Fuera - sobreejecución","Dentro de franja")))` };
+    row.getCell(9).value = { formula: `SUM(E$5:E${rowNumber})` };
+    [4, 5, 6, 9].forEach((col) => { row.getCell(col).numFmt = '"$"#,##0.00'; row.getCell(col).alignment = { vertical: 'middle', horizontal: 'right' }; });
+    row.getCell(7).numFmt = '0.0%';
   });
-  const total = ws.getRow(17);
-  total.getCell(2).value = 'TOTAL AÑO';
-  total.getCell(3).value = { formula: 'SUM(C5:C16)' };
+
+  const total = wsMensual.getRow(17);
+  total.getCell(3).value = 'TOTAL AÑO';
   total.getCell(4).value = { formula: 'SUM(D5:D16)' };
-  total.getCell(5).value = { formula: 'D17-C17' };
-  total.getCell(6).value = { formula: 'IF(C17=0,"-",D17/C17)' };
-  total.getCell(8).value = { formula: 'D17' };
-  total.eachCell((cell) => { cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } }; });
-  ws.columns = [{ width: 6 }, { width: 16 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 16 }, { width: 22 }, { width: 24 }, { width: 42 }];
+  total.getCell(5).value = { formula: 'SUM(E5:E16)' };
+  total.getCell(6).value = { formula: 'E17-D17' };
+  total.getCell(7).value = { formula: 'IF(D17=0,"-",E17/D17)' };
+  total.getCell(9).value = { formula: 'E17' };
+  total.eachCell((cell) => { cell.font = { bold: true }; cell.fill = totalFill; });
+  wsMensual.columns = [{ width: 6 }, { width: 4 }, { width: 16 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 16 }, { width: 22 }, { width: 24 }, { width: 42 }];
+
+  const wsTrimestral = workbook.addWorksheet('05_Seguimiento_Trimestral');
+  wsTrimestral.mergeCells('A1:L1');
+  wsTrimestral.getCell('A1').value = 'SEGUIMIENTO TRIMESTRAL DE EJECUCIÓN FINANCIERA';
+  wsTrimestral.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsTrimestral.getCell('A1').alignment = { horizontal: 'center' };
+  wsTrimestral.getCell('A1').fill = titleFill;
+  ['Trimestre', 'Meses', 'Valor proyectado', 'Valor ejecutado', 'Desviación', '% cumplimiento', 'Estado', 'Observaciones'].forEach((header, idx) => {
+    const cell = wsTrimestral.getCell(3, idx + 1);
+    cell.value = header;
+    cell.font = { bold: true };
+    cell.fill = headerFill;
+    cell.alignment = { horizontal: 'center', wrapText: true };
+  });
+  [['Trimestre 1', 'Enero - Marzo', 'SUM(04_Seguimiento_Mensual!D5:D7)', 'SUM(04_Seguimiento_Mensual!E5:E7)'], ['Trimestre 2', 'Abril - Junio', 'SUM(04_Seguimiento_Mensual!D8:D10)', 'SUM(04_Seguimiento_Mensual!E8:E10)'], ['Trimestre 3', 'Julio - Septiembre', 'SUM(04_Seguimiento_Mensual!D11:D13)', 'SUM(04_Seguimiento_Mensual!E11:E13)'], ['Trimestre 4', 'Octubre - Diciembre', 'SUM(04_Seguimiento_Mensual!D14:D16)', 'SUM(04_Seguimiento_Mensual!E14:E16)']].forEach(([tri, meses, projectedFormula, executedFormula], idx) => {
+    const rowNumber = idx + 4;
+    wsTrimestral.getCell(rowNumber, 1).value = tri;
+    wsTrimestral.getCell(rowNumber, 2).value = meses;
+    wsTrimestral.getCell(rowNumber, 3).value = { formula: projectedFormula };
+    wsTrimestral.getCell(rowNumber, 4).value = { formula: executedFormula };
+    wsTrimestral.getCell(rowNumber, 5).value = { formula: `D${rowNumber}-C${rowNumber}` };
+    wsTrimestral.getCell(rowNumber, 6).value = { formula: `IF(C${rowNumber}=0,"-",D${rowNumber}/C${rowNumber})` };
+    wsTrimestral.getCell(rowNumber, 7).value = { formula: `IF(D${rowNumber}=0,"Sin registro",IF(F${rowNumber}<0.9,"Fuera - subejecución",IF(F${rowNumber}>1.1,"Fuera - sobreejecución","Dentro de franja")))` };
+    [3, 4, 5].forEach((col) => wsTrimestral.getCell(rowNumber, col).numFmt = '"$"#,##0.00');
+    wsTrimestral.getCell(rowNumber, 6).numFmt = '0.0%';
+  });
+  wsTrimestral.columns = [{ width: 16 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 18 }, { width: 16 }, { width: 22 }, { width: 42 }];
+
+  const wsCierre = workbook.addWorksheet('06_Cierre_Anual');
+  wsCierre.mergeCells('A1:E1');
+  wsCierre.getCell('A1').value = 'CIERRE ANUAL';
+  wsCierre.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsCierre.getCell('A1').alignment = { horizontal: 'center' };
+  wsCierre.getCell('A1').fill = titleFill;
+  [['A3', 'Valor proyectado anual', 'B3', { formula: '04_Seguimiento_Mensual!D17' }], ['A4', 'Valor ejecutado anual', 'B4', { formula: '04_Seguimiento_Mensual!E17' }], ['A5', 'Desviación anual', 'B5', { formula: 'B4-B3' }], ['A6', '% cumplimiento anual', 'B6', { formula: 'IF(B3=0,"-",B4/B3)' }]].forEach(([labelCell, label, valueCell, value]) => {
+    wsCierre.getCell(String(labelCell)).value = label;
+    wsCierre.getCell(String(labelCell)).font = { bold: true };
+    wsCierre.getCell(String(valueCell)).value = value as any;
+  });
+  ['B3', 'B4', 'B5'].forEach((addr) => wsCierre.getCell(addr).numFmt = '"$"#,##0.00');
+  wsCierre.getCell('B6').numFmt = '0.0%';
+  wsCierre.columns = [{ width: 28 }, { width: 22 }, { width: 18 }, { width: 18 }, { width: 18 }];
+
+  const wsAlertas = workbook.addWorksheet('07_Alertas_Semaforo');
+  wsAlertas.mergeCells('A1:F1');
+  wsAlertas.getCell('A1').value = 'ALERTAS Y SEMÁFORO';
+  wsAlertas.getCell('A1').font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+  wsAlertas.getCell('A1').alignment = { horizontal: 'center' };
+  wsAlertas.getCell('A1').fill = titleFill;
+  ['Periodo', 'Cumplimiento', 'Estado', 'Acción sugerida'].forEach((header, idx) => {
+    const cell = wsAlertas.getCell(3, idx + 1);
+    cell.value = header;
+    cell.font = { bold: true };
+    cell.fill = headerFill;
+  });
+  for (let i = 0; i < 12; i += 1) {
+    const rowNumber = i + 4;
+    wsAlertas.getCell(rowNumber, 1).value = { formula: `04_Seguimiento_Mensual!C${i + 5}` };
+    wsAlertas.getCell(rowNumber, 2).value = { formula: `04_Seguimiento_Mensual!G${i + 5}` };
+    wsAlertas.getCell(rowNumber, 3).value = { formula: `04_Seguimiento_Mensual!H${i + 5}` };
+    wsAlertas.getCell(rowNumber, 4).value = { formula: `IF(B${rowNumber}="-","Sin acción",IF(B${rowNumber}<0.9,"Revisar subejecución",IF(B${rowNumber}>1.1,"Revisar sobreejecución","Continuar seguimiento")))` };
+    wsAlertas.getCell(rowNumber, 2).numFmt = '0.0%';
+  }
+  wsAlertas.columns = [{ width: 18 }, { width: 16 }, { width: 24 }, { width: 34 }, { width: 12 }, { width: 12 }];
 }
 
 function fillDatosContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
@@ -228,14 +321,12 @@ function fillDatosContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
   ws.getCell('C13').value = row.departamento || '';
   ws.getCell('C14').value = row.ciudad || '';
   const poblacion = parseNumberLoose(row.poblacion);
-  if (poblacion !== null) ws.getCell('C15').value = poblacion;
+  if (poblacion !== null) { ws.getCell('C15').value = poblacion; ws.getCell('C15').numFmt = '#,##0'; }
   const mensual = typeof row.valor_mensual === 'number' ? row.valor_mensual : parseNumberLoose(row.valor_mensual_texto) ?? 0;
   const mesesNum = typeof row.meses === 'number' ? row.meses : parseNumberLoose(row.meses_texto) ?? 0;
   const total = row.valor_total > 0 ? row.valor_total : mensual * mesesNum;
-  ws.getCell('C20').value = total;
-  ws.getCell('C21').value = mensual;
-  ws.getCell('C20').numFmt = '"$"#,##0.00';
-  ws.getCell('C21').numFmt = '"$"#,##0.00';
+  if (total > 0) { ws.getCell('C20').value = total; ws.getCell('C20').numFmt = '"$"#,##0.00'; }
+  if (mensual > 0) { ws.getCell('C21').value = mensual; ws.getCell('C21').numFmt = '"$"#,##0.00'; }
 }
 
 function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[], row: ProviderRow) {
