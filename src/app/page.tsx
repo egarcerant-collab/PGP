@@ -411,6 +411,7 @@ export default function Home() {
 
           {/* ── analysis modules — PgPsearchForm always mounted ── */}
           <div className={cn("p-6", (activeModule === "historial") && "hidden")}>
+            <div className={cn(activeModule === "datos" && "max-w-5xl mx-auto")}>
             <PgPsearchForm
               ref={pgpSearchRef}
               executionDataByMonth={executionData}
@@ -423,6 +424,7 @@ export default function Home() {
               userName={currentUser?.nombre}
               userRole={currentUser?.rol}
             />
+            </div>
           </div>
 
           {/* ── historial module ── */}
