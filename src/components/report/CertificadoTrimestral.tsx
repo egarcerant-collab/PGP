@@ -1601,11 +1601,23 @@ export default function CertificadoTrimestral({
                             <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={prestador}>{prestador}</td>
                             <td className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
-                                {infs.map((i: any) => (
-                                  <span key={i.numero} className="inline-block bg-green-100 text-green-800 border border-green-200 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
-                                    {i.periodo}
-                                  </span>
-                                ))}
+                                {infs.map((i: any) => {
+                                  const partes = (i.periodo || '').split('-').filter(Boolean).length;
+                                  const esTrimestre = partes >= 3;
+                                  const esBimestre = partes === 2;
+                                  const badgeCls = esTrimestre
+                                    ? 'bg-violet-100 text-violet-800 border-violet-200'
+                                    : esBimestre
+                                    ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                    : 'bg-green-100 text-green-800 border-green-200';
+                                  return (
+                                    <span key={i.numero} className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap border ${badgeCls}`}>
+                                      {esTrimestre && <span className="font-bold text-violet-600">T·</span>}
+                                      {esBimestre && <span className="font-bold text-blue-600">B·</span>}
+                                      {i.periodo}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </td>
                             <td className="px-3 py-2 text-center font-bold text-blue-700">{infs.length}</td>
