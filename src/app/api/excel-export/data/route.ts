@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const EXCEL_EXPORT_COOKIE = 'excel_export_auth';
 const GOOGLE_SHEET_ID = '10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04';
