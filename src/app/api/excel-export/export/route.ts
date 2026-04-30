@@ -170,35 +170,37 @@ type InformeRecord = {
 
 async function fetchInformesByPrestador(prestador: string, contrato: string): Promise<InformeRecord[]> {
   try {
+    // cache: 'no-store' evita que Next.js reutilice el resultado entre prestadores distintos
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) },
     });
 
-    // Filtra en el servidor para evitar traer todos los registros
-    let query = supabase
+    const { data, error } = await supabase
       .from('informes')
-      .select('numero, prestador, contrato, periodo, tipo_periodo, fecha, total_ejecutado, valor_final, descontar, reconocer, responsable')
-      .ilike('prestador', prestador);
-
-    if (contrato) {
-      query = query.ilike('contrato', contrato);
-    }
-
-    const { data, error } = await query;
+      .select('numero, prestador, contrato, periodo, tipo_periodo, fecha, total_ejecutado, valor_final, descontar, reconocer, responsable');
 
     if (error || !data?.length) return [];
 
-    return data.map((r: any) => ({
-      numero: r.numero ?? null,
-      periodo: r.periodo ?? null,
-      tipo_periodo: r.tipo_periodo ?? null,
-      fecha: r.fecha ?? null,
-      total_ejecutado: typeof r.total_ejecutado === 'number' ? r.total_ejecutado : parseNumberLoose(r.total_ejecutado),
-      valor_final: typeof r.valor_final === 'number' ? r.valor_final : parseNumberLoose(r.valor_final),
-      descontar: typeof r.descontar === 'number' ? r.descontar : parseNumberLoose(r.descontar),
-      reconocer: typeof r.reconocer === 'number' ? r.reconocer : parseNumberLoose(r.reconocer),
-      responsable: r.responsable ?? null,
-    }));
+    const pKey = normalizeKey(prestador);
+    const cKey = normalizeKey(contrato);
+
+    return data
+      .filter((r: any) => {
+        const matchP = normalizeKey(r.prestador || '') === pKey;
+        const matchC = !cKey || normalizeKey(r.contrato || '') === cKey;
+        return matchP && matchC;
+      })
+      .map((r: any) => ({
+        numero: r.numero ?? null,
+        periodo: r.periodo ?? null,
+        tipo_periodo: r.tipo_periodo ?? null,
+        fecha: r.fecha ?? null,
+        total_ejecutado: typeof r.total_ejecutado === 'number' ? r.total_ejecutado : parseNumberLoose(r.total_ejecutado),
+        valor_final: typeof r.valor_final === 'number' ? r.valor_final : parseNumberLoose(r.valor_final),
+        descontar: typeof r.descontar === 'number' ? r.descontar : parseNumberLoose(r.descontar),
+        reconocer: typeof r.reconocer === 'number' ? r.reconocer : parseNumberLoose(r.reconocer),
+        responsable: r.responsable ?? null,
+      }));
   } catch {
     return [];
   }
