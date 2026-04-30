@@ -125,9 +125,10 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
+    if (!unlocked) return;
     fetchUsuarios();
     fetchCurrentUser();
-  }, [fetchUsuarios, fetchCurrentUser]);
+  }, [unlocked, fetchUsuarios, fetchCurrentUser]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
