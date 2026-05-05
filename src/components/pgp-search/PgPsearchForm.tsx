@@ -430,14 +430,9 @@ const PgPsearchForm = forwardRef<
         selectedRows: adjustedData.selectedRows,
         executionData: Object.fromEntries(
           Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-            ...v,
-            cupCounts: Object.fromEntries(
-              Array.from(v.cupCounts.entries()).map(([cup, info]) => [cup, {
-                ...info,
-                uniqueUsers: Array.from(info.uniqueUsers),
-                diagnoses: Object.fromEntries(info.diagnoses),
-              }])
-            ),
+            totalRealValue: v.totalRealValue,
+            uniqueCupCount: v.uniqueCupCount,
+            totalCups: v.totalCups,
           }])
         ),
         jsonPrestadorCode,
@@ -775,14 +770,9 @@ const PgPsearchForm = forwardRef<
                   selectedRows: adjustedData.selectedRows,
                   executionData: Object.fromEntries(
                     Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-                      ...v,
-                      cupCounts: Object.fromEntries(
-                        Array.from(v.cupCounts.entries()).map(([cup, info]) => [cup, {
-                          ...info,
-                          uniqueUsers: Array.from(info.uniqueUsers),
-                          diagnoses: Object.fromEntries(info.diagnoses),
-                        }])
-                      ),
+                      totalRealValue: v.totalRealValue,
+                      uniqueCupCount: v.uniqueCupCount,
+                      totalCups: v.totalCups,
                     }])
                   ),
                   jsonPrestadorCode,
