@@ -435,23 +435,30 @@ const PgPsearchForm = forwardRef<
             totalCups: v.totalCups,
           }])
         ),
-        jsonPrestadorCode,
         uniqueUserCount,
         selectedPrestador,
       };
       try {
+        const bodyStr = JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName });
+        const kb = (v: any) => (JSON.stringify(v || '').length / 1024).toFixed(1) + 'KB';
+        const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(bodyStr.length/1024/1024).toFixed(2)}MB`;
+        console.log('[triggerSave sizes]', sizes);
+        if (bodyStr.length > 3_500_000) {
+          return { error: `Payload demasiado grande (${(bodyStr.length/1024/1024).toFixed(1)}MB). Campos: ${sizes}` };
+        }
         const response = await fetch('/api/save-audit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName }),
+          body: bodyStr,
         });
         if (response.ok) {
           const data = await response.json();
           return { numero: data.numero };
         }
-        return { error: 'Error al guardar.' };
-      } catch {
-        return { error: 'Error de red.' };
+        const errData = await response.json().catch(() => ({ message: 'Error desconocido' }));
+        return { error: errData.message || 'Error al guardar.' };
+      } catch (e: any) {
+        return { error: `Error de red: ${e?.message || e}` };
       }
     }
   }));
@@ -774,16 +781,10 @@ const PgPsearchForm = forwardRef<
                       totalCups: v.totalCups,
                     }])
                   ),
-                  jsonPrestadorCode,
                   uniqueUserCount,
                   selectedPrestador,
                 };
                 try {
-                  // Diagnóstico de tamaño por campo
-                  const kb = (v: any) => (JSON.stringify(v || '').length / 1024).toFixed(1) + 'KB';
-                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} jsonCode:${kb(jsonPrestadorCode)} total:${kb({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName })}`;
-                  console.log('[SaveAudit sizes]', sizes);
-
                   let bodyStr: string;
                   try {
                     bodyStr = JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName });
@@ -792,8 +793,13 @@ const PgPsearchForm = forwardRef<
                     return;
                   }
 
-                  if (bodyStr.length > 4_000_000) {
-                    alert(`❌ Payload demasiado grande (${(bodyStr.length/1024/1024).toFixed(1)}MB). Campos: ${sizes}`);
+                  // Diagnóstico de tamaño por campo
+                  const kb = (v: any) => (JSON.stringify(v || '').length / 1024).toFixed(1) + 'KB';
+                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(bodyStr.length/1024/1024).toFixed(2)}MB`;
+                  console.log('[onSaveAudit sizes]', sizes);
+
+                  if (bodyStr.length > 3_500_000) {
+                    alert(`❌ Payload demasiado grande (${(bodyStr.length/1024/1024).toFixed(1)}MB).\n${sizes}`);
                     return;
                   }
 
