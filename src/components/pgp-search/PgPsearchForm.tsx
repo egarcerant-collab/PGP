@@ -791,10 +791,17 @@ const PgPsearchForm = forwardRef<
                   selectedPrestador,
                 };
                 try {
+                  let bodyStr: string;
+                  try {
+                    bodyStr = JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName });
+                  } catch (serErr: any) {
+                    alert(`❌ Error al serializar datos: ${serErr?.message || serErr}`);
+                    return;
+                  }
                   const response = await fetch('/api/save-audit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName }),
+                    body: bodyStr,
                   });
                   const data = await response.json();
                   if (response.ok) {
@@ -802,8 +809,8 @@ const PgPsearchForm = forwardRef<
                   } else {
                     alert(`❌ Error al guardar: ${data.message || 'Error desconocido'}`);
                   }
-                } catch {
-                  alert('❌ Error de conexión al guardar la auditoría.');
+                } catch (netErr: any) {
+                  alert(`❌ Error de red: ${netErr?.message || netErr}`);
                 }
               }}
             />
