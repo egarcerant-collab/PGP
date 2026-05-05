@@ -267,13 +267,13 @@ const PgPsearchForm = forwardRef<
   });
 
   useEffect(() => {
-    if (initialAuditData?.pgpData) {
-      setPgpData(initialAuditData.pgpData);
-      setSelectedPrestador(initialAuditData.selectedPrestador || null);
-      setIsDataLoaded(true);
-      if (initialAuditData.selectedPrestador?.PRESTADOR) {
-        onPrestadorLoaded?.(initialAuditData.selectedPrestador.PRESTADOR);
+    if (initialAuditData?.selectedPrestador) {
+      if (initialAuditData.pgpData) {
+        setPgpData(initialAuditData.pgpData);
+        setIsDataLoaded(true);
       }
+      setSelectedPrestador(initialAuditData.selectedPrestador);
+      onPrestadorLoaded?.(initialAuditData.selectedPrestador.PRESTADOR);
     }
   }, [initialAuditData]);
 
@@ -437,7 +437,6 @@ const PgPsearchForm = forwardRef<
         ),
         jsonPrestadorCode,
         uniqueUserCount,
-        pgpData,
         selectedPrestador,
       };
       try {
@@ -777,7 +776,6 @@ const PgPsearchForm = forwardRef<
                   ),
                   jsonPrestadorCode,
                   uniqueUserCount,
-                  pgpData,
                   selectedPrestador,
                 };
                 try {
