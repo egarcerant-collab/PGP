@@ -38,11 +38,8 @@ export async function GET() {
         const auditorId = (r.datos as any)?.auditor_id;
         const auditorNombre = (r.datos as any)?.auditor_nombre || '';
 
-        // Filtrar: admin ve todo
-        // Auditor: ve las suyas + las que no tienen dueño asignado (antiguas)
-        if (!isAdmin) {
-          if (auditorId && currentUser?.id && auditorId !== currentUser.id) return;
-        }
+        // Todos los usuarios autenticados ven todas las auditorías del equipo
+        // El control de editar/eliminar se hace en los endpoints correspondientes
 
         results.push({
           id: r.id,
