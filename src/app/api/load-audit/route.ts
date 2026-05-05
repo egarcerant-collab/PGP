@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import fs from 'fs/promises';
 import path from 'path';
-
-const supabase = createClient(
-  'https://fvrgfqxohacipmnmqyef.supabase.co',
-  'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
-);
 
 export async function GET(request: Request) {
   try {
@@ -37,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     // Leer de Supabase
-    const { data, error } = await supabase
+    const { data, error } = await createSupabaseAdminClient()
       .from('auditorias')
       .select('id, numero, prestador, nit, mes, datos, created_at')
       .eq('id', numericId)

@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import fs from 'fs/promises';
 import path from 'path';
-
-const supabase = createClient(
-  'https://fvrgfqxohacipmnmqyef.supabase.co',
-  'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
-);
 
 async function getCurrentUser() {
   try {
@@ -33,7 +27,8 @@ export async function GET() {
 
   // 1. Leer de Supabase
   try {
-    const { data } = await supabase
+    const db = createSupabaseAdminClient();
+    const { data } = await db
       .from('auditorias')
       .select('id, numero, prestador, nit, mes, created_at, datos')
       .order('created_at', { ascending: false });
@@ -43,13 +38,10 @@ export async function GET() {
         const auditorId = (r.datos as any)?.auditor_id;
         const auditorNombre = (r.datos as any)?.auditor_nombre || '';
 
-        // Filtrar: admin ve todo, auditor solo sus propias
-        // Auditorías sin auditor_id (antiguas) las ven todos los admins
+        // Filtrar: admin ve todo
+        // Auditor: ve las suyas + las que no tienen dueño asignado (antiguas)
         if (!isAdmin) {
-          // Si tiene dueño asignado, solo el dueño puede verla
           if (auditorId && currentUser?.id && auditorId !== currentUser.id) return;
-          // Si no tiene dueño (auditoría antigua), solo admins la ven
-          if (!auditorId && currentUser) return;
         }
 
         results.push({
