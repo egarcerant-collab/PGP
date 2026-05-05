@@ -74,8 +74,6 @@ export default function Home() {
 
   const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> } | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [savePw, setSavePw] = useState('');
-  const [savePwError, setSavePwError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNumero, setSavedNumero] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
@@ -184,14 +182,13 @@ export default function Home() {
   };
 
   const handleSaveAudit = async () => {
-    if (savePw !== '123456') { setSavePwError(true); return; }
     if (selectedMonths.length === 0) return;
     setIsSaving(true);
     try {
-      const result = await pgpSearchRef.current?.triggerSave(savePw, selectedMonths);
-      if (!result) { setSavePwError(false); setShowSaveModal(false); return; }
+      const result = await pgpSearchRef.current?.triggerSave('', selectedMonths);
+      if (!result) { setShowSaveModal(false); return; }
       if ('error' in result) {
-        setSavePwError(result.error === 'Contraseña incorrecta.');
+        alert(`❌ ${result.error}`);
       } else {
         setSavedNumero(result.numero);
         setShowSaveModal(false);
@@ -336,7 +333,7 @@ export default function Home() {
               <p className="text-[10px] text-emerald-500">{executionData.size} mes{executionData.size !== 1 ? "es" : ""} cargado{executionData.size !== 1 ? "s" : ""}</p>
               {savedNumero && <p className="text-[10px] text-emerald-700 font-bold">Guardada N° {savedNumero}</p>}
               <button
-                onClick={() => { setShowSaveModal(true); setSavePw(''); setSavePwError(false); setSelectedMonths(Array.from(executionData.keys()).slice(0,3)); }}
+                onClick={() => { setShowSaveModal(true); setSelectedMonths(Array.from(executionData.keys()).slice(0,3)); }}
                 className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors"
               >
                 <Save className="h-3 w-3" />
@@ -468,16 +465,6 @@ export default function Home() {
               {selectedMonths.length === 3 && <p className="text-xs text-emerald-600">Máximo 3 meses seleccionados.</p>}
             </div>
 
-            <Input
-              type="password"
-              placeholder="Contraseña"
-              value={savePw}
-              onChange={e => { setSavePw(e.target.value); setSavePwError(false); }}
-              onKeyDown={e => e.key === 'Enter' && handleSaveAudit()}
-              className={savePwError ? 'border-red-500' : ''}
-              autoFocus
-            />
-            {savePwError && <p className="text-xs text-red-500">Contraseña incorrecta.</p>}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setShowSaveModal(false)}>Cancelar</Button>
               <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveAudit} disabled={isSaving || selectedMonths.length === 0}>
