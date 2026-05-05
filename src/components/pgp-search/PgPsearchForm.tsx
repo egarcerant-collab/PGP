@@ -762,7 +762,10 @@ const PgPsearchForm = forwardRef<
               userName={userName}
               initialResponsable={initialAuditData?.auditor_nombre || userName}
               onSaveAudit={async () => {
-                if (!selectedPrestador || executionDataByMonth.size === 0) return;
+                if (!selectedPrestador || executionDataByMonth.size === 0) {
+                  alert('Primero carga los archivos JSON del prestador.');
+                  return;
+                }
                 const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
                 const date = new Date(2024, parseInt(monthKey) - 1, 1);
                 const monthName = date.toLocaleString('es-CO', { month: 'long' });
@@ -787,11 +790,21 @@ const PgPsearchForm = forwardRef<
                   pgpData,
                   selectedPrestador,
                 };
-                await fetch('/api/save-audit', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName }),
-                });
+                try {
+                  const response = await fetch('/api/save-audit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName }),
+                  });
+                  const data = await response.json();
+                  if (response.ok) {
+                    alert(`✅ Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} exitosamente.`);
+                  } else {
+                    alert(`❌ Error al guardar: ${data.message || 'Error desconocido'}`);
+                  }
+                } catch {
+                  alert('❌ Error de conexión al guardar la auditoría.');
+                }
               }}
             />
           </div>

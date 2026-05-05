@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import fs from 'fs/promises';
 import path from 'path';
-
-const supabase = createClient(
-  'https://fvrgfqxohacipmnmqyef.supabase.co',
-  'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA'
-);
 
 const PASSWORD = '123456';
 
@@ -37,6 +31,7 @@ export async function POST(request: Request) {
     }
 
     const nit = auditData.selectedPrestador?.NIT || '';
+    const db = createSupabaseAdminClient();
 
     // Obtener usuario actual para asociar la auditoría
     const currentUser = await getCurrentUser();
@@ -47,7 +42,7 @@ export async function POST(request: Request) {
     };
 
     // Verificar si ya existe una auditoría con el mismo prestador y mes
-    const { data: duplicate } = await supabase
+    const { data: duplicate } = await db
       .from('auditorias')
       .select('id, numero, datos')
       .eq('prestador', prestadorName)
@@ -69,7 +64,7 @@ export async function POST(request: Request) {
         auditor_nombre: (duplicate.datos as any)?.auditor_nombre || currentUser?.nombre || '',
       };
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await db
         .from('auditorias')
         .update({ datos: preservedData, nit })
         .eq('id', duplicate.id);
@@ -85,7 +80,7 @@ export async function POST(request: Request) {
     }
 
     // Insertar nuevo registro con número secuencial
-    const { data: last } = await supabase
+    const { data: last } = await db
       .from('auditorias')
       .select('numero')
       .order('numero', { ascending: false })
@@ -94,7 +89,7 @@ export async function POST(request: Request) {
     const lastNumber = last && last.length > 0 ? parseInt(last[0].numero, 10) || 0 : 0;
     const numero = String(lastNumber + 1).padStart(3, '0');
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('auditorias')
       .insert([{ numero, prestador: prestadorName, nit, mes: month, datos: auditDataWithOwner }])
       .select()
@@ -126,6 +121,8 @@ export async function DELETE(request: Request) {
     }
     if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
 
+    const db = createSupabaseAdminClient();
+
     if (id === 'ALL') {
       // Solo admins pueden eliminar todas
       const currentUser = await getCurrentUser();
@@ -133,7 +130,7 @@ export async function DELETE(request: Request) {
       if (!isAdmin) {
         return NextResponse.json({ message: 'Solo los administradores pueden eliminar todas las auditorías.' }, { status: 403 });
       }
-      await supabase.from('auditorias').delete().neq('id', 0);
+      await db.from('auditorias').delete().neq('id', 0);
       try {
         const reportsDir = path.join(process.cwd(), 'public', 'informes');
         const monthDirs = await fs.readdir(reportsDir, { withFileTypes: true });
@@ -159,7 +156,7 @@ export async function DELETE(request: Request) {
         const currentUser = await getCurrentUser();
         const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
         if (!isAdmin) {
-          const { data: record } = await supabase
+          const { data: record } = await db
             .from('auditorias')
             .select('datos')
             .eq('id', id)
@@ -169,7 +166,7 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ message: 'No tienes permiso para eliminar esta auditoría.' }, { status: 403 });
           }
         }
-        const { error } = await supabase.from('auditorias').delete().eq('id', id);
+        const { error } = await db.from('auditorias').delete().eq('id', id);
         if (error) throw error;
       }
     }
