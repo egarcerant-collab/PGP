@@ -43,6 +43,8 @@ export async function GET(request: Request) {
     if (error) throw error;
     if (!data) return NextResponse.json({ message: 'No encontrado.' }, { status: 404 });
 
+    const datosActuales = (data.datos as any) || {};
+
     // Buscar informe vinculado por prestador + mes
     let informeRelacionado: any = null;
     try {
@@ -59,7 +61,11 @@ export async function GET(request: Request) {
           const partes = (inf.periodo || '').toUpperCase().split('-').map((p: string) => p.trim());
           return partes.includes(mesNorm);
         });
+
         if (match) {
+          const notaEF = match.pdf_data?.notaEjecucionFinanciera || '';
+          const notaAd = match.pdf_data?.notaAdicional || '';
+
           informeRelacionado = {
             numero: match.numero,
             contrato: match.contrato,
@@ -67,15 +73,54 @@ export async function GET(request: Request) {
             periodo: match.periodo,
             ntPeriodo: match.nt_periodo,
             responsable: match.responsable,
-            notaEjecucionFinanciera: match.pdf_data?.notaEjecucionFinanciera || '',
-            notaAdicional: match.pdf_data?.notaAdicional || '',
+            notaEjecucionFinanciera: notaEF,
+            notaAdicional: notaAd,
           };
+
+          // ── Auto-sincronización permanente ──────────────────────────────────
+          // Si la auditoría aún no tiene las notas guardadas en datos, las
+          // copiamos ahora desde el informe. Esto ocurre UNA sola vez por
+          // auditoría (en la primera apertura). Las siguientes aperturas ya
+          // las encuentran directamente en datos sin necesitar al informe.
+          const yaConNotas = datosActuales.notasGuardadas?.notaEjecucionFinanciera
+            || datosActuales.notasGuardadas?.notaAdicional;
+
+          if (!yaConNotas && (notaEF || notaAd)) {
+            const datosMerged = {
+              ...datosActuales,
+              notasGuardadas: {
+                notaEjecucionFinanciera: notaEF,
+                notaAdicional: notaAd,
+                informeNum: match.numero || '',
+              },
+              // Guardar informeRestored también si aún no existe
+              ...(!datosActuales.informeRestored ? {
+                informeRestored: {
+                  numero: match.numero,
+                  contrato: match.contrato,
+                  tipoPeriodo: match.tipo_periodo,
+                  periodo: match.periodo,
+                  ntPeriodo: match.nt_periodo,
+                  responsable: match.responsable,
+                  notaEjecucionFinanciera: notaEF,
+                  notaAdicional: notaAd,
+                },
+              } : {}),
+            };
+            // Fire-and-forget: actualizar en BD sin bloquear la respuesta
+            db.from('auditorias')
+              .update({ datos: datosMerged })
+              .eq('id', data.id)
+              .then(() => {})
+              .catch(() => {});
+          }
+          // ────────────────────────────────────────────────────────────────────
         }
       }
     } catch { /* si falla la búsqueda del informe, no bloqueamos la carga */ }
 
     return NextResponse.json({
-      auditData: data.datos,
+      auditData: datosActuales,
       prestador: data.prestador,
       mes: data.mes,
       numero: data.numero,
