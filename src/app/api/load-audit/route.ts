@@ -49,6 +49,7 @@ export async function GET(request: Request) {
     let informeRelacionado: any = null;
     try {
       const mesNorm = (data.mes || '').trim().toUpperCase();
+
       const { data: informes } = await db
         .from('informes')
         .select('*')
@@ -56,11 +57,29 @@ export async function GET(request: Request) {
         .order('numero', { ascending: false });
 
       if (informes && informes.length > 0) {
-        // Buscar el informe cuyo periodo incluya el mes de la auditoría
-        const match = informes.find(inf => {
+        // Filtrar todos los informes que incluyan el mes de la auditoría en su periodo
+        const candidatos = informes.filter(inf => {
           const partes = (inf.periodo || '').toUpperCase().split('-').map((p: string) => p.trim());
           return partes.includes(mesNorm);
         });
+
+        let match: any = null;
+
+        if (candidatos.length > 0) {
+          // Prioridad 1: informe mensual exacto (periodo == mesNorm exactamente)
+          // → tiene las notas propias del mes, no diluidas en un trimestral
+          const exacto = candidatos.find(inf =>
+            inf.periodo.trim().toUpperCase() === mesNorm
+          );
+
+          // Prioridad 2: entre los que incluyen el mes, el que tenga notas no vacías
+          const conNotas = candidatos.find(inf =>
+            inf.pdf_data?.notaEjecucionFinanciera || inf.pdf_data?.notaAdicional
+          );
+
+          // Prioridad 3: el de número más alto (más reciente)
+          match = exacto ?? conNotas ?? candidatos[0];
+        }
 
         if (match) {
           const notaEF = match.pdf_data?.notaEjecucionFinanciera || '';
@@ -78,10 +97,9 @@ export async function GET(request: Request) {
           };
 
           // ── Auto-sincronización permanente ──────────────────────────────────
-          // Si la auditoría aún no tiene las notas guardadas en datos, las
-          // copiamos ahora desde el informe. Esto ocurre UNA sola vez por
-          // auditoría (en la primera apertura). Las siguientes aperturas ya
-          // las encuentran directamente en datos sin necesitar al informe.
+          // Si la auditoría aún no tiene notas en datos, las copiamos ahora
+          // desde el informe. Ocurre UNA sola vez; siguientes aperturas las
+          // encuentran directamente en datos sin buscar el informe.
           const yaConNotas = datosActuales.notasGuardadas?.notaEjecucionFinanciera
             || datosActuales.notasGuardadas?.notaAdicional;
 
@@ -93,7 +111,6 @@ export async function GET(request: Request) {
                 notaAdicional: notaAd,
                 informeNum: match.numero || '',
               },
-              // Guardar informeRestored también si aún no existe
               ...(!datosActuales.informeRestored ? {
                 informeRestored: {
                   numero: match.numero,
