@@ -144,8 +144,42 @@ export async function GET(request: Request) {
       }
     } catch { /* si falla la búsqueda del informe, no bloqueamos la carga */ }
 
+    // ── Enriquecer executionData con totalRealValue desde el informe ──────────
+    // Si la auditoría tiene totalRealValue=0 (guardada sin datos financieros),
+    // usamos pdf_data.totalEjecutadoFinal del informe como valor real.
+    let auditDataFinal = datosActuales;
+    try {
+      if (informeRelacionado && datosActuales.executionData) {
+        const MESES: Record<string, string> = {
+          ENERO:'1',FEBRERO:'2',MARZO:'3',ABRIL:'4',MAYO:'5',JUNIO:'6',
+          JULIO:'7',AGOSTO:'8',SEPTIEMBRE:'9',OCTUBRE:'10',NOVIEMBRE:'11',DICIEMBRE:'12'
+        };
+        const mesKey = MESES[(data.mes || '').toUpperCase().trim()] || '';
+        const execEntry = datosActuales.executionData[mesKey];
+        if (execEntry && (!execEntry.totalRealValue || execEntry.totalRealValue === 0)) {
+          // Buscar el totalEjecutadoFinal en el informe encontrado
+          const { data: inf } = await db
+            .from('informes')
+            .select('pdf_data')
+            .eq('numero', informeRelacionado.numero)
+            .single();
+          const totalReal = inf?.pdf_data?.totalEjecutadoFinal || 0;
+          if (totalReal > 0) {
+            auditDataFinal = {
+              ...datosActuales,
+              executionData: {
+                ...datosActuales.executionData,
+                [mesKey]: { ...execEntry, totalRealValue: totalReal },
+              },
+            };
+          }
+        }
+      }
+    } catch { /* no bloquear */ }
+    // ──────────────────────────────────────────────────────────────────────────
+
     return NextResponse.json({
-      auditData: datosActuales,
+      auditData: auditDataFinal,
       prestador: data.prestador,
       mes: data.mes,
       numero: data.numero,
