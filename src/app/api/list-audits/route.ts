@@ -35,7 +35,11 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     // Auditor normal → solo ve sus propias auditorías (filtro por auditor_id en datos)
-    if (!isAdmin && currentUser?.id) {
+    if (!isAdmin) {
+      if (!currentUser?.id) {
+        // Sin sesión válida → no exponer auditorías de nadie
+        return NextResponse.json([]);
+      }
       query = query.filter('datos->>auditor_id', 'eq', currentUser.id);
     }
 

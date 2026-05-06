@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Play, RefreshCw, FolderOpen, Trash2, Eraser, ChevronDown, ChevronUp, FileText, Save, X } from "lucide-react";
@@ -291,9 +291,8 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     const loadingInf = informesLoading[a.id];
 
                                     return (
-                                        <>
+                                        <Fragment key={`frag-${a.id}-${idx}`}>
                                             <tr
-                                                key={`row-${a.id}-${idx}`}
                                                 className={`border-t border-border transition-colors ${
                                                     checked
                                                         ? 'bg-emerald-50 border-emerald-200'
@@ -467,7 +466,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                                     </td>
                                                 </tr>
                                             )}
-                                        </>
+                                        </Fragment>
                                     );
                                 })}
                             </tbody>
