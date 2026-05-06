@@ -31,6 +31,8 @@ interface InformeRestored {
   responsable?: string;
   notaEjecucionFinanciera?: string;
   notaAdicional?: string;
+  valorCupsInesperadas?: number;
+  cantidadCupsInesperadas?: string;
 }
 
 export interface NotasAuditoria {
@@ -302,6 +304,11 @@ export default function CertificadoTrimestral({
       setNotaEjecucionFinanciera(initialInforme.notaEjecucionFinanciera);
     if (initialInforme.notaAdicional !== undefined)
       setNotaAdicional(initialInforme.notaAdicional);
+    // Restaurar valor de CUPS / Tecnologías Inesperadas desde el informe
+    if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0)
+      setValorCupsInesperadas(initialInforme.valorCupsInesperadas);
+    if (initialInforme.cantidadCupsInesperadas !== undefined && initialInforme.cantidadCupsInesperadas !== '')
+      setCantidadCupsInesperadas(initialInforme.cantidadCupsInesperadas);
     if (initialInforme.tipoPeriodo) {
       const tp = initialInforme.tipoPeriodo.toLowerCase();
       if (tp.includes('bimen') || tp.includes('bimest')) setPeriodType('bimensual');

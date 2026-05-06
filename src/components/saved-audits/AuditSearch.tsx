@@ -185,11 +185,15 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 // Informe encontrado en Supabase — usar sus datos (prioridad)
                 merged.informeRestored = {
                   ...base.informeRelacionado,
-                  // Si las notas del informe en BD están vacías, usar las del respaldo en auditData
+                  // Si las notas/valores del informe en BD están vacíos, usar los del respaldo
                   notaEjecucionFinanciera: base.informeRelacionado.notaEjecucionFinanciera
                     || merged.notasGuardadas?.notaEjecucionFinanciera || '',
                   notaAdicional: base.informeRelacionado.notaAdicional
                     || merged.notasGuardadas?.notaAdicional || '',
+                  valorCupsInesperadas: base.informeRelacionado.valorCupsInesperadas
+                    || (merged.notasGuardadas as any)?.valorCupsInesperadas || 0,
+                  cantidadCupsInesperadas: base.informeRelacionado.cantidadCupsInesperadas
+                    || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
                 };
             } else if (merged.notasGuardadas) {
                 // Sin informe en BD pero con notas guardadas en la auditoría
@@ -197,6 +201,8 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                   numero: merged.notasGuardadas.informeNum || '',
                   notaEjecucionFinanciera: merged.notasGuardadas.notaEjecucionFinanciera || '',
                   notaAdicional: merged.notasGuardadas.notaAdicional || '',
+                  valorCupsInesperadas: (merged.notasGuardadas as any).valorCupsInesperadas || 0,
+                  cantidadCupsInesperadas: (merged.notasGuardadas as any).cantidadCupsInesperadas || '',
                 };
             }
 

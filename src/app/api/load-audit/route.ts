@@ -84,6 +84,8 @@ export async function GET(request: Request) {
         if (match) {
           const notaEF = match.pdf_data?.notaEjecucionFinanciera || '';
           const notaAd = match.pdf_data?.notaAdicional || '';
+          const valorCupsInesperadas = match.pdf_data?.valorCupsInesperadas || 0;
+          const cantidadCupsInesperadas = match.pdf_data?.cantidadCupsInesperadas || '';
 
           informeRelacionado = {
             numero: match.numero,
@@ -94,6 +96,8 @@ export async function GET(request: Request) {
             responsable: match.responsable,
             notaEjecucionFinanciera: notaEF,
             notaAdicional: notaAd,
+            valorCupsInesperadas,
+            cantidadCupsInesperadas,
           };
 
           // ── Auto-sincronización permanente ──────────────────────────────────
@@ -103,13 +107,15 @@ export async function GET(request: Request) {
           const yaConNotas = datosActuales.notasGuardadas?.notaEjecucionFinanciera
             || datosActuales.notasGuardadas?.notaAdicional;
 
-          if (!yaConNotas && (notaEF || notaAd)) {
+          if (!yaConNotas && (notaEF || notaAd || valorCupsInesperadas)) {
             const datosMerged = {
               ...datosActuales,
               notasGuardadas: {
                 notaEjecucionFinanciera: notaEF,
                 notaAdicional: notaAd,
                 informeNum: match.numero || '',
+                valorCupsInesperadas,
+                cantidadCupsInesperadas,
               },
               ...(!datosActuales.informeRestored ? {
                 informeRestored: {
@@ -121,6 +127,8 @@ export async function GET(request: Request) {
                   responsable: match.responsable,
                   notaEjecucionFinanciera: notaEF,
                   notaAdicional: notaAd,
+                  valorCupsInesperadas,
+                  cantidadCupsInesperadas,
                 },
               } : {}),
             };
