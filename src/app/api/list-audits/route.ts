@@ -28,19 +28,22 @@ export async function GET() {
   // 1. Leer de Supabase
   try {
     const db = createSupabaseAdminClient();
-    const { data } = await db
+
+    let query = db
       .from('auditorias')
       .select('id, numero, prestador, nit, mes, created_at, datos')
       .order('created_at', { ascending: false });
 
+    // Auditor normal → solo ve sus propias auditorías (filtro por auditor_id en datos)
+    if (!isAdmin && currentUser?.id) {
+      query = query.filter('datos->>auditor_id', 'eq', currentUser.id);
+    }
+
+    const { data } = await query;
+
     if (data && data.length > 0) {
       data.forEach(r => {
-        const auditorId = (r.datos as any)?.auditor_id;
         const auditorNombre = (r.datos as any)?.auditor_nombre || '';
-
-        // Todos los usuarios autenticados ven todas las auditorías del equipo
-        // El control de editar/eliminar se hace en los endpoints correspondientes
-
         results.push({
           id: r.id,
           numero: r.numero || '',
@@ -57,7 +60,7 @@ export async function GET() {
     console.warn('Supabase list error:', e);
   }
 
-  // 2. Leer del filesystem (solo admins ven archivos del sistema)
+  // 2. Leer del filesystem (solo admins)
   if (isAdmin) {
     try {
       const rootDir = process.cwd();
