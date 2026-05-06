@@ -40,38 +40,24 @@ let toastId = 0;
 export default function AdminPage() {
   const router = useRouter();
 
-  // Password gate
+  // Control de acceso por sesión (solo superadmin)
   const [unlocked, setUnlocked] = useState(false);
-  const [gatePw, setGatePw] = useState('');
-  const [gateError, setGateError] = useState('');
-  const [gateLoading, setGateLoading] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
 
   useEffect(() => {
-    if (sessionStorage.getItem('admin_unlocked') === '1') setUnlocked(true);
-  }, []);
-
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGateLoading(true);
-    setGateError('');
-    try {
-      const res = await fetch('/api/admin/verify-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: gatePw }),
-      });
-      if (res.ok) {
-        sessionStorage.setItem('admin_unlocked', '1');
-        setUnlocked(true);
-      } else {
-        setGateError('Contraseña incorrecta.');
-      }
-    } catch {
-      setGateError('Error de conexión.');
-    } finally {
-      setGateLoading(false);
-    }
-  };
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => {
+        const rol = data.profile?.rol || '';
+        if (rol === 'superadmin') {
+          setUnlocked(true);
+        } else {
+          router.replace('/');
+        }
+      })
+      .catch(() => router.replace('/'))
+      .finally(() => setAuthChecking(false));
+  }, [router]);
 
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,10 +112,10 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!unlocked) return;
+    if (!unlocked || authChecking) return;
     fetchUsuarios();
     fetchCurrentUser();
-  }, [unlocked, fetchUsuarios, fetchCurrentUser]);
+  }, [unlocked, authChecking, fetchUsuarios, fetchCurrentUser]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -331,44 +317,10 @@ export default function AdminPage() {
     }
   };
 
-  if (!unlocked) {
+  if (authChecking || !unlocked) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-sm p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <div className="h-12 w-12 rounded-xl bg-red-600 flex items-center justify-center mx-auto">
-              <Shield className="h-6 w-6 text-white" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-800">Gestión de Usuarios</h2>
-            <p className="text-sm text-slate-500">Ingresa la contraseña de administración para continuar.</p>
-          </div>
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <input
-              type="password"
-              value={gatePw}
-              onChange={e => { setGatePw(e.target.value); setGateError(''); }}
-              placeholder="Contraseña"
-              autoFocus
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
-            />
-            {gateError && <p className="text-xs text-red-600 font-medium">{gateError}</p>}
-            <button
-              type="submit"
-              disabled={gateLoading || !gatePw}
-              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
-            >
-              {gateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-              Ingresar
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push('/')}
-              className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              Volver al inicio
-            </button>
-          </form>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
   }
