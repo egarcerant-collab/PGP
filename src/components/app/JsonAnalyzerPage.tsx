@@ -31,6 +31,8 @@ export interface InformeRestored {
   responsable?: string;
   notaEjecucionFinanciera?: string;
   notaAdicional?: string;
+  valorCupsInesperadas?: number;
+  cantidadCupsInesperadas?: string;
 }
 
 export interface SavedAuditData {
