@@ -330,16 +330,19 @@ export default function CertificadoTrimestral({
     localStorage.setItem(`pgp-cups-inesperadas-cantidad-${prestKey}`, val);
   };
 
-  // Carga siguiente número disponible al montar
+  // Carga siguiente número disponible al montar.
+  // Si ya viene un número desde initialInforme (auditoría guardada), NO lo sobreescribimos.
   useEffect(() => {
+    if (initialInforme?.numero) return; // Ya tenemos número del informe vinculado
     fetch('/api/informes')
       .then(r => r.json())
       .then(d => {
         const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
-        setInformeNum(next);
+        setInformeNum(prev => prev || next); // Solo asignar si aún está vacío
       })
       .catch(() => {});
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInforme?.numero]);
 
   const loadHistorial = async () => {
     setLoadingHistorial(true);
