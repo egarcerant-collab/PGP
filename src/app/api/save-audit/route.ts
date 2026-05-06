@@ -21,6 +21,43 @@ async function getCurrentUser() {
   }
 }
 
+// GET /api/save-audit?prestador=X&month=Y — verifica si ya existe una auditoría
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const prestador = searchParams.get('prestador') || '';
+    const month = searchParams.get('month') || '';
+    if (!prestador || !month) return NextResponse.json({ exists: false });
+
+    const currentUser = await getCurrentUser();
+    const db = createSupabaseAdminClient();
+
+    const { data } = await db
+      .from('auditorias')
+      .select('id, numero, datos')
+      .eq('prestador', prestador)
+      .eq('mes', month)
+      .maybeSingle();
+
+    if (!data) return NextResponse.json({ exists: false });
+
+    const ownerNombre = (data.datos as any)?.auditor_nombre || '';
+    const ownerId     = (data.datos as any)?.auditor_id || '';
+    const isAdmin     = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+    const isOwner     = currentUser?.id === ownerId;
+    const canOverwrite = isAdmin || isOwner;
+
+    return NextResponse.json({
+      exists: true,
+      numero: data.numero,
+      ownerNombre,
+      canOverwrite,
+    });
+  } catch {
+    return NextResponse.json({ exists: false });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();

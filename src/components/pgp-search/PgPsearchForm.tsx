@@ -424,6 +424,28 @@ const PgPsearchForm = forwardRef<
       const monthKey = months[0] || Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
       const date = new Date(2024, parseInt(monthKey) - 1, 1);
       const monthName = date.toLocaleString('es-CO', { month: 'long' });
+
+      // ── Verificar si ya existe una auditoría para este prestador/mes ──
+      try {
+        const checkRes = await fetch(
+          `/api/save-audit?prestador=${encodeURIComponent(selectedPrestador.PRESTADOR)}&month=${encodeURIComponent(monthName)}`
+        );
+        const checkData = await checkRes.json();
+        if (checkData.exists) {
+          if (!checkData.canOverwrite) {
+            return { error: `Ya existe la auditoría N° ${checkData.numero} creada por ${checkData.ownerNombre}. Sin permiso para modificarla.` };
+          }
+          const continuar = window.confirm(
+            `⚠️ ADVERTENCIA\n\nYa existe la auditoría N° ${checkData.numero} para:\n${selectedPrestador.PRESTADOR} — ${monthName}\n\nSobreescribirla puede causar pérdida de datos.\n\n¿Deseas continuar?`
+          );
+          if (!continuar) return { error: 'Operación cancelada por el usuario.' };
+
+          const pw = window.prompt('Ingresa la contraseña para confirmar la sobreescritura:');
+          if (pw === null) return { error: 'Operación cancelada.' };
+          if (pw !== '123456') return { error: 'Contraseña incorrecta. Operación cancelada.' };
+        }
+      } catch { /* si falla la verificación, continuar */ }
+      // ─────────────────────────────────────────────────────────────────
       const auditPackage = {
         adjustedQuantities: adjustedData.adjustedQuantities,
         comments: adjustedData.comments,
@@ -774,6 +796,34 @@ const PgPsearchForm = forwardRef<
                 const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
                 const date = new Date(2024, parseInt(monthKey) - 1, 1);
                 const monthName = date.toLocaleString('es-CO', { month: 'long' });
+
+                // ── Verificar si ya existe una auditoría para este prestador/mes ──
+                try {
+                  const checkRes = await fetch(
+                    `/api/save-audit?prestador=${encodeURIComponent(selectedPrestador.PRESTADOR)}&month=${encodeURIComponent(monthName)}`
+                  );
+                  const checkData = await checkRes.json();
+
+                  if (checkData.exists) {
+                    if (!checkData.canOverwrite) {
+                      alert(`❌ Ya existe la auditoría N° ${checkData.numero} para ${selectedPrestador.PRESTADOR} - ${monthName}, creada por ${checkData.ownerNombre}.\n\nNo tienes permiso para modificarla.`);
+                      return;
+                    }
+                    // Advertencia + contraseña para sobreescribir
+                    const continuar = window.confirm(
+                      `⚠️ ADVERTENCIA\n\nYa existe la auditoría N° ${checkData.numero} para:\n${selectedPrestador.PRESTADOR} — ${monthName}\n\nSobreescribirla puede causar pérdida de datos.\n\n¿Deseas continuar?`
+                    );
+                    if (!continuar) return;
+
+                    const pw = window.prompt('Ingresa la contraseña para confirmar la sobreescritura:');
+                    if (pw === null) return; // canceló
+                    if (pw !== '123456') {
+                      alert('❌ Contraseña incorrecta. Operación cancelada.');
+                      return;
+                    }
+                  }
+                } catch { /* si falla la verificación, continuar normalmente */ }
+                // ─────────────────────────────────────────────────────────────────
                 const auditPackage = {
                   adjustedQuantities: adjustedData.adjustedQuantities,
                   comments: adjustedData.comments,
