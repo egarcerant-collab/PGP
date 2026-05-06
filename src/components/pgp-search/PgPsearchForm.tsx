@@ -766,7 +766,7 @@ const PgPsearchForm = forwardRef<
               userName={userName}
               initialResponsable={initialAuditData?.auditor_nombre || userName}
               initialInforme={initialAuditData?.informeRestored ?? null}
-              onSaveAudit={async () => {
+              onSaveAudit={async (notas) => {
                 if (!selectedPrestador || executionDataByMonth.size === 0) {
                   alert('Primero carga los archivos JSON del prestador.');
                   return;
@@ -787,6 +787,8 @@ const PgPsearchForm = forwardRef<
                   ),
                   uniqueUserCount,
                   selectedPrestador,
+                  // Notas del certificado — respaldo para cuando no haya informe en BD
+                  ...(notas ? { notasGuardadas: notas } : {}),
                 };
                 try {
                   let bodyStr: string;

@@ -33,12 +33,18 @@ interface InformeRestored {
   notaAdicional?: string;
 }
 
+export interface NotasAuditoria {
+  notaEjecucionFinanciera?: string;
+  notaAdicional?: string;
+  informeNum?: string;
+}
+
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
   pgpData: { notaTecnica: { valor3m: number } } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
-  onSaveAudit?: () => Promise<void>;
+  onSaveAudit?: (notas?: NotasAuditoria) => Promise<void>;
   userName?: string;
   initialResponsable?: string;
   /** Datos del informe vinculado para pre-llenar el formulario al cargar auditoría */
@@ -1585,7 +1591,34 @@ export default function CertificadoTrimestral({
             {savedNum ? `Guardado N° ${savedNum}` : 'Guardar en Registro'}
           </Button>
           {onSaveAudit && (
-            <Button variant="outline" onClick={async () => { setIsSavingAudit(true); await onSaveAudit(); setIsSavingAudit(false); }} disabled={isSavingAudit} className="flex-1 border-blue-400 text-blue-700 hover:bg-blue-50">
+            <Button variant="outline" onClick={async () => {
+              setIsSavingAudit(true);
+              try {
+                // 1. Sincronizar notas con el informe en Supabase (si existe número de informe).
+                //    Así la próxima apertura las encontrará en pdf_data.
+                if (informeNum && (notaEjecucionFinanciera || notaAdicional)) {
+                  try {
+                    await fetch('/api/informes', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        numero: informeNum,
+                        notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                        notaAdicional: notaAdicional || '',
+                      }),
+                    });
+                  } catch { /* si falla no bloquear la auditoría */ }
+                }
+                // 2. Guardar auditoría pasando las notas como respaldo en datos.
+                await onSaveAudit({
+                  notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                  notaAdicional: notaAdicional || '',
+                  informeNum: informeNum || '',
+                });
+              } finally {
+                setIsSavingAudit(false);
+              }
+            }} disabled={isSavingAudit} className="flex-1 border-blue-400 text-blue-700 hover:bg-blue-50">
               {isSavingAudit ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">🗂️</span>}
               Guardar Auditoría
             </Button>
@@ -2002,7 +2035,14 @@ export default function CertificadoTrimestral({
                     </Button>
                     {onSaveAudit && (
                       <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
-                        onClick={async () => { await onSaveAudit(); setViewingInf(null); }}>
+                        onClick={async () => {
+                          await onSaveAudit({
+                            notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                            notaAdicional: notaAdicional || '',
+                            informeNum: informeNum || '',
+                          });
+                          setViewingInf(null);
+                        }}>
                         🔄 Reabrir Auditoría
                       </Button>
                     )}

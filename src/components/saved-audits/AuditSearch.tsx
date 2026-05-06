@@ -179,9 +179,25 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             const allMonths = results.map(r => r.mes).join(' + ');
             const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
 
-            // Si la primera auditoría tiene un informe vinculado, incluirlo
+            // Si la primera auditoría tiene un informe vinculado, incluirlo.
+            // Fallback: usar las notas guardadas directamente en auditorias.datos.
             if (base.informeRelacionado) {
-                merged.informeRestored = base.informeRelacionado;
+                // Informe encontrado en Supabase — usar sus datos (prioridad)
+                merged.informeRestored = {
+                  ...base.informeRelacionado,
+                  // Si las notas del informe en BD están vacías, usar las del respaldo en auditData
+                  notaEjecucionFinanciera: base.informeRelacionado.notaEjecucionFinanciera
+                    || merged.notasGuardadas?.notaEjecucionFinanciera || '',
+                  notaAdicional: base.informeRelacionado.notaAdicional
+                    || merged.notasGuardadas?.notaAdicional || '',
+                };
+            } else if (merged.notasGuardadas) {
+                // Sin informe en BD pero con notas guardadas en la auditoría
+                merged.informeRestored = {
+                  numero: merged.notasGuardadas.informeNum || '',
+                  notaEjecucionFinanciera: merged.notasGuardadas.notaEjecucionFinanciera || '',
+                  notaAdicional: merged.notasGuardadas.notaAdicional || '',
+                };
             }
 
             onAuditLoad(merged, prestadorName, allMonths);

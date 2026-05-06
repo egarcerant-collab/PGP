@@ -45,6 +45,12 @@ export interface SavedAuditData {
   auditor_nombre?: string;
   /** Datos del informe vinculado — se pre-llenan al cargar la auditoría */
   informeRestored?: InformeRestored;
+  /** Notas del Certificado Trimestral guardadas junto con la auditoría como respaldo */
+  notasGuardadas?: {
+    notaEjecucionFinanciera?: string;
+    notaAdicional?: string;
+    informeNum?: string;
+  };
 }
 
 export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
