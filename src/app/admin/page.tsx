@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Loader2, UserPlus, Trash2, Edit2, Check, X, Shield,
   Users, ArrowLeft, ToggleLeft, ToggleRight, RefreshCw,
+  Download, Upload, DatabaseBackup,
 } from 'lucide-react';
 
 interface UserProfile {
@@ -225,6 +226,82 @@ export default function AdminPage() {
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  // ── Backup / Restore ──
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<string | null>(null);
+
+  const handleDownloadBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const res = await fetch('/api/admin/backup');
+      if (!res.ok) {
+        const d = await res.json();
+        addToast(d.message || 'Error al generar backup', 'error');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fecha = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `backup_dsk_${fecha}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast('Backup descargado exitosamente', 'success');
+    } catch {
+      addToast('Error de conexión al generar backup', 'error');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (!file.name.endsWith('.json')) {
+      addToast('Solo se aceptan archivos .json', 'error');
+      return;
+    }
+
+    const confirmRestore = window.confirm(
+      `¿Restaurar backup desde "${file.name}"?\n\nEsta acción actualizará/insertará los registros existentes. Los registros no incluidos en el backup NO serán eliminados.`
+    );
+    if (!confirmRestore) return;
+
+    setRestoreLoading(true);
+    setRestoreResult(null);
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      const res = await fetch('/api/admin/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backup),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        const msg = `Restaurado: ${data.auditorias} auditoría(s), ${data.informes} informe(s)`;
+        setRestoreResult(msg);
+        addToast(msg, 'success');
+      } else {
+        const errMsg = data.errores?.join(' | ') || data.message || 'Error al restaurar';
+        setRestoreResult(`Error: ${errMsg}`);
+        addToast(errMsg, 'error');
+      }
+    } catch (err: any) {
+      const msg = `Error: ${err?.message || 'Archivo inválido'}`;
+      setRestoreResult(msg);
+      addToast(msg, 'error');
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
 
   if (!unlocked) {
     return (
@@ -510,6 +587,85 @@ export default function AdminPage() {
         <p className="text-xs text-slate-400 mt-4 text-right">
           {usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''} en total
         </p>
+
+        {/* ── Backup y Restauración ── */}
+        <div className="mt-10">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+            <DatabaseBackup className="h-4 w-4 text-slate-500" />
+            Backup y Restauración
+          </h2>
+          <p className="text-slate-500 text-sm mb-4">
+            Descarga un respaldo completo de auditorías e informes, o restaura uno anterior.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Descargar */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                  <Download className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Descargar Backup</p>
+                  <p className="text-xs text-slate-400">Exporta auditorías e informes en JSON</p>
+                </div>
+              </div>
+              <button
+                onClick={handleDownloadBackup}
+                disabled={backupLoading}
+                className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+              >
+                {backupLoading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Generando...</>
+                  : <><Download className="h-4 w-4" />Descargar</>
+                }
+              </button>
+            </div>
+
+            {/* Restaurar */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Upload className="h-4 w-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Restaurar Backup</p>
+                  <p className="text-xs text-slate-400">Importa un archivo .json generado anteriormente</p>
+                </div>
+              </div>
+              <label className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2 text-sm font-semibold cursor-pointer transition-colors ${
+                restoreLoading
+                  ? 'border-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'border-blue-300 text-blue-600 hover:bg-blue-50'
+              }`}>
+                {restoreLoading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Restaurando...</>
+                  : <><Upload className="h-4 w-4" />Seleccionar archivo</>
+                }
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  disabled={restoreLoading}
+                  onChange={handleRestoreBackup}
+                />
+              </label>
+              {restoreResult && (
+                <p className={`text-xs font-medium rounded-lg px-3 py-2 ${
+                  restoreResult.startsWith('Error')
+                    ? 'bg-red-50 text-red-600 border border-red-200'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                }`}>
+                  {restoreResult}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400 mt-3">
+            El backup incluye todos los registros de auditorías e informes. La restauración hace upsert (inserta o actualiza) sin eliminar registros existentes.
+          </p>
+        </div>
       </main>
 
       {/* Create User Modal */}

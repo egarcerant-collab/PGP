@@ -431,8 +431,8 @@ const PgPsearchForm = forwardRef<
         executionData: Object.fromEntries(
           Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
             totalRealValue: v.totalRealValue,
-            uniqueCupCount: v.uniqueCupCount,
-            totalCups: v.totalCups,
+            uniqueCupCount: v.cupCounts?.size ?? 0,
+            totalCups: v.cupCounts?.size ?? 0,
           }])
         ),
         uniqueUserCount,
@@ -777,8 +777,8 @@ const PgPsearchForm = forwardRef<
                   executionData: Object.fromEntries(
                     Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
                       totalRealValue: v.totalRealValue,
-                      uniqueCupCount: v.uniqueCupCount,
-                      totalCups: v.totalCups,
+                      uniqueCupCount: v.cupCounts?.size ?? 0,
+                      totalCups: v.cupCounts?.size ?? 0,
                     }])
                   ),
                   uniqueUserCount,
