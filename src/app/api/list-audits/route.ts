@@ -8,11 +8,30 @@ async function getCurrentUser() {
     const serverClient = await createSupabaseServerClient();
     const { data: { user } } = await serverClient.auth.getUser();
     if (!user) return null;
-    const { data: profile } = await serverClient
-      .from('profiles')
-      .select('nombre, rol')
-      .eq('id', user.id)
-      .single();
+
+    // Intentar con cliente de servidor primero; si falla por RLS usar admin
+    let profile: { nombre: string; rol: string } | null = null;
+    try {
+      const { data, error } = await serverClient
+        .from('profiles')
+        .select('nombre, rol')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) profile = data;
+    } catch {}
+
+    if (!profile) {
+      try {
+        const admin = createSupabaseAdminClient();
+        const { data } = await admin
+          .from('profiles')
+          .select('nombre, rol')
+          .eq('id', user.id)
+          .single();
+        profile = data ?? null;
+      } catch {}
+    }
+
     return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
   } catch {
     return null;
