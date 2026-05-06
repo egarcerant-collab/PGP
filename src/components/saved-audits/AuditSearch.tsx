@@ -179,6 +179,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             const allMonths = results.map(r => r.mes).join(' + ');
             const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
 
+            // Si la primera auditoría tiene un informe vinculado, incluirlo
+            if (base.informeRelacionado) {
+                merged.informeRestored = base.informeRelacionado;
+            }
+
             onAuditLoad(merged, prestadorName, allMonths);
 
             if (!hasExecData) {

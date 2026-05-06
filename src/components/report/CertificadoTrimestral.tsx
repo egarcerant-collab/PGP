@@ -22,6 +22,17 @@ if ((pdfFonts as any).pdfMake && pdfMake.vfs) {
 
 type PeriodType = 'trimestral' | 'bimensual' | 'mensual';
 
+interface InformeRestored {
+  numero?: string;
+  contrato?: string;
+  tipoPeriodo?: string;
+  periodo?: string;
+  ntPeriodo?: number;
+  responsable?: string;
+  notaEjecucionFinanciera?: string;
+  notaAdicional?: string;
+}
+
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
   pgpData: { notaTecnica: { valor3m: number } } | null;
@@ -30,6 +41,8 @@ interface CertificadoTrimestralProps {
   onSaveAudit?: () => Promise<void>;
   userName?: string;
   initialResponsable?: string;
+  /** Datos del informe vinculado para pre-llenar el formulario al cargar auditoría */
+  initialInforme?: InformeRestored | null;
 }
 
 const MONTH_ES: Record<string, string> = {
@@ -215,7 +228,7 @@ async function loadLogoBase64(): Promise<string> {
 }
 
 export default function CertificadoTrimestral({
-  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable,
+  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable, initialInforme,
 }: CertificadoTrimestralProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('trimestral');
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState(0);
@@ -272,6 +285,33 @@ export default function CertificadoTrimestral({
       setResponsable(initialResponsable.toUpperCase());
     }
   }, [initialResponsable]);
+
+  // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
+  useEffect(() => {
+    if (!initialInforme) return;
+    if (initialInforme.numero)    setInformeNum(initialInforme.numero);
+    if (initialInforme.contrato)  setContrato(initialInforme.contrato);
+    if (initialInforme.responsable) setResponsable(initialInforme.responsable.toUpperCase());
+    if (initialInforme.notaEjecucionFinanciera !== undefined)
+      setNotaEjecucionFinanciera(initialInforme.notaEjecucionFinanciera);
+    if (initialInforme.notaAdicional !== undefined)
+      setNotaAdicional(initialInforme.notaAdicional);
+    if (initialInforme.tipoPeriodo) {
+      const tp = initialInforme.tipoPeriodo.toLowerCase();
+      if (tp.includes('bimen') || tp.includes('bimest')) setPeriodType('bimensual');
+      else if (tp.includes('mensual')) setPeriodType('mensual');
+      else setPeriodType('trimestral');
+    }
+    if (initialInforme.periodo) {
+      const MESES_IDX: Record<string, number> = {
+        ENERO:0,FEBRERO:1,MARZO:2,ABRIL:3,MAYO:4,JUNIO:5,
+        JULIO:6,AGOSTO:7,SEPTIEMBRE:8,OCTUBRE:9,NOVIEMBRE:10,DICIEMBRE:11
+      };
+      const primerMes = initialInforme.periodo.toUpperCase().split('-')[0].trim();
+      const idx = MESES_IDX[primerMes];
+      if (idx !== undefined) setSelectedPeriodIndex(idx);
+    }
+  }, [initialInforme]);
 
   // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
   useEffect(() => {

@@ -739,6 +739,7 @@ const PgPsearchForm = forwardRef<
             executionDataByMonth={executionDataByMonth}
             userName={userName}
             initialResponsable={initialAuditData?.auditor_nombre || userName}
+            initialInforme={initialAuditData?.informeRestored ?? null}
           />
         </div>
       </div>
@@ -764,6 +765,7 @@ const PgPsearchForm = forwardRef<
               executionDataByMonth={executionDataByMonth}
               userName={userName}
               initialResponsable={initialAuditData?.auditor_nombre || userName}
+              initialInforme={initialAuditData?.informeRestored ?? null}
               onSaveAudit={async () => {
                 if (!selectedPrestador || executionDataByMonth.size === 0) {
                   alert('Primero carga los archivos JSON del prestador.');

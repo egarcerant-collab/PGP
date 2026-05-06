@@ -22,6 +22,17 @@ export interface MonthlyExecutionData {
   rawJsonData: any;
 }
 
+export interface InformeRestored {
+  numero?: string;
+  contrato?: string;
+  tipoPeriodo?: string;
+  periodo?: string;
+  ntPeriodo?: number;
+  responsable?: string;
+  notaEjecucionFinanciera?: string;
+  notaAdicional?: string;
+}
+
 export interface SavedAuditData {
   adjustedQuantities: Record<string, number>;
   comments: Record<string, string>;
@@ -32,6 +43,8 @@ export interface SavedAuditData {
   pgpData?: any[];
   selectedPrestador?: any;
   auditor_nombre?: string;
+  /** Datos del informe vinculado — se pre-llenan al cargar la auditoría */
+  informeRestored?: InformeRestored;
 }
 
 export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
