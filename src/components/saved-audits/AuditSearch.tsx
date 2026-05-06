@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Play, RefreshCw, FolderOpen, Trash2, Eraser } from "lucide-react";
+import { Loader2, Play, RefreshCw, FolderOpen, Trash2, Eraser, ChevronDown, ChevronUp, FileText, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
@@ -18,9 +18,25 @@ interface AuditRecord {
     fsPath?: string;
 }
 
+interface InformeVinculado {
+    numero: string;
+    periodo: string;
+    contrato: string;
+    total_ejecutado: number;
+    descontar: number;
+    reconocer: number;
+    valor_final: number;
+    total_anticipos: number;
+    responsable: string;
+    pdf_data: { notaEjecucionFinanciera?: string; notaAdicional?: string; [k: string]: any };
+}
+
 interface AuditSearchProps {
     onAuditLoad: (auditData: SavedAuditData, prestadorName: string, month: string) => void;
 }
+
+const fmt = (n: number) =>
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n || 0);
 
 export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [audits, setAudits] = useState<AuditRecord[]>([]);
@@ -32,6 +48,16 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [pwInput, setPwInput] = useState('');
     const [pwError, setPwError] = useState(false);
     const { toast } = useToast();
+
+    // ── Informes vinculados ──
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [informesPorAudit, setInformesPorAudit] = useState<Record<number, InformeVinculado[]>>({});
+    const [informesLoading, setInformesLoading] = useState<Record<number, boolean>>({});
+    // Edición de notas
+    const [editingInfomre, setEditingInforme] = useState<string | null>(null); // numero del informe
+    const [notaFin, setNotaFin] = useState('');
+    const [notaAdi, setNotaAdi] = useState('');
+    const [savingNota, setSavingNota] = useState(false);
 
     const fetchAudits = useCallback(async () => {
         setIsLoading(true);
@@ -51,7 +77,6 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const toggleSelect = (id: number, prestador: string) => {
         setSelectedIds(prev => {
             if (prev.includes(id)) return prev.filter(x => x !== id);
-            // Validar mismo prestador
             if (prev.length > 0) {
                 const firstPrestador = audits.find(a => a.id === prev[0])?.prestador;
                 if (firstPrestador?.toLowerCase() !== prestador.toLowerCase()) {
@@ -67,11 +92,67 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         });
     };
 
+    // ── Cargar informe vinculado al expandir una fila ──
+    const handleToggleExpand = async (audit: AuditRecord) => {
+        if (expandedId === audit.id) {
+            setExpandedId(null);
+            return;
+        }
+        setExpandedId(audit.id);
+        setEditingInforme(null);
+
+        if (informesPorAudit[audit.id]) return; // ya cargado
+
+        setInformesLoading(prev => ({ ...prev, [audit.id]: true }));
+        try {
+            const url = `/api/audit-informe?prestador=${encodeURIComponent(audit.prestador)}&mes=${encodeURIComponent(audit.month)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            setInformesPorAudit(prev => ({ ...prev, [audit.id]: data.informes || [] }));
+        } catch {
+            setInformesPorAudit(prev => ({ ...prev, [audit.id]: [] }));
+        } finally {
+            setInformesLoading(prev => ({ ...prev, [audit.id]: false }));
+        }
+    };
+
+    // ── Guardar notas editadas ──
+    const handleSaveNotas = async (informeNumero: string) => {
+        setSavingNota(true);
+        try {
+            const res = await fetch('/api/audit-informe', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: informeNumero, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+
+            // Actualizar local
+            setInformesPorAudit(prev => {
+                const updated = { ...prev };
+                for (const auditId in updated) {
+                    updated[auditId] = updated[auditId].map(inf =>
+                        inf.numero === informeNumero
+                            ? { ...inf, pdf_data: { ...inf.pdf_data, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi } }
+                            : inf
+                    );
+                }
+                return updated;
+            });
+            toast({ title: "✅ Notas guardadas", description: `Informe N° ${informeNumero} actualizado.` });
+            setEditingInforme(null);
+        } catch (e: any) {
+            toast({ title: "Error al guardar", description: e.message, variant: "destructive" });
+        } finally {
+            setSavingNota(false);
+        }
+    };
+
     const handleLoad = async () => {
         if (selectedIds.length === 0) return;
         setIsContinuing(true);
         try {
-            // Cargar todas las auditorías seleccionadas en paralelo
             const results = await Promise.all(
                 selectedIds.map(id => {
                     const audit = audits.find(a => a.id === id);
@@ -82,11 +163,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 })
             );
 
-            // Tomar datos base de la primera
             const base = results[0];
             const merged: SavedAuditData = { ...base.auditData };
 
-            // Combinar executionData de todas
             if (results.length > 1) {
                 const allExecData: Record<string, any> = { ...(base.auditData.executionData || {}) };
                 for (let i = 1; i < results.length; i++) {
@@ -98,15 +177,35 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
 
             const prestadorName = base.prestador;
             const allMonths = results.map(r => r.mes).join(' + ');
-
             const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
+
+            // Si la primera auditoría tiene un informe vinculado, incluirlo.
+            // Fallback: usar las notas guardadas directamente en auditorias.datos.
+            if (base.informeRelacionado) {
+                // Informe encontrado en Supabase — usar sus datos (prioridad)
+                merged.informeRestored = {
+                  ...base.informeRelacionado,
+                  // Si las notas del informe en BD están vacías, usar las del respaldo en auditData
+                  notaEjecucionFinanciera: base.informeRelacionado.notaEjecucionFinanciera
+                    || merged.notasGuardadas?.notaEjecucionFinanciera || '',
+                  notaAdicional: base.informeRelacionado.notaAdicional
+                    || merged.notasGuardadas?.notaAdicional || '',
+                };
+            } else if (merged.notasGuardadas) {
+                // Sin informe en BD pero con notas guardadas en la auditoría
+                merged.informeRestored = {
+                  numero: merged.notasGuardadas.informeNum || '',
+                  notaEjecucionFinanciera: merged.notasGuardadas.notaEjecucionFinanciera || '',
+                  notaAdicional: merged.notasGuardadas.notaAdicional || '',
+                };
+            }
 
             onAuditLoad(merged, prestadorName, allMonths);
 
             if (!hasExecData) {
                 toast({
                     title: "⚠️ Auditoría sin datos de ejecución",
-                    description: "Esta auditoría fue guardada sin los datos de análisis. Carga los JSON nuevamente, realiza el análisis y guarda de nuevo con el botón 'Guardar Auditoría'.",
+                    description: "Esta auditoría fue guardada sin los datos de análisis. Carga los JSON nuevamente, realiza el análisis y guarda de nuevo.",
                     variant: "destructive",
                 });
             } else {
@@ -159,11 +258,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             ) : (
                 <>
                     <p className="text-xs text-muted-foreground">
-                        Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas al cargar.
+                        Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas. Usa <strong>▼</strong> para ver el informe financiero vinculado.
                     </p>
-                    <div className="rounded-lg border border-border overflow-auto max-h-96">
+                    <div className="rounded-lg border border-border overflow-auto max-h-[520px]">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted sticky top-0">
+                            <thead className="bg-muted sticky top-0 z-10">
                                 <tr>
                                     <th className="px-3 py-2 w-8"></th>
                                     <th className="px-4 py-2 text-left font-semibold">N°</th>
@@ -171,6 +270,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     <th className="px-4 py-2 text-left font-semibold">NIT</th>
                                     <th className="px-4 py-2 text-left font-semibold">Mes</th>
                                     <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                    <th className="px-4 py-2 text-center font-semibold">Informe</th>
                                     <th className="px-4 py-2"></th>
                                 </tr>
                             </thead>
@@ -180,41 +280,188 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
                                     const disabled = !checked && selectedIds.length >= 3;
                                     const differentPrestador = !checked && firstPrestador && firstPrestador.toLowerCase() !== a.prestador.toLowerCase();
+                                    const isExpanded = expandedId === a.id;
+                                    const informes = informesPorAudit[a.id] || [];
+                                    const loadingInf = informesLoading[a.id];
+
                                     return (
-                                        <tr
-                                            key={`${a.id}-${idx}`}
-                                            className={`border-t border-border transition-colors ${
-                                                checked
-                                                    ? 'bg-emerald-50 border-emerald-200'
-                                                    : disabled || differentPrestador
-                                                    ? 'opacity-40 cursor-not-allowed'
-                                                    : 'hover:bg-muted/40'
-                                            }`}
-                                        >
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={checked}
-                                                    onChange={() => !disabled && !differentPrestador && toggleSelect(a.id, a.prestador)}
-                                                    className="accent-emerald-600 h-4 w-4 cursor-pointer"
-                                                    disabled={disabled || !!differentPrestador}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2 font-mono text-primary font-bold">{a.numero}</td>
-                                            <td className="px-4 py-2 max-w-[180px] truncate">{a.prestador?.toUpperCase()}</td>
-                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.nit}</td>
-                                            <td className="px-4 py-2 capitalize">{a.month}</td>
-                                            <td className="px-4 py-2 text-muted-foreground text-xs">{a.fecha}</td>
-                                            <td className="px-4 py-2">
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); setDeletingId(a.id); setPwInput(''); setPwError(false); }}
-                                                    className="text-red-400 hover:text-red-600 transition-colors"
-                                                    title="Eliminar auditoría"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <>
+                                            <tr
+                                                key={`row-${a.id}-${idx}`}
+                                                className={`border-t border-border transition-colors ${
+                                                    checked
+                                                        ? 'bg-emerald-50 border-emerald-200'
+                                                        : isExpanded
+                                                        ? 'bg-blue-50/40'
+                                                        : disabled || differentPrestador
+                                                        ? 'opacity-40 cursor-not-allowed'
+                                                        : 'hover:bg-muted/40'
+                                                }`}
+                                            >
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => !disabled && !differentPrestador && toggleSelect(a.id, a.prestador)}
+                                                        className="accent-emerald-600 h-4 w-4 cursor-pointer"
+                                                        disabled={disabled || !!differentPrestador}
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-2 font-mono text-primary font-bold">{a.numero}</td>
+                                                <td className="px-4 py-2 max-w-[180px] truncate">{a.prestador?.toUpperCase()}</td>
+                                                <td className="px-4 py-2 text-muted-foreground text-xs">{a.nit}</td>
+                                                <td className="px-4 py-2 capitalize">{a.month}</td>
+                                                <td className="px-4 py-2 text-muted-foreground text-xs">{a.fecha}</td>
+                                                <td className="px-4 py-2 text-center">
+                                                    <button
+                                                        onClick={() => handleToggleExpand(a)}
+                                                        title={isExpanded ? 'Ocultar informe' : 'Ver informe vinculado'}
+                                                        className={`inline-flex items-center gap-1 text-xs font-medium rounded-md px-2 py-1 transition-colors ${
+                                                            isExpanded
+                                                                ? 'bg-blue-100 text-blue-700'
+                                                                : 'bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600'
+                                                        }`}
+                                                    >
+                                                        <FileText className="h-3 w-3" />
+                                                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                                    </button>
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); setDeletingId(a.id); setPwInput(''); setPwError(false); }}
+                                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                                        title="Eliminar auditoría"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* Panel de informe vinculado */}
+                                            {isExpanded && (
+                                                <tr key={`inf-${a.id}`} className="border-t border-blue-100 bg-blue-50/30">
+                                                    <td colSpan={8} className="px-4 py-3">
+                                                        {loadingInf ? (
+                                                            <div className="flex items-center gap-2 text-xs text-slate-500 py-2">
+                                                                <Loader2 className="h-3 w-3 animate-spin" /> Buscando informe relacionado…
+                                                            </div>
+                                                        ) : informes.length === 0 ? (
+                                                            <p className="text-xs text-slate-400 italic py-1">
+                                                                No se encontró un informe financiero vinculado a esta auditoría ({a.prestador.toUpperCase()} — {a.month}).
+                                                            </p>
+                                                        ) : (
+                                                            <div className="space-y-3">
+                                                                {informes.map(inf => (
+                                                                    <div key={inf.numero} className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 space-y-3">
+                                                                        {/* Cabecera del informe */}
+                                                                        <div className="flex items-center justify-between flex-wrap gap-2">
+                                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                                <span className="text-xs font-bold bg-blue-600 text-white rounded px-2 py-0.5">
+                                                                                    Informe N° {inf.numero}
+                                                                                </span>
+                                                                                <span className="text-xs text-slate-500">Período: <strong>{inf.periodo}</strong></span>
+                                                                                {inf.contrato && <span className="text-xs text-slate-500">Contrato: <strong>{inf.contrato}</strong></span>}
+                                                                                {inf.responsable && <span className="text-xs text-slate-400">Auditor: {inf.responsable}</span>}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Totales financieros */}
+                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                            <div className="bg-slate-50 rounded p-2 text-center">
+                                                                                <p className="text-[10px] text-slate-400 uppercase font-semibold">Total Ejecutado</p>
+                                                                                <p className="text-xs font-bold text-slate-700 mt-0.5">{fmt(inf.total_ejecutado)}</p>
+                                                                            </div>
+                                                                            <div className="bg-red-50 rounded p-2 text-center">
+                                                                                <p className="text-[10px] text-red-400 uppercase font-semibold">A Descontar</p>
+                                                                                <p className="text-xs font-bold text-red-600 mt-0.5">{fmt(inf.descontar)}</p>
+                                                                            </div>
+                                                                            <div className="bg-emerald-50 rounded p-2 text-center">
+                                                                                <p className="text-[10px] text-emerald-500 uppercase font-semibold">A Reconocer</p>
+                                                                                <p className="text-xs font-bold text-emerald-700 mt-0.5">{fmt(inf.reconocer)}</p>
+                                                                            </div>
+                                                                            <div className="bg-blue-50 rounded p-2 text-center">
+                                                                                <p className="text-[10px] text-blue-400 uppercase font-semibold">Valor Final</p>
+                                                                                <p className="text-xs font-bold text-blue-700 mt-0.5">{fmt(inf.valor_final)}</p>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Notas */}
+                                                                        {editingInfomre === inf.numero ? (
+                                                                            <div className="space-y-2">
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Nota Ejecución Financiera</label>
+                                                                                    <textarea
+                                                                                        value={notaFin}
+                                                                                        onChange={e => setNotaFin(e.target.value)}
+                                                                                        rows={3}
+                                                                                        className="w-full mt-1 text-xs border border-blue-200 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+                                                                                        placeholder="Nota de ejecución financiera…"
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Nota Adicional</label>
+                                                                                    <textarea
+                                                                                        value={notaAdi}
+                                                                                        onChange={e => setNotaAdi(e.target.value)}
+                                                                                        rows={2}
+                                                                                        className="w-full mt-1 text-xs border border-blue-200 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+                                                                                        placeholder="Nota adicional…"
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="flex gap-2">
+                                                                                    <button
+                                                                                        onClick={() => handleSaveNotas(inf.numero)}
+                                                                                        disabled={savingNota}
+                                                                                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors"
+                                                                                    >
+                                                                                        {savingNota ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                                                                                        Guardar notas
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => setEditingInforme(null)}
+                                                                                        className="flex items-center gap-1 border border-slate-200 text-slate-500 hover:text-slate-700 text-xs font-medium rounded-md px-3 py-1.5 transition-colors"
+                                                                                    >
+                                                                                        <X className="h-3 w-3" /> Cancelar
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="space-y-2">
+                                                                                {inf.pdf_data?.notaEjecucionFinanciera && (
+                                                                                    <div>
+                                                                                        <p className="text-[10px] font-semibold text-slate-400 uppercase">Nota Financiera</p>
+                                                                                        <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-line">{inf.pdf_data.notaEjecucionFinanciera}</p>
+                                                                                    </div>
+                                                                                )}
+                                                                                {inf.pdf_data?.notaAdicional && (
+                                                                                    <div>
+                                                                                        <p className="text-[10px] font-semibold text-slate-400 uppercase">Nota Adicional</p>
+                                                                                        <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-line">{inf.pdf_data.notaAdicional}</p>
+                                                                                    </div>
+                                                                                )}
+                                                                                {!inf.pdf_data?.notaEjecucionFinanciera && !inf.pdf_data?.notaAdicional && (
+                                                                                    <p className="text-xs text-slate-400 italic">Sin notas registradas en este informe.</p>
+                                                                                )}
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        setEditingInforme(inf.numero);
+                                                                                        setNotaFin(inf.pdf_data?.notaEjecucionFinanciera || '');
+                                                                                        setNotaAdi(inf.pdf_data?.notaAdicional || '');
+                                                                                    }}
+                                                                                    className="text-xs text-blue-500 hover:text-blue-700 underline underline-offset-2 transition-colors"
+                                                                                >
+                                                                                    Editar notas
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
                                     );
                                 })}
                             </tbody>

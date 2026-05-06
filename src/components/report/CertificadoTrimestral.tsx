@@ -22,14 +22,33 @@ if ((pdfFonts as any).pdfMake && pdfMake.vfs) {
 
 type PeriodType = 'trimestral' | 'bimensual' | 'mensual';
 
+interface InformeRestored {
+  numero?: string;
+  contrato?: string;
+  tipoPeriodo?: string;
+  periodo?: string;
+  ntPeriodo?: number;
+  responsable?: string;
+  notaEjecucionFinanciera?: string;
+  notaAdicional?: string;
+}
+
+export interface NotasAuditoria {
+  notaEjecucionFinanciera?: string;
+  notaAdicional?: string;
+  informeNum?: string;
+}
+
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
   pgpData: { notaTecnica: { valor3m: number } } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
-  onSaveAudit?: () => Promise<void>;
+  onSaveAudit?: (notas?: NotasAuditoria) => Promise<void>;
   userName?: string;
   initialResponsable?: string;
+  /** Datos del informe vinculado para pre-llenar el formulario al cargar auditoría */
+  initialInforme?: InformeRestored | null;
 }
 
 const MONTH_ES: Record<string, string> = {
@@ -215,7 +234,7 @@ async function loadLogoBase64(): Promise<string> {
 }
 
 export default function CertificadoTrimestral({
-  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable,
+  comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable, initialInforme,
 }: CertificadoTrimestralProps) {
   const [periodType, setPeriodType] = useState<PeriodType>('trimestral');
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState(0);
@@ -273,6 +292,33 @@ export default function CertificadoTrimestral({
     }
   }, [initialResponsable]);
 
+  // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
+  useEffect(() => {
+    if (!initialInforme) return;
+    if (initialInforme.numero)    setInformeNum(initialInforme.numero);
+    if (initialInforme.contrato)  setContrato(initialInforme.contrato);
+    if (initialInforme.responsable) setResponsable(initialInforme.responsable.toUpperCase());
+    if (initialInforme.notaEjecucionFinanciera !== undefined)
+      setNotaEjecucionFinanciera(initialInforme.notaEjecucionFinanciera);
+    if (initialInforme.notaAdicional !== undefined)
+      setNotaAdicional(initialInforme.notaAdicional);
+    if (initialInforme.tipoPeriodo) {
+      const tp = initialInforme.tipoPeriodo.toLowerCase();
+      if (tp.includes('bimen') || tp.includes('bimest')) setPeriodType('bimensual');
+      else if (tp.includes('mensual')) setPeriodType('mensual');
+      else setPeriodType('trimestral');
+    }
+    if (initialInforme.periodo) {
+      const MESES_IDX: Record<string, number> = {
+        ENERO:0,FEBRERO:1,MARZO:2,ABRIL:3,MAYO:4,JUNIO:5,
+        JULIO:6,AGOSTO:7,SEPTIEMBRE:8,OCTUBRE:9,NOVIEMBRE:10,DICIEMBRE:11
+      };
+      const primerMes = initialInforme.periodo.toUpperCase().split('-')[0].trim();
+      const idx = MESES_IDX[primerMes];
+      if (idx !== undefined) setSelectedPeriodIndex(idx);
+    }
+  }, [initialInforme]);
+
   // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
   useEffect(() => {
     const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
@@ -290,16 +336,19 @@ export default function CertificadoTrimestral({
     localStorage.setItem(`pgp-cups-inesperadas-cantidad-${prestKey}`, val);
   };
 
-  // Carga siguiente número disponible al montar
+  // Carga siguiente número disponible al montar.
+  // Si ya viene un número desde initialInforme (auditoría guardada), NO lo sobreescribimos.
   useEffect(() => {
+    if (initialInforme?.numero) return; // Ya tenemos número del informe vinculado
     fetch('/api/informes')
       .then(r => r.json())
       .then(d => {
         const next = String((d.lastNumber || 0) + 1).padStart(3, '0');
-        setInformeNum(next);
+        setInformeNum(prev => prev || next); // Solo asignar si aún está vacío
       })
       .catch(() => {});
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInforme?.numero]);
 
   const loadHistorial = async () => {
     setLoadingHistorial(true);
@@ -1542,7 +1591,34 @@ export default function CertificadoTrimestral({
             {savedNum ? `Guardado N° ${savedNum}` : 'Guardar en Registro'}
           </Button>
           {onSaveAudit && (
-            <Button variant="outline" onClick={async () => { setIsSavingAudit(true); await onSaveAudit(); setIsSavingAudit(false); }} disabled={isSavingAudit} className="flex-1 border-blue-400 text-blue-700 hover:bg-blue-50">
+            <Button variant="outline" onClick={async () => {
+              setIsSavingAudit(true);
+              try {
+                // 1. Sincronizar notas con el informe en Supabase (si existe número de informe).
+                //    Así la próxima apertura las encontrará en pdf_data.
+                if (informeNum && (notaEjecucionFinanciera || notaAdicional)) {
+                  try {
+                    await fetch('/api/informes', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        numero: informeNum,
+                        notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                        notaAdicional: notaAdicional || '',
+                      }),
+                    });
+                  } catch { /* si falla no bloquear la auditoría */ }
+                }
+                // 2. Guardar auditoría pasando las notas como respaldo en datos.
+                await onSaveAudit({
+                  notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                  notaAdicional: notaAdicional || '',
+                  informeNum: informeNum || '',
+                });
+              } finally {
+                setIsSavingAudit(false);
+              }
+            }} disabled={isSavingAudit} className="flex-1 border-blue-400 text-blue-700 hover:bg-blue-50">
               {isSavingAudit ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <span className="mr-2">🗂️</span>}
               Guardar Auditoría
             </Button>
@@ -1959,7 +2035,14 @@ export default function CertificadoTrimestral({
                     </Button>
                     {onSaveAudit && (
                       <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-50"
-                        onClick={async () => { await onSaveAudit(); setViewingInf(null); }}>
+                        onClick={async () => {
+                          await onSaveAudit({
+                            notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                            notaAdicional: notaAdicional || '',
+                            informeNum: informeNum || '',
+                          });
+                          setViewingInf(null);
+                        }}>
                         🔄 Reabrir Auditoría
                       </Button>
                     )}

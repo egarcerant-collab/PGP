@@ -153,35 +153,67 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         const date = new Date(2024, parseInt(monthKey) - 1, 1);
         const monthName = date.toLocaleString('es-CO', { month: 'long' });
 
+        // pgpData y jsonPrestadorCode NO se incluyen: son demasiado grandes (10MB+)
+        // jsonPrestadorCode es redundante (= selectedPrestador['ID DE ZONA'])
         const auditPackage: SavedAuditData = {
             adjustedQuantities,
             comments,
             selectedRows,
-            executionData: serializeExecutionData(executionDataByMonth),
-            jsonPrestadorCode,
+            executionData: {
+                // Solo totales por mes, sin cupCounts completo
+                ...Object.fromEntries(
+                    Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
+                        totalRealValue: v.totalRealValue,
+                        uniqueCupCount: v.cupCounts?.size ?? 0,
+                        totalCups: v.cupCounts?.size ?? 0,
+                    }])
+                )
+            },
             uniqueUserCount,
-            pgpData: pgpData,
             selectedPrestador: selectedPrestador
         };
-        
+
         try {
-            const response = await fetch('/api/save-audit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            let bodyStr: string;
+            try {
+                bodyStr = JSON.stringify({
                     auditData: auditPackage,
                     prestadorName: selectedPrestador.PRESTADOR,
                     month: monthName
-                })
+                });
+            } catch (serErr: any) {
+                toast({ title: "Error al serializar", description: serErr?.message || String(serErr), variant: "destructive" });
+                setIsSaving(false);
+                return;
+            }
+
+            // Medición en bytes reales (UTF-8)
+            const byteSize = new Blob([bodyStr]).size;
+            const mb = (byteSize / 1024 / 1024).toFixed(2);
+            console.log('[DiscountMatrix save bytes]', mb + 'MB');
+            if (byteSize > 3_000_000) {
+                toast({ title: "Payload muy grande", description: `${mb}MB — máximo 3MB. Reduzca los datos seleccionados.`, variant: "destructive" });
+                setIsSaving(false);
+                return;
+            }
+
+            const response = await fetch('/api/save-audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: bodyStr,
             });
 
+            // Manejar respuesta de forma segura (puede venir texto plano si Vercel rechaza)
+            const rawText = await response.text();
+            let data: any = {};
+            try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
             if (response.ok) {
-                toast({ title: "Guardado Exitoso", description: `Auditoría guardada en la carpeta de ${monthName}.` });
+                toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
             } else {
-                toast({ title: "Aviso de Servidor", description: "No se pudo guardar en el servidor. Verifique permisos.", variant: "destructive" });
+                toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
             }
         } catch (error: any) {
-            toast({ title: "Error de Red", description: "No se pudo conectar con el servidor.", variant: "destructive" });
+            toast({ title: "Error de Red", description: error?.message || "No se pudo conectar.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
