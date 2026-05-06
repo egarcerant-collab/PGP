@@ -78,16 +78,27 @@ export const deserializeExecutionData = (obj: any): ExecutionDataByMonth => {
   const map: ExecutionDataByMonth = new Map();
   Object.entries(obj).forEach(([monthKey, monthData]: [string, any]) => {
     const cupCountsMap: CupCountsMap = new Map();
-    Object.entries(monthData.cupCounts).forEach(([cupKey, cupData]: [string, any]) => {
-      cupCountsMap.set(cupKey, {
-        ...cupData,
-        diagnoses: new Map(Object.entries(cupData.diagnoses)),
-        uniqueUsers: new Set(cupData.uniqueUsers)
+
+    // Formato completo: tiene cupCounts con detalle de RIPS
+    if (monthData.cupCounts && typeof monthData.cupCounts === 'object') {
+      Object.entries(monthData.cupCounts).forEach(([cupKey, cupData]: [string, any]) => {
+        try {
+          cupCountsMap.set(cupKey, {
+            ...cupData,
+            diagnoses: new Map(Object.entries(cupData.diagnoses || {})),
+            uniqueUsers: new Set(Array.isArray(cupData.uniqueUsers) ? cupData.uniqueUsers : [])
+          });
+        } catch { /* omitir entrada malformada */ }
       });
-    });
+    }
+    // Formato mínimo (solo totales guardados): cupCounts queda vacío pero
+    // totalRealValue permite que el certificado y análisis financiero funcionen
+
     map.set(monthKey, {
-      ...monthData,
-      cupCounts: cupCountsMap
+      cupCounts: cupCountsMap,
+      summary: monthData.summary || null,
+      totalRealValue: monthData.totalRealValue || 0,
+      rawJsonData: monthData.rawJsonData || null,
     });
   });
   return map;
