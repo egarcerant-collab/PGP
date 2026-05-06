@@ -232,6 +232,10 @@ export default function AdminPage() {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [restoreResult, setRestoreResult] = useState<string | null>(null);
 
+  // ── Sincronización notas informe → auditoría ──
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ resumen: any; detalles: string[] } | null>(null);
+
   const handleDownloadBackup = async () => {
     setBackupLoading(true);
     try {
@@ -300,6 +304,30 @@ export default function AdminPage() {
       addToast(msg, 'error');
     } finally {
       setRestoreLoading(false);
+    }
+  };
+
+  const handleSyncNotas = async () => {
+    const ok = window.confirm(
+      'Esta acción copiará las notas de cada informe guardado hacia la auditoría correspondiente.\n\n' +
+      '¿Confirmar sincronización?'
+    );
+    if (!ok) return;
+    setSyncLoading(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/admin/sync-notas', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setSyncResult({ resumen: data.resumen, detalles: data.detalles });
+        addToast(`Sincronización completa: ${data.resumen.actualizadas} auditoría(s) actualizadas`, 'success');
+      } else {
+        addToast(data.message || 'Error al sincronizar', 'error');
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err?.message || 'Error de conexión'}`, 'error');
+    } finally {
+      setSyncLoading(false);
     }
   };
 
@@ -665,6 +693,57 @@ export default function AdminPage() {
           <p className="text-xs text-slate-400 mt-3">
             El backup incluye todos los registros de auditorías e informes. La restauración hace upsert (inserta o actualiza) sin eliminar registros existentes.
           </p>
+        </div>
+
+        {/* ── Sincronización Notas Informe → Auditoría ── */}
+        <div className="mt-10">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+            <RefreshCw className="h-4 w-4 text-slate-500" />
+            Sincronizar Notas de Informes
+          </h2>
+          <p className="text-slate-500 text-sm mb-4">
+            Copia las notas (financiera y adicional) de cada informe guardado hacia la auditoría correspondiente.
+            Útil para recuperar notas de informes creados antes de que las auditorías las persistieran.
+          </p>
+          <div className="bg-white border border-amber-200 rounded-xl p-5 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className="bg-amber-100 rounded-lg p-2 shrink-0">
+                <RefreshCw className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Copiar notas de informes a auditorías</p>
+                <p className="text-xs text-slate-400">
+                  Busca por prestador y mes el informe vinculado y transfiere sus notas a la auditoría.
+                  No sobreescribe notas que ya estén guardadas.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSyncNotas}
+              disabled={syncLoading}
+              className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+            >
+              {syncLoading
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Sincronizando...</>
+                : <><RefreshCw className="h-4 w-4" />Ejecutar sincronización</>
+              }
+            </button>
+            {syncResult && (
+              <div className="text-xs rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
+                <p className="font-semibold text-amber-800">
+                  Resultado: {syncResult.resumen.actualizadas} actualizada(s) /
+                  {syncResult.resumen.sinInforme} sin informe /
+                  {syncResult.resumen.sinNotas} sin notas /
+                  {syncResult.resumen.total} total
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-0.5">
+                  {syncResult.detalles.map((d, i) => (
+                    <p key={i} className={d.startsWith('✅') ? 'text-emerald-700' : 'text-red-600'}>{d}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
