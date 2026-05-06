@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Loader2, UserPlus, Trash2, Edit2, Check, X, Shield,
   Users, ArrowLeft, ToggleLeft, ToggleRight, RefreshCw,
-  Download, Upload, DatabaseBackup,
+  Download, Upload, HardDrive,
 } from 'lucide-react';
 
 interface UserProfile {
@@ -591,7 +591,7 @@ export default function AdminPage() {
         {/* ── Backup y Restauración ── */}
         <div className="mt-10">
           <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
-            <DatabaseBackup className="h-4 w-4 text-slate-500" />
+            <HardDrive className="h-4 w-4 text-slate-500" />
             Backup y Restauración
           </h2>
           <p className="text-slate-500 text-sm mb-4">

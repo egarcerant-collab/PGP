@@ -187,9 +187,12 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 return;
             }
 
-            if (bodyStr.length > 3_500_000) {
-                const mb = (bodyStr.length / 1024 / 1024).toFixed(1);
-                toast({ title: "Payload muy grande", description: `${mb}MB — límite es 3.5MB. Contacte soporte.`, variant: "destructive" });
+            // Medición en bytes reales (UTF-8)
+            const byteSize = new Blob([bodyStr]).size;
+            const mb = (byteSize / 1024 / 1024).toFixed(2);
+            console.log('[DiscountMatrix save bytes]', mb + 'MB');
+            if (byteSize > 3_000_000) {
+                toast({ title: "Payload muy grande", description: `${mb}MB — máximo 3MB. Reduzca los datos seleccionados.`, variant: "destructive" });
                 setIsSaving(false);
                 return;
             }
@@ -200,11 +203,14 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 body: bodyStr,
             });
 
-            const data = await response.json();
+            // Manejar respuesta de forma segura (puede venir texto plano si Vercel rechaza)
+            const rawText = await response.text();
+            let data: any = {};
+            try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
             if (response.ok) {
                 toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
             } else {
-                toast({ title: "Error del Servidor", description: data.message || "No se pudo guardar.", variant: "destructive" });
+                toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
             }
         } catch (error: any) {
             toast({ title: "Error de Red", description: error?.message || "No se pudo conectar.", variant: "destructive" });

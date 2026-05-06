@@ -440,23 +440,25 @@ const PgPsearchForm = forwardRef<
       };
       try {
         const bodyStr = JSON.stringify({ auditData: auditPackage, prestadorName: selectedPrestador.PRESTADOR, month: monthName });
-        const kb = (v: any) => (JSON.stringify(v || '').length / 1024).toFixed(1) + 'KB';
-        const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(bodyStr.length/1024/1024).toFixed(2)}MB`;
-        console.log('[triggerSave sizes]', sizes);
-        if (bodyStr.length > 3_500_000) {
-          return { error: `Payload demasiado grande (${(bodyStr.length/1024/1024).toFixed(1)}MB). Campos: ${sizes}` };
+        // Medición en bytes reales (UTF-8), no en caracteres JS
+        const byteSize = new Blob([bodyStr]).size;
+        const kb = (v: any) => (new Blob([JSON.stringify(v || '')]).size / 1024).toFixed(1) + 'KB';
+        const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
+        console.log('[triggerSave bytes]', sizes);
+        if (byteSize > 3_000_000) {
+          return { error: `Payload demasiado grande (${(byteSize/1024/1024).toFixed(1)}MB).\n${sizes}` };
         }
         const response = await fetch('/api/save-audit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: bodyStr,
         });
-        if (response.ok) {
-          const data = await response.json();
-          return { numero: data.numero };
-        }
-        const errData = await response.json().catch(() => ({ message: 'Error desconocido' }));
-        return { error: errData.message || 'Error al guardar.' };
+        // Manejar respuesta de forma segura (puede venir texto plano si Vercel rechaza)
+        const rawText = await response.text();
+        let data: any = {};
+        try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 200) }; }
+        if (response.ok) return { numero: data.numero };
+        return { error: data.message || `Error ${response.status}` };
       } catch (e: any) {
         return { error: `Error de red: ${e?.message || e}` };
       }
@@ -793,13 +795,14 @@ const PgPsearchForm = forwardRef<
                     return;
                   }
 
-                  // Diagnóstico de tamaño por campo
-                  const kb = (v: any) => (JSON.stringify(v || '').length / 1024).toFixed(1) + 'KB';
-                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(bodyStr.length/1024/1024).toFixed(2)}MB`;
-                  console.log('[onSaveAudit sizes]', sizes);
+                  // Medición en bytes reales (UTF-8), no en caracteres JS
+                  const byteSize = new Blob([bodyStr]).size;
+                  const kb = (v: any) => (new Blob([JSON.stringify(v || '')]).size / 1024).toFixed(1) + 'KB';
+                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
+                  console.log('[onSaveAudit bytes]', sizes);
 
-                  if (bodyStr.length > 3_500_000) {
-                    alert(`❌ Payload demasiado grande (${(bodyStr.length/1024/1024).toFixed(1)}MB).\n${sizes}`);
+                  if (byteSize > 3_000_000) {
+                    alert(`❌ Payload demasiado grande (${(byteSize/1024/1024).toFixed(1)}MB).\nCampos:\n${sizes}`);
                     return;
                   }
 
@@ -808,14 +811,17 @@ const PgPsearchForm = forwardRef<
                     headers: { 'Content-Type': 'application/json' },
                     body: bodyStr,
                   });
-                  const data = await response.json();
+                  // Manejar respuesta de forma segura (puede venir texto plano si Vercel rechaza)
+                  const rawText = await response.text();
+                  let data: any = {};
+                  try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
                   if (response.ok) {
                     alert(`✅ Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} exitosamente.`);
                   } else {
-                    alert(`❌ Error al guardar: ${data.message || 'Error desconocido'}`);
+                    alert(`❌ Error al guardar (${response.status}): ${data.message || 'Error desconocido'}`);
                   }
                 } catch (netErr: any) {
-                  alert(`❌ Error de red: ${netErr?.message || netErr}`);
+                  alert(`❌ Error de conexión: ${netErr?.message || netErr}`);
                 }
               }}
             />
