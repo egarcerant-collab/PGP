@@ -375,7 +375,9 @@ const PgPsearchForm = forwardRef<
         ciudad: "Riohacha", fecha: new Date().toLocaleDateString('es-CO'),
       },
       months: Array.from(executionDataByMonth.entries()).map(([m, d]) => ({
-        month: getMonthName(m), cups: d.summary.numConsultas + d.summary.numProcedimientos, valueCOP: d.totalRealValue
+        month: getMonthName(m),
+        cups: (d.summary?.numConsultas ?? 0) + (d.summary?.numProcedimientos ?? 0),
+        valueCOP: d.totalRealValue
       })),
       notaTecnica: {
         min90: globalSummary.costoMinimoPeriodo, valor3m: globalSummary.totalPeriodo, max110: globalSummary.costoMaximoPeriodo,
