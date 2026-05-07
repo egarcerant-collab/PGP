@@ -27,7 +27,7 @@ import { type ExecutionDataByMonth, type ModuleId } from '@/app/page';
 import FinancialMatrix, { type MonthlyFinancialSummary } from './FinancialMatrix';
 import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
-import { getNumericValue, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
+import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
@@ -532,17 +532,13 @@ const PgPsearchForm = forwardRef<
         }
       } catch { /* si falla la verificación, continuar */ }
       // ─────────────────────────────────────────────────────────────────
+      // Serializar con datos completos (cupCounts incluido) para análisis desde historial
+      const fullExecutionData = serializeExecutionData(executionDataByMonth);
       const auditPackage = {
         adjustedQuantities: adjustedData.adjustedQuantities,
         comments: adjustedData.comments,
         selectedRows: adjustedData.selectedRows,
-        executionData: Object.fromEntries(
-          Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-            totalRealValue: v.totalRealValue,
-            uniqueCupCount: v.cupCounts?.size ?? 0,
-            totalCups: v.cupCounts?.size ?? 0,
-          }])
-        ),
+        executionData: fullExecutionData,
         uniqueUserCount,
         selectedPrestador,
       };
@@ -551,7 +547,7 @@ const PgPsearchForm = forwardRef<
         // Medición en bytes reales (UTF-8), no en caracteres JS
         const byteSize = new Blob([bodyStr]).size;
         const kb = (v: any) => (new Blob([JSON.stringify(v || '')]).size / 1024).toFixed(1) + 'KB';
-        const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
+        const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(fullExecutionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
         console.log('[triggerSave bytes]', sizes);
         if (byteSize > 3_000_000) {
           return { error: `Payload demasiado grande (${(byteSize/1024/1024).toFixed(1)}MB).\n${sizes}` };
@@ -921,17 +917,13 @@ const PgPsearchForm = forwardRef<
                   }
                 } catch { /* si falla la verificación, continuar normalmente */ }
                 // ─────────────────────────────────────────────────────────────────
+                // Serializar con datos completos (cupCounts incluido) para análisis desde historial
+                const fullExecutionData = serializeExecutionData(executionDataByMonth);
                 const auditPackage = {
                   adjustedQuantities: adjustedData.adjustedQuantities,
                   comments: adjustedData.comments,
                   selectedRows: adjustedData.selectedRows,
-                  executionData: Object.fromEntries(
-                    Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-                      totalRealValue: v.totalRealValue,
-                      uniqueCupCount: v.cupCounts?.size ?? 0,
-                      totalCups: v.cupCounts?.size ?? 0,
-                    }])
-                  ),
+                  executionData: fullExecutionData,
                   uniqueUserCount,
                   selectedPrestador,
                   // Notas del certificado — respaldo para cuando no haya informe en BD
@@ -949,7 +941,7 @@ const PgPsearchForm = forwardRef<
                   // Medición en bytes reales (UTF-8), no en caracteres JS
                   const byteSize = new Blob([bodyStr]).size;
                   const kb = (v: any) => (new Blob([JSON.stringify(v || '')]).size / 1024).toFixed(1) + 'KB';
-                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(auditPackage.executionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
+                  const sizes = `adjustedQ:${kb(adjustedData.adjustedQuantities)} selectedRows:${kb(adjustedData.selectedRows)} execData:${kb(fullExecutionData)} prestador:${kb(auditPackage.selectedPrestador)} total:${(byteSize/1024/1024).toFixed(2)}MB`;
                   console.log('[onSaveAudit bytes]', sizes);
 
                   if (byteSize > 3_000_000) {
