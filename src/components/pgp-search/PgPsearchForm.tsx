@@ -267,12 +267,17 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     });
   });
 
-  // ── Consolidar por CUPS: sumar frecuencias y valores de todos los meses ──────
-  const overExecutedCups  = consolidateDeviatedCups(overExecutedCupsRaw,  executionDataByMonth);
-  const underExecutedCups = consolidateDeviatedCups(underExecutedCupsRaw, executionDataByMonth);
-  const missingCups       = consolidateDeviatedCups(missingCupsRaw,       executionDataByMonth);
-  const normalExecutionCups = consolidateDeviatedCups(normalExecutionCupsRaw, executionDataByMonth);
-  const unexpectedCups    = consolidateUnexpectedCups(unexpectedCupsRaw);
+  // ── Consolidar por CUPS y ordenar de mayor a menor desviación absoluta ───────
+  const byAbsDevDesc  = (a: DeviatedCupInfo, b: DeviatedCupInfo) =>
+    Math.abs(b.deviationValue) - Math.abs(a.deviationValue);
+  const byValueDesc   = (a: UnexpectedCupInfo, b: UnexpectedCupInfo) =>
+    b.totalValue - a.totalValue;
+
+  const overExecutedCups    = consolidateDeviatedCups(overExecutedCupsRaw,    executionDataByMonth).sort(byAbsDevDesc);
+  const underExecutedCups   = consolidateDeviatedCups(underExecutedCupsRaw,   executionDataByMonth).sort(byAbsDevDesc);
+  const missingCups         = consolidateDeviatedCups(missingCupsRaw,         executionDataByMonth).sort(byAbsDevDesc);
+  const normalExecutionCups = consolidateDeviatedCups(normalExecutionCupsRaw, executionDataByMonth).sort(byAbsDevDesc);
+  const unexpectedCups      = consolidateUnexpectedCups(unexpectedCupsRaw).sort(byValueDesc);
   // ─────────────────────────────────────────────────────────────────────────────
 
   const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
