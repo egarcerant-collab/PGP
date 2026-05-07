@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
@@ -327,6 +327,8 @@ const PgPsearchForm = forwardRef<
   const [adjustedData, setAdjustedData] = useState<AdjustedData>({
     adjustedQuantities: {}, adjustedValues: {}, comments: {}, selectedRows: {}
   });
+  // Ref para evitar loop: registra el 'ID DE ZONA' del último auto-fetch disparado
+  const autoFetchedCode = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialAuditData?.selectedPrestador) {
@@ -336,6 +338,8 @@ const PgPsearchForm = forwardRef<
       }
       setSelectedPrestador(initialAuditData.selectedPrestador);
       onPrestadorLoaded?.(initialAuditData.selectedPrestador.PRESTADOR);
+      // Resetear el ref para que el nuevo prestador pueda hacer auto-fetch
+      autoFetchedCode.current = null;
     }
   }, [initialAuditData]);
 
@@ -563,16 +567,19 @@ const PgPsearchForm = forwardRef<
     // O del prestador restaurado desde historial (selectedPrestador['ID DE ZONA'])
     const codeToUse = jsonPrestadorCode || selectedPrestador?.['ID DE ZONA'];
     if (codeToUse && prestadores.length > 0 && !loading && !isDataLoaded) {
+      // Guard anti-loop: si ya lanzamos el fetch para este código, no repetir
+      if (autoFetchedCode.current === codeToUse) return;
+
       // Si el prestador ya está seleccionado (desde historial), usarlo directamente
       const target = selectedPrestador?.['ID DE ZONA'] === codeToUse
         ? selectedPrestador
         : prestadores.find(p => p['ID DE ZONA'] === codeToUse);
       if (target) {
-        // Solo mostrar toast si el prestador aún no está seleccionado (auto-selección nueva)
+        // Solo mostrar toast si el prestador aún no está seleccionado
         if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== codeToUse) {
           toast({ title: "Nota Sugerida", description: `Analizaré con (${target.PRESTADOR}) automáticamente.` });
         }
-        // Siempre llamar handleSelectPrestador para cargar la NT del sheet
+        autoFetchedCode.current = codeToUse; // marcar como iniciado
         handleSelectPrestador(target);
       }
     }
