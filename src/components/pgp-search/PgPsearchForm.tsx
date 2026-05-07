@@ -559,13 +559,21 @@ const PgPsearchForm = forwardRef<
   }, []);
 
   useEffect(() => {
-    if (jsonPrestadorCode && prestadores.length > 0 && !loading && !isDataLoaded) {
-      if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== jsonPrestadorCode) {
-        const suggested = prestadores.find(p => p['ID DE ZONA'] === jsonPrestadorCode);
-        if (suggested) {
-          toast({ title: "Nota Sugerida", description: `Analizaré con (${suggested.PRESTADOR}) automáticamente.` });
-          handleSelectPrestador(suggested);
+    // El código de zona puede venir del JSON cargado (jsonPrestadorCode)
+    // O del prestador restaurado desde historial (selectedPrestador['ID DE ZONA'])
+    const codeToUse = jsonPrestadorCode || selectedPrestador?.['ID DE ZONA'];
+    if (codeToUse && prestadores.length > 0 && !loading && !isDataLoaded) {
+      // Si el prestador ya está seleccionado (desde historial), usarlo directamente
+      const target = selectedPrestador?.['ID DE ZONA'] === codeToUse
+        ? selectedPrestador
+        : prestadores.find(p => p['ID DE ZONA'] === codeToUse);
+      if (target) {
+        // Solo mostrar toast si el prestador aún no está seleccionado (auto-selección nueva)
+        if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== codeToUse) {
+          toast({ title: "Nota Sugerida", description: `Analizaré con (${target.PRESTADOR}) automáticamente.` });
         }
+        // Siempre llamar handleSelectPrestador para cargar la NT del sheet
+        handleSelectPrestador(target);
       }
     }
   }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
