@@ -280,6 +280,24 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   const unexpectedCups      = consolidateUnexpectedCups(unexpectedCupsRaw).sort(byValueDesc);
   // ─────────────────────────────────────────────────────────────────────────────
 
+  // ── Fallback: si el valor ejecutado calculado es 0 pero hay totalRealValue
+  // guardado (formato mínimo desde historial), usar ese valor directamente ───
+  const MESES_NUM: Record<string, string> = {
+    Enero:'1',Febrero:'2',Marzo:'3',Abril:'4',Mayo:'5',Junio:'6',
+    Julio:'7',Agosto:'8',Septiembre:'9',Octubre:'10',Noviembre:'11',Diciembre:'12'
+  };
+  executionDataByMonth.forEach((monthData, monthKey) => {
+    if (monthData.totalRealValue > 0) {
+      // Buscar la entrada del mapa por nombre de mes
+      monthlyFinancialsMap.forEach((data, monthName) => {
+        if (MESES_NUM[monthName] === monthKey && data.executed === 0) {
+          data.executed = monthData.totalRealValue;
+        }
+      });
+    }
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
     month,
     totalValorEsperado: data.expected,
