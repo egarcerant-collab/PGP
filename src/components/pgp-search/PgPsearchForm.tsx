@@ -146,14 +146,71 @@ const getMonthName = (monthNumber: string) => {
     return date.toLocaleString('es-CO', { month: 'long' }).charAt(0).toUpperCase() + date.toLocaleString('es-CO', { month: 'long' }).slice(1);
 };
 
+/** Consolida varias filas del mismo CUPS (una por mes) en una sola fila sumada */
+function consolidateDeviatedCups(
+  cups: DeviatedCupInfo[],
+  executionDataByMonth: ExecutionDataByMonth
+): DeviatedCupInfo[] {
+  const map = new Map<string, DeviatedCupInfo>();
+
+  cups.forEach(info => {
+    const key = info.cup;
+    if (!map.has(key)) {
+      map.set(key, { ...info });
+    } else {
+      const acc = map.get(key)!;
+      acc.expectedFrequency  += info.expectedFrequency;
+      acc.realFrequency      += info.realFrequency;
+      acc.deviation           = acc.realFrequency - acc.expectedFrequency;
+      acc.deviationValue     += info.deviationValue;
+      acc.totalValue         += info.totalValue;
+      acc.sameDayDetections  += info.sameDayDetections;
+      acc.sameDayDetectionsCost += info.sameDayDetectionsCost;
+      acc.valorReconocer      = (acc.valorReconocer || 0) + (info.valorReconocer || 0);
+    }
+  });
+
+  // Recalcular usuarios únicos (unión entre meses) y atenciones repetidas
+  map.forEach((info, cupCode) => {
+    const allUsers = new Set<string>();
+    let totalRepeated = 0;
+    executionDataByMonth.forEach(monthData => {
+      const cd = monthData.cupCounts.get(cupCode);
+      if (cd) {
+        cd.uniqueUsers.forEach(u => allUsers.add(u));
+        totalRepeated += Math.max(0, cd.total - cd.uniqueUsers.size);
+      }
+    });
+    info.uniqueUsers       = allUsers.size;
+    info.repeatedAttentions = totalRepeated;
+  });
+
+  return Array.from(map.values());
+}
+
+/** Consolida varias filas del mismo CUPS inesperado (una por mes) */
+function consolidateUnexpectedCups(cups: UnexpectedCupInfo[]): UnexpectedCupInfo[] {
+  const map = new Map<string, UnexpectedCupInfo>();
+  cups.forEach(info => {
+    if (!map.has(info.cup)) {
+      map.set(info.cup, { ...info });
+    } else {
+      const acc = map.get(info.cup)!;
+      acc.realFrequency += info.realFrequency;
+      acc.totalValue    += info.totalValue;
+    }
+  });
+  return Array.from(map.values());
+}
+
 export function calculateComparison(pgpData: any[], executionDataByMonth: ExecutionDataByMonth): ComparisonSummary {
   const matrizRows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
 
-  const overExecutedCups: DeviatedCupInfo[] = [];
-  const underExecutedCups: DeviatedCupInfo[] = [];
-  const missingCups: DeviatedCupInfo[] = [];
-  const normalExecutionCups: DeviatedCupInfo[] = [];
-  const unexpectedCups: UnexpectedCupInfo[] = [];
+  const overExecutedCupsRaw: DeviatedCupInfo[] = [];
+  const underExecutedCupsRaw: DeviatedCupInfo[] = [];
+  const missingCupsRaw: DeviatedCupInfo[] = [];
+  const normalExecutionCupsRaw: DeviatedCupInfo[] = [];
+  const unexpectedCupsRaw: UnexpectedCupInfo[] = [];
   const matrizDescuentos: DiscountMatrixRow[] = [];
 
   const monthlyFinancialsMap = new Map<string, { expected: number; executed: number; activities: number }>();
@@ -182,20 +239,12 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
       unitValueFromNote: row.Valor_Unitario
     };
 
-    executionDataByMonth.forEach((monthData) => {
-        const cupData = monthData.cupCounts.get(row.CUPS);
-        if (cupData) {
-            commonInfo.uniqueUsers = cupData.uniqueUsers.size;
-            commonInfo.repeatedAttentions = Math.max(0, cupData.total - cupData.uniqueUsers.size);
-        }
-    });
-
-    if (row.Clasificacion === "Sobre-ejecutado") overExecutedCups.push(commonInfo);
-    else if (row.Clasificacion === "Sub-ejecutado") underExecutedCups.push(commonInfo);
-    else if (row.Clasificacion === "Faltante") missingCups.push(commonInfo);
-    else if (row.Clasificacion === "Ejecución Normal") normalExecutionCups.push(commonInfo);
+    if (row.Clasificacion === "Sobre-ejecutado") overExecutedCupsRaw.push(commonInfo);
+    else if (row.Clasificacion === "Sub-ejecutado") underExecutedCupsRaw.push(commonInfo);
+    else if (row.Clasificacion === "Faltante") missingCupsRaw.push(commonInfo);
+    else if (row.Clasificacion === "Ejecución Normal") normalExecutionCupsRaw.push(commonInfo);
     else if (row.Clasificacion === "Inesperado") {
-        unexpectedCups.push({
+        unexpectedCupsRaw.push({
             cup: row.CUPS,
             description: row.Descripcion,
             realFrequency: row.Cantidad_Ejecutada,
@@ -217,6 +266,14 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
         Tipo_Servicio: row.Tipo_Servicio as ServiceType
     });
   });
+
+  // ── Consolidar por CUPS: sumar frecuencias y valores de todos los meses ──────
+  const overExecutedCups  = consolidateDeviatedCups(overExecutedCupsRaw,  executionDataByMonth);
+  const underExecutedCups = consolidateDeviatedCups(underExecutedCupsRaw, executionDataByMonth);
+  const missingCups       = consolidateDeviatedCups(missingCupsRaw,       executionDataByMonth);
+  const normalExecutionCups = consolidateDeviatedCups(normalExecutionCupsRaw, executionDataByMonth);
+  const unexpectedCups    = consolidateUnexpectedCups(unexpectedCupsRaw);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
     month,
