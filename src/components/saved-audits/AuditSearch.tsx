@@ -458,7 +458,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                                             </p>
                                                         ) : (
                                                             <div className="space-y-3">
-                                                                {informes.map(inf => renderInforme(inf))}
+                                                                {informes.map((inf, i) => (
+                                                                    <Fragment key={inf.numero || String(i)}>
+                                                                        {renderInforme(inf)}
+                                                                    </Fragment>
+                                                                ))}
                                                             </div>
                                                         )}
                                                     </td>
@@ -537,7 +541,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {entry.informes.map(inf => renderInforme(inf))}
+                                            {entry.informes.map((inf, i) => (
+                                                <Fragment key={inf.numero || String(i)}>
+                                                    {renderInforme(inf)}
+                                                </Fragment>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
