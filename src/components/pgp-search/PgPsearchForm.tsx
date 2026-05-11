@@ -440,8 +440,33 @@ const PgPsearchForm = forwardRef<
     };
   }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData]);
 
+  // \u2500\u2500 Descarga de la matriz comparativa (formato MatrizRow) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const handleDownloadMatrizComparativa = useCallback(() => {
+    if (!showComparison || !pgpData) return;
+    toast({ title: "Generando Excel...", description: "Matriz NT vs Ejecuci\u00F3n." });
+    const rows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
+    const csv = Papa.unparse(rows, { delimiter: ";" });
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `matriz_comparativa_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
+    link.click();
+  }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
+
+  // \u2500\u2500 Descarga detalle por usuario/servicio (requiere rawJsonData) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadExecutionDetail = useCallback(() => {
     if (!showComparison || !pgpData || executionDataByMonth.size === 0) return;
+
+    // rawJsonData no se guarda en historial para reducir tama\u00F1o del payload
+    const hasRawData = Array.from(executionDataByMonth.values()).some(m => m.rawJsonData?.usuarios?.length > 0);
+    if (!hasRawData) {
+      toast({
+        title: "Detalle no disponible",
+        description: "El detalle por usuario s\u00F3lo est\u00E1 disponible cuando los JSON se cargan en la sesi\u00F3n actual, no desde historial.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     toast({ title: "Generando Excel...", description: "Cruce de columnas solicitado." });
 
@@ -456,7 +481,7 @@ const PgPsearchForm = forwardRef<
     const exportRows: any[] = [];
     executionDataByMonth.forEach((monthData, monthKey) => {
       const monthName = getMonthName(monthKey);
-      monthData.rawJsonData.usuarios?.forEach((user: any) => {
+      monthData.rawJsonData?.usuarios?.forEach((user: any) => {
         const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
         const processServices = (services: any[], serviceType: string, codeField: string, valueField: string, unitValField?: string, qtyF?: string) => {
           if (!services) return;
@@ -735,7 +760,7 @@ const PgPsearchForm = forwardRef<
           <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(totalJsonExec)} icon={Wallet}
             footer="Costo total en archivos JSON" />
           <StatCard accent="purple" title="Ejecución NT" value={formatCurrency(totalNTExec)} icon={FileText}
-            footer="Doble clic para Excel" onDoubleClick={handleDownloadExecutionDetail} />
+            footer="Doble clic → Matriz NT vs Ejecución (.xls)" onDoubleClick={handleDownloadMatrizComparativa} />
           {globalSummary && (
             <StatCard accent="amber" title="Valor NT (período)" value={formatCurrency(globalSummary.totalPeriodo)} icon={Landmark}
               footer={`Banda: ${formatCurrency(globalSummary.costoMinimoPeriodo)} – ${formatCurrency(globalSummary.costoMaximoPeriodo)}`} />
