@@ -760,7 +760,7 @@ const PgPsearchForm = forwardRef<
           <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(totalJsonExec)} icon={Wallet}
             footer="Costo total en archivos JSON" />
           <StatCard accent="purple" title="Ejecución NT" value={formatCurrency(totalNTExec)} icon={FileText}
-            footer="Doble clic → Matriz NT vs Ejecución (.xls)" onDoubleClick={handleDownloadMatrizComparativa} />
+            footer="Doble clic → Detalle por usuario (.xls)" onDoubleClick={handleDownloadExecutionDetail} />
           {globalSummary && (
             <StatCard accent="amber" title="Valor NT (período)" value={formatCurrency(globalSummary.totalPeriodo)} icon={Landmark}
               footer={`Banda: ${formatCurrency(globalSummary.costoMinimoPeriodo)} – ${formatCurrency(globalSummary.costoMaximoPeriodo)}`} />
@@ -870,6 +870,18 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-4">
         {analysisHeader}
+        {/* Botón Descargar Matriz NT vs Ejecución */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadMatrizComparativa}
+            title="Descarga la matriz completa NT vs Ejecución por CUPS y mes"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Descargar Matriz NT vs Ejecución (.xls)
+          </Button>
+        </div>
         <InformeDesviaciones comparisonSummary={comparisonSummary!} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
       </div>
     );
