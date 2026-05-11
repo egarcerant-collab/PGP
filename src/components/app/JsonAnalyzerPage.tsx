@@ -61,14 +61,21 @@ export const serializeExecutionData = (data: ExecutionDataByMonth): any => {
     const serializedCupCounts: any = {};
     monthData.cupCounts.forEach((cupData, cupKey) => {
       serializedCupCounts[cupKey] = {
-        ...cupData,
+        total: cupData.total,
+        totalValue: cupData.totalValue,
+        type: cupData.type,
+        jsonDescription: cupData.jsonDescription,
         diagnoses: Object.fromEntries(cupData.diagnoses),
-        uniqueUsers: Array.from(cupData.uniqueUsers)
+        uniqueUsers: Array.from(cupData.uniqueUsers),
       };
     });
+    // rawJsonData se excluye intencionalmente — contiene los JSON crudos de pacientes
+    // y puede superar 10MB, haciendo el payload imposible de guardar en Supabase.
+    // Todos los campos necesarios para el análisis están en cupCounts.
     obj[monthKey] = {
-      ...monthData,
-      cupCounts: serializedCupCounts
+      cupCounts: serializedCupCounts,
+      summary: monthData.summary,
+      totalRealValue: monthData.totalRealValue,
     };
   });
   return obj;

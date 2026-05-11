@@ -206,71 +206,109 @@ function consolidateUnexpectedCups(cups: UnexpectedCupInfo[]): UnexpectedCupInfo
 export function calculateComparison(pgpData: any[], executionDataByMonth: ExecutionDataByMonth): ComparisonSummary {
   const matrizRows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
 
-  const overExecutedCupsRaw: DeviatedCupInfo[] = [];
-  const underExecutedCupsRaw: DeviatedCupInfo[] = [];
-  const missingCupsRaw: DeviatedCupInfo[] = [];
-  const normalExecutionCupsRaw: DeviatedCupInfo[] = [];
-  const unexpectedCupsRaw: UnexpectedCupInfo[] = [];
+  // ── 1. Financials por mes + matrix de descuentos (detalle mensual) ─────────
   const matrizDescuentos: DiscountMatrixRow[] = [];
-
   const monthlyFinancialsMap = new Map<string, { expected: number; executed: number; activities: number }>();
 
   matrizRows.forEach(row => {
     const current = monthlyFinancialsMap.get(row.Mes) || { expected: 0, executed: 0, activities: 0 };
-    current.expected += row.Valor_Esperado;
-    current.executed += row.Valor_Ejecutado;
+    current.expected  += row.Valor_Esperado;
+    current.executed  += row.Valor_Ejecutado;
     current.activities += row.Cantidad_Ejecutada;
     monthlyFinancialsMap.set(row.Mes, current);
 
-    const commonInfo: DeviatedCupInfo = {
-      cup: row.CUPS,
-      description: row.Descripcion,
-      activityDescription: row.Descripcion,
-      expectedFrequency: row.Cantidad_Esperada,
-      realFrequency: row.Cantidad_Ejecutada,
-      uniqueUsers: 0,
-      repeatedAttentions: 0,
-      sameDayDetections: 0,
-      sameDayDetectionsCost: 0,
-      deviation: row.Diferencia,
-      deviationValue: row.Diferencia * row.Valor_Unitario,
-      totalValue: row.Valor_Ejecutado,
-      valorReconocer: Math.min(row.Valor_Ejecutado, row.Valor_Esperado * 1.11),
-      unitValueFromNote: row.Valor_Unitario
-    };
-
-    if (row.Clasificacion === "Sobre-ejecutado") overExecutedCupsRaw.push(commonInfo);
-    else if (row.Clasificacion === "Sub-ejecutado") underExecutedCupsRaw.push(commonInfo);
-    else if (row.Clasificacion === "Faltante") missingCupsRaw.push(commonInfo);
-    else if (row.Clasificacion === "Ejecución Normal") normalExecutionCupsRaw.push(commonInfo);
-    else if (row.Clasificacion === "Inesperado") {
-        unexpectedCupsRaw.push({
-            cup: row.CUPS,
-            description: row.Descripcion,
-            realFrequency: row.Cantidad_Ejecutada,
-            totalValue: row.Valor_Ejecutado,
-            serviceType: row.Tipo_Servicio as ServiceType
-        });
-    }
-
+    const valorReconocer = Math.min(row.Valor_Ejecutado, row.Valor_Esperado * 1.11);
     matrizDescuentos.push({
-        ...commonInfo,
-        CUPS: row.CUPS,
-        Descripcion: row.Descripcion,
-        Cantidad_Ejecutada: row.Cantidad_Ejecutada,
-        Valor_Unitario: row.Valor_Unitario,
-        Valor_Ejecutado: row.Valor_Ejecutado,
-        Valor_a_Reconocer: commonInfo.valorReconocer,
-        Valor_a_Descontar: Math.max(0, row.Valor_Ejecutado - commonInfo.valorReconocer),
-        Clasificacion: row.Clasificacion,
-        Tipo_Servicio: row.Tipo_Servicio as ServiceType
+      cup: row.CUPS, description: row.Descripcion, activityDescription: row.Descripcion,
+      expectedFrequency: row.Cantidad_Esperada, realFrequency: row.Cantidad_Ejecutada,
+      uniqueUsers: 0, repeatedAttentions: 0, sameDayDetections: 0, sameDayDetectionsCost: 0,
+      deviation: row.Diferencia, deviationValue: row.Diferencia * row.Valor_Unitario,
+      totalValue: row.Valor_Ejecutado, valorReconocer, unitValueFromNote: row.Valor_Unitario,
+      CUPS: row.CUPS, Descripcion: row.Descripcion,
+      Cantidad_Ejecutada: row.Cantidad_Ejecutada, Valor_Unitario: row.Valor_Unitario,
+      Valor_Ejecutado: row.Valor_Ejecutado, Valor_a_Reconocer: valorReconocer,
+      Valor_a_Descontar: Math.max(0, row.Valor_Ejecutado - valorReconocer),
+      Clasificacion: row.Clasificacion, Tipo_Servicio: row.Tipo_Servicio as ServiceType,
     });
   });
 
-  // ── Consolidar por CUPS y ordenar de mayor a menor desviación absoluta ───────
-  const byAbsDevDesc  = (a: DeviatedCupInfo, b: DeviatedCupInfo) =>
+  // ── 2. Consolidar TODAS las filas por CUPS (suma de TODOS los meses) ──────
+  // Clasificar DESPUÉS de consolidar evita que un mismo CUPS aparezca
+  // como "Sub" en enero y "Normal" en febrero → ahora sólo aparece una vez
+  // con la clasificación del período completo (ej: bimestre, trimestre).
+  type PeriodEntry = {
+    cup: string; description: string; serviceType: ServiceType;
+    totalExpected: number; totalExecuted: number; totalValue: number;
+    unitValue: number; isInNT: boolean;
+  };
+  const cupsPeriodMap = new Map<string, PeriodEntry>();
+
+  matrizRows.forEach(row => {
+    const key = row.CUPS;
+    const e = cupsPeriodMap.get(key);
+    if (!e) {
+      cupsPeriodMap.set(key, {
+        cup: row.CUPS, description: row.Descripcion || row.CUPS,
+        serviceType: row.Tipo_Servicio,
+        totalExpected: row.Cantidad_Esperada,
+        totalExecuted: row.Cantidad_Ejecutada,
+        totalValue: row.Valor_Ejecutado,
+        unitValue: row.Valor_Unitario,
+        isInNT: row.Clasificacion !== 'Inesperado',
+      });
+    } else {
+      e.totalExpected  += row.Cantidad_Esperada;
+      e.totalExecuted  += row.Cantidad_Ejecutada;
+      e.totalValue     += row.Valor_Ejecutado;
+      if (row.Clasificacion !== 'Inesperado') e.isInNT = true;
+    }
+  });
+
+  // ── 3. Clasificar con base en los totales del período ─────────────────────
+  const overExecutedCupsRaw: DeviatedCupInfo[]   = [];
+  const underExecutedCupsRaw: DeviatedCupInfo[]  = [];
+  const missingCupsRaw: DeviatedCupInfo[]        = [];
+  const normalExecutionCupsRaw: DeviatedCupInfo[] = [];
+  const unexpectedCupsRaw: UnexpectedCupInfo[]   = [];
+
+  cupsPeriodMap.forEach(data => {
+    if (data.totalExpected === 0 && data.totalExecuted === 0) return;
+
+    const pct = data.totalExpected > 0
+      ? (data.totalExecuted / data.totalExpected) * 100
+      : (data.totalExecuted > 0 ? Infinity : 0);
+
+    // CUPS inesperado: ejecutado pero no está en la NT
+    if (!data.isInNT && data.totalExecuted > 0) {
+      unexpectedCupsRaw.push({
+        cup: data.cup, description: data.description,
+        realFrequency: data.totalExecuted, totalValue: data.totalValue,
+        serviceType: data.serviceType,
+      });
+      return;
+    }
+
+    const info: DeviatedCupInfo = {
+      cup: data.cup, description: data.description, activityDescription: data.description,
+      expectedFrequency: data.totalExpected, realFrequency: data.totalExecuted,
+      uniqueUsers: 0, repeatedAttentions: 0, sameDayDetections: 0, sameDayDetectionsCost: 0,
+      deviation: data.totalExecuted - data.totalExpected,
+      deviationValue: (data.totalExecuted - data.totalExpected) * data.unitValue,
+      totalValue: data.totalValue,
+      valorReconocer: Math.min(data.totalValue, data.totalExpected * data.unitValue * 1.11),
+      unitValueFromNote: data.unitValue,
+    };
+
+    if (data.totalExecuted === 0 && data.totalExpected > 0) missingCupsRaw.push(info);
+    else if (pct > 111)                                    overExecutedCupsRaw.push(info);
+    else if (pct < 90 && data.totalExpected > 0)           underExecutedCupsRaw.push(info);
+    else                                                   normalExecutionCupsRaw.push(info);
+  });
+
+  // ── 4. Enriquecer con uniqueUsers/atenciones (de cupCounts) y ordenar ─────
+  const byAbsDevDesc = (a: DeviatedCupInfo, b: DeviatedCupInfo) =>
     Math.abs(b.deviationValue) - Math.abs(a.deviationValue);
-  const byValueDesc   = (a: UnexpectedCupInfo, b: UnexpectedCupInfo) =>
+  const byValueDesc  = (a: UnexpectedCupInfo, b: UnexpectedCupInfo) =>
     b.totalValue - a.totalValue;
 
   const overExecutedCups    = consolidateDeviatedCups(overExecutedCupsRaw,    executionDataByMonth).sort(byAbsDevDesc);
@@ -278,17 +316,14 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
   const missingCups         = consolidateDeviatedCups(missingCupsRaw,         executionDataByMonth).sort(byAbsDevDesc);
   const normalExecutionCups = consolidateDeviatedCups(normalExecutionCupsRaw, executionDataByMonth).sort(byAbsDevDesc);
   const unexpectedCups      = consolidateUnexpectedCups(unexpectedCupsRaw).sort(byValueDesc);
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Fallback: si el valor ejecutado calculado es 0 pero hay totalRealValue
-  // guardado (formato mínimo desde historial), usar ese valor directamente ───
+  // ── 5. Fallback financiero: usar totalRealValue si cupCounts estaba vacío ──
   const MESES_NUM: Record<string, string> = {
     Enero:'1',Febrero:'2',Marzo:'3',Abril:'4',Mayo:'5',Junio:'6',
-    Julio:'7',Agosto:'8',Septiembre:'9',Octubre:'10',Noviembre:'11',Diciembre:'12'
+    Julio:'7',Agosto:'8',Septiembre:'9',Octubre:'10',Noviembre:'11',Diciembre:'12',
   };
   executionDataByMonth.forEach((monthData, monthKey) => {
     if (monthData.totalRealValue > 0) {
-      // Buscar la entrada del mapa por nombre de mes
       monthlyFinancialsMap.forEach((data, monthName) => {
         if (MESES_NUM[monthName] === monthKey && data.executed === 0) {
           data.executed = monthData.totalRealValue;
@@ -296,7 +331,6 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
       });
     }
   });
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
     month,
@@ -306,15 +340,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     totalActividades: data.activities,
   }));
 
-  return {
-    monthlyFinancials,
-    overExecutedCups,
-    underExecutedCups,
-    missingCups,
-    unexpectedCups,
-    normalExecutionCups,
-    matrizDescuentos
-  };
+  return { monthlyFinancials, overExecutedCups, underExecutedCups, missingCups, unexpectedCups, normalExecutionCups, matrizDescuentos };
 }
 
 const calculateSummaryData = (data: PgpRow[], numMeses = 12): SummaryData | null => {
@@ -361,7 +387,10 @@ const PgPsearchForm = forwardRef<
     }
   }, [initialAuditData]);
 
-  const showComparison = isDataLoaded && executionDataByMonth.size > 0;
+  // Mostrar el dashboard en cuanto la NT esté cargada.
+  // Si no hay datos de ejecución, buildMatrizEjecucion usa un dummy month
+  // y todas las actividades aparecen como "Faltante" (comportamiento informativo).
+  const showComparison = isDataLoaded;
 
   useEffect(() => {
     if (isDataLoaded) {
@@ -586,10 +615,10 @@ const PgPsearchForm = forwardRef<
       // Guard anti-loop: si ya lanzamos el fetch para este código, no repetir
       if (autoFetchedCode.current === codeToUse) return;
 
-      // Si el prestador ya está seleccionado (desde historial), usarlo directamente
-      const target = selectedPrestador?.['ID DE ZONA'] === codeToUse
-        ? selectedPrestador
-        : prestadores.find(p => p['ID DE ZONA'] === codeToUse);
+      // Preferir siempre el prestador fresco de la lista (WEB URL actualizado);
+      // si no se encuentra, usar el guardado en historial como fallback
+      const target = prestadores.find(p => p['ID DE ZONA'] === codeToUse)
+        ?? (selectedPrestador?.['ID DE ZONA'] === codeToUse ? selectedPrestador : null);
       if (target) {
         // Solo mostrar toast si el prestador aún no está seleccionado
         if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== codeToUse) {

@@ -83,12 +83,11 @@ const guessServiceTypeByCup = (cup: string): "Consulta" | "Procedimiento" | "Med
 
 export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMatrizArgs): MatrizRow[] {
   const matriz: MatrizRow[] = [];
-  
+
   const pgpCupsMap = new Map<string, PgpRow>();
   pgpData.forEach((row, i) => {
       const cup = findColumnValue(row, ['cups', 'cup/cum', 'id resolucion 3100', 'código', 'cup', 'codigo']);
       if(cup) pgpCupsMap.set(String(cup).trim().toUpperCase(), row);
-      // Log columnas y valores completos de la primera fila para diagnóstico
       if (i === 0) {
         console.log('[NT columnas]', Object.keys(row));
         console.log('[NT primera fila]', JSON.stringify(row));
@@ -96,12 +95,20 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
   });
 
   const getMonthName = (monthNumber: string) => {
-    const date = new Date(2024, parseInt(monthNumber) - 1, 1);
+    const n = parseInt(monthNumber);
+    if (isNaN(n)) return 'Período';
+    const date = new Date(2024, n - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
-  executionDataByMonth.forEach((monthData, monthKey) => {
+  // Si no hay datos de ejecución, usar un "mes" dummy para que la NT
+  // se procese y aparezcan todas sus actividades como "Faltante"
+  const dataToIterate: ExecutionDataByMonth = executionDataByMonth.size > 0
+    ? executionDataByMonth
+    : new Map([['periodo', { cupCounts: new Map(), summary: null, totalRealValue: 0, rawJsonData: null }]] as any);
+
+  dataToIterate.forEach((monthData, monthKey) => {
     const monthName = getMonthName(monthKey);
     const allCupsForMonth = new Set([
         ...pgpCupsMap.keys(), 
