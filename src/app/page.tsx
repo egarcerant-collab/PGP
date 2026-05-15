@@ -35,7 +35,7 @@ export type CupCountInfo = {
 };
 export type CupCountsMap = Map<string, CupCountInfo>;
 export type ExecutionDataByMonth = Map<string, MonthlyExecutionData>;
-export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador" | "cierre";
+export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador";
 
 interface NavItem {
   id: ModuleId;
@@ -54,7 +54,6 @@ const NAV: NavItem[] = [
   { id: "financiero", label: "Análisis Financiero",      icon: TrendingUp,      group: "analisis", requiresData: true },
   { id: "cups",       label: "CUPS / Tecnologías",       icon: Activity,        group: "analisis", requiresData: true },
   { id: "ajustes",    label: "Descuentos y Ajustes",     icon: Sliders,         group: "analisis", requiresData: true },
-  { id: "cierre",     label: "Generación de Certificados", icon: ClipboardCheck, group: "analisis", requiresData: true },
 ];
 
 export default function Home() {

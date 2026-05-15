@@ -37,237 +37,25 @@ interface AuditSearchProps {
 const fmt = (n: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n || 0);
 
-export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
-    const [audits, setAudits] = useState<AuditRecord[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const [isContinuing, setIsContinuing] = useState(false);
-    const { toast } = useToast();
+// ── Componente separado para evitar el warning de key ──────────────────────
+interface InformeCardProps {
+    inf: InformeVinculado;
+    editingInforme: string | null;
+    notaFin: string;
+    notaAdi: string;
+    savingNota: boolean;
+    setEditingInforme: (v: string | null) => void;
+    setNotaFin: (v: string) => void;
+    setNotaAdi: (v: string) => void;
+    handleSaveNotas: (numero: string) => void;
+}
 
-    // ── Informes vinculados (múltiples expandidos simultáneamente) ──
-    const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-    const [informesPorAudit, setInformesPorAudit] = useState<Record<number, InformeVinculado[]>>({});
-    const [informesLoading, setInformesLoading] = useState<Record<number, boolean>>({});
-    // Panel combinado de informes para auditorías seleccionadas
-    const [showCombinedPanel, setShowCombinedPanel] = useState(false);
-    const [combinedInformes, setCombinedInformes] = useState<Array<{ auditId: number; month: string; informes: InformeVinculado[] }>>([]);
-    const [combinedLoading, setCombinedLoading] = useState(false);
-    // Edición de notas
-    const [editingInforme, setEditingInforme] = useState<string | null>(null);
-    const [notaFin, setNotaFin] = useState('');
-    const [notaAdi, setNotaAdi] = useState('');
-    const [savingNota, setSavingNota] = useState(false);
-
-    const fetchAudits = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch('/api/list-audits');
-            const data = await response.json();
-            if (Array.isArray(data)) setAudits(data);
-        } catch {
-            toast({ title: "Error", description: "No se pudieron cargar las auditorías.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    }, [toast]);
-
-    useEffect(() => { fetchAudits(); }, [fetchAudits]);
-
-    // Resetear panel combinado cuando cambia la selección
-    useEffect(() => {
-        setShowCombinedPanel(false);
-        setCombinedInformes([]);
-    }, [selectedIds]);
-
-    const toggleSelect = (id: number, prestador: string) => {
-        setSelectedIds(prev => {
-            if (prev.includes(id)) return prev.filter(x => x !== id);
-            if (prev.length > 0) {
-                const firstPrestador = audits.find(a => a.id === prev[0])?.prestador;
-                if (firstPrestador?.toLowerCase() !== prestador.toLowerCase()) {
-                    toast({ title: "Mismo prestador", description: "Solo puedes combinar auditorías del mismo prestador.", variant: "destructive" });
-                    return prev;
-                }
-            }
-            if (prev.length >= 3) {
-                toast({ title: "Máximo 3", description: "Solo puedes cargar hasta 3 auditorías a la vez.", variant: "destructive" });
-                return prev;
-            }
-            return [...prev, id];
-        });
-    };
-
-    // ── Expandir/colapsar informe de una fila (múltiples simultáneos) ──
-    const handleToggleExpand = async (audit: AuditRecord) => {
-        setExpandedIds(prev => {
-            const next = new Set(prev);
-            if (next.has(audit.id)) { next.delete(audit.id); return next; }
-            next.add(audit.id);
-            return next;
-        });
-        setEditingInforme(null);
-
-        if (informesPorAudit[audit.id] !== undefined) return; // ya cargado
-
-        setInformesLoading(prev => ({ ...prev, [audit.id]: true }));
-        try {
-            const url = `/api/audit-informe?prestador=${encodeURIComponent(audit.prestador)}&mes=${encodeURIComponent(audit.month)}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            setInformesPorAudit(prev => ({ ...prev, [audit.id]: data.informes || [] }));
-        } catch {
-            setInformesPorAudit(prev => ({ ...prev, [audit.id]: [] }));
-        } finally {
-            setInformesLoading(prev => ({ ...prev, [audit.id]: false }));
-        }
-    };
-
-    // ── Cargar informes combinados de todas las auditorías seleccionadas ──
-    const handleShowCombinedInformes = async () => {
-        if (selectedIds.length === 0) return;
-        if (showCombinedPanel) { setShowCombinedPanel(false); return; }
-
-        setCombinedLoading(true);
-        setShowCombinedPanel(true);
-        try {
-            const results = await Promise.all(
-                selectedIds.map(async id => {
-                    const audit = audits.find(a => a.id === id)!;
-                    // Usar caché si ya se cargó
-                    if (informesPorAudit[id] !== undefined) {
-                        return { auditId: id, month: audit.month, informes: informesPorAudit[id] };
-                    }
-                    const url = `/api/audit-informe?prestador=${encodeURIComponent(audit.prestador)}&mes=${encodeURIComponent(audit.month)}`;
-                    const res = await fetch(url);
-                    const data = await res.json();
-                    const informes = data.informes || [];
-                    setInformesPorAudit(prev => ({ ...prev, [id]: informes }));
-                    return { auditId: id, month: audit.month, informes };
-                })
-            );
-            setCombinedInformes(results);
-        } catch {
-            toast({ title: "Error", description: "No se pudieron cargar los informes.", variant: "destructive" });
-        } finally {
-            setCombinedLoading(false);
-        }
-    };
-
-    // ── Guardar notas editadas ──
-    const handleSaveNotas = async (informeNumero: string) => {
-        setSavingNota(true);
-        try {
-            const res = await fetch('/api/audit-informe', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero: informeNumero, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message);
-
-            setInformesPorAudit(prev => {
-                const updated = { ...prev };
-                for (const auditId in updated) {
-                    updated[auditId] = updated[auditId].map(inf =>
-                        inf.numero === informeNumero
-                            ? { ...inf, pdf_data: { ...inf.pdf_data, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi } }
-                            : inf
-                    );
-                }
-                return updated;
-            });
-            setCombinedInformes(prev => prev.map(entry => ({
-                ...entry,
-                informes: entry.informes.map(inf =>
-                    inf.numero === informeNumero
-                        ? { ...inf, pdf_data: { ...inf.pdf_data, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi } }
-                        : inf
-                )
-            })));
-            toast({ title: "✅ Notas guardadas", description: `Informe N° ${informeNumero} actualizado.` });
-            setEditingInforme(null);
-        } catch (e: any) {
-            toast({ title: "Error al guardar", description: e.message, variant: "destructive" });
-        } finally {
-            setSavingNota(false);
-        }
-    };
-
-    const handleLoad = async () => {
-        if (selectedIds.length === 0) return;
-        setIsContinuing(true);
-        try {
-            const results = await Promise.all(
-                selectedIds.map(id => {
-                    const audit = audits.find(a => a.id === id);
-                    const url = audit?.fsPath
-                        ? `/api/load-audit?fsPath=${encodeURIComponent(audit.fsPath)}`
-                        : `/api/load-audit?id=${id}`;
-                    return fetch(url).then(r => r.json());
-                })
-            );
-
-            const base = results[0];
-            const merged: SavedAuditData = { ...base.auditData };
-
-            if (results.length > 1) {
-                const allExecData: Record<string, any> = { ...(base.auditData.executionData || {}) };
-                for (let i = 1; i < results.length; i++) {
-                    const other = results[i].auditData?.executionData || {};
-                    Object.assign(allExecData, other);
-                }
-                merged.executionData = allExecData;
-            }
-
-            const prestadorName = base.prestador;
-            const allMonths = results.map(r => r.mes).join(' + ');
-            const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
-
-            if (base.informeRelacionado) {
-                merged.informeRestored = {
-                  ...base.informeRelacionado,
-                  notaEjecucionFinanciera: base.informeRelacionado.notaEjecucionFinanciera
-                    || merged.notasGuardadas?.notaEjecucionFinanciera || '',
-                  notaAdicional: base.informeRelacionado.notaAdicional
-                    || merged.notasGuardadas?.notaAdicional || '',
-                  valorCupsInesperadas: base.informeRelacionado.valorCupsInesperadas
-                    || (merged.notasGuardadas as any)?.valorCupsInesperadas || 0,
-                  cantidadCupsInesperadas: base.informeRelacionado.cantidadCupsInesperadas
-                    || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
-                };
-            } else if (merged.notasGuardadas) {
-                merged.informeRestored = {
-                  numero: merged.notasGuardadas.informeNum || '',
-                  notaEjecucionFinanciera: merged.notasGuardadas.notaEjecucionFinanciera || '',
-                  notaAdicional: merged.notasGuardadas.notaAdicional || '',
-                  valorCupsInesperadas: (merged.notasGuardadas as any).valorCupsInesperadas || 0,
-                  cantidadCupsInesperadas: (merged.notasGuardadas as any).cantidadCupsInesperadas || '',
-                };
-            }
-
-            onAuditLoad(merged, prestadorName, allMonths);
-
-            if (!hasExecData) {
-                toast({
-                    title: "⚠️ Auditoría sin datos de ejecución",
-                    description: "Esta auditoría fue guardada sin los datos de análisis. Carga los JSON nuevamente, realiza el análisis y guarda de nuevo.",
-                    variant: "destructive",
-                });
-            } else {
-                toast({ title: "✅ Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
-            }
-        } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
-        } finally {
-            setIsContinuing(false);
-        }
-    };
-
-    const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
-
-    // ── Render de un informe individual ──
-    const renderInforme = (inf: InformeVinculado) => (
-        <div key={inf.numero} className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 space-y-3">
+function InformeCard({
+    inf, editingInforme, notaFin, notaAdi, savingNota,
+    setEditingInforme, setNotaFin, setNotaAdi, handleSaveNotas,
+}: InformeCardProps) {
+    return (
+        <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold bg-blue-600 text-white rounded px-2 py-0.5">
@@ -353,7 +141,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                         <p className="text-xs text-slate-400 italic">Sin notas registradas en este informe.</p>
                     )}
                     <button
-                        onClick={() => { setEditingInforme(inf.numero); setNotaFin(inf.pdf_data?.notaEjecucionFinanciera || ''); setNotaAdi(inf.pdf_data?.notaAdicional || ''); }}
+                        onClick={() => {
+                            setEditingInforme(inf.numero);
+                            setNotaFin(inf.pdf_data?.notaEjecucionFinanciera || '');
+                            setNotaAdi(inf.pdf_data?.notaAdicional || '');
+                        }}
                         className="text-xs text-blue-500 hover:text-blue-700 underline underline-offset-2 transition-colors"
                     >
                         Editar notas
@@ -362,6 +154,230 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             )}
         </div>
     );
+}
+
+export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
+    const [audits, setAudits] = useState<AuditRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [isContinuing, setIsContinuing] = useState(false);
+    const { toast } = useToast();
+
+    const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+    const [informesPorAudit, setInformesPorAudit] = useState<Record<number, InformeVinculado[]>>({});
+    const [informesLoading, setInformesLoading] = useState<Record<number, boolean>>({});
+    const [showCombinedPanel, setShowCombinedPanel] = useState(false);
+    const [combinedInformes, setCombinedInformes] = useState<Array<{ auditId: number; month: string; informes: InformeVinculado[] }>>([]);
+    const [combinedLoading, setCombinedLoading] = useState(false);
+    const [editingInforme, setEditingInforme] = useState<string | null>(null);
+    const [notaFin, setNotaFin] = useState('');
+    const [notaAdi, setNotaAdi] = useState('');
+    const [savingNota, setSavingNota] = useState(false);
+
+    const fetchAudits = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/list-audits');
+            const data = await response.json();
+            if (Array.isArray(data)) setAudits(data);
+        } catch {
+            toast({ title: "Error", description: "No se pudieron cargar las auditorías.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => { fetchAudits(); }, [fetchAudits]);
+
+    useEffect(() => {
+        setShowCombinedPanel(false);
+        setCombinedInformes([]);
+    }, [selectedIds]);
+
+    const toggleSelect = (id: number, prestador: string) => {
+        setSelectedIds(prev => {
+            if (prev.includes(id)) return prev.filter(x => x !== id);
+            if (prev.length > 0) {
+                const firstPrestador = audits.find(a => a.id === prev[0])?.prestador;
+                if (firstPrestador?.toLowerCase() !== prestador.toLowerCase()) {
+                    toast({ title: "Mismo prestador", description: "Solo puedes combinar auditorías del mismo prestador.", variant: "destructive" });
+                    return prev;
+                }
+            }
+            if (prev.length >= 3) {
+                toast({ title: "Máximo 3", description: "Solo puedes cargar hasta 3 auditorías a la vez.", variant: "destructive" });
+                return prev;
+            }
+            return [...prev, id];
+        });
+    };
+
+    const handleToggleExpand = async (audit: AuditRecord) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(audit.id)) { next.delete(audit.id); return next; }
+            next.add(audit.id);
+            return next;
+        });
+        setEditingInforme(null);
+
+        if (informesPorAudit[audit.id] !== undefined) return;
+
+        setInformesLoading(prev => ({ ...prev, [audit.id]: true }));
+        try {
+            const url = `/api/audit-informe?prestador=${encodeURIComponent(audit.prestador)}&mes=${encodeURIComponent(audit.month)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            setInformesPorAudit(prev => ({ ...prev, [audit.id]: data.informes || [] }));
+        } catch {
+            setInformesPorAudit(prev => ({ ...prev, [audit.id]: [] }));
+        } finally {
+            setInformesLoading(prev => ({ ...prev, [audit.id]: false }));
+        }
+    };
+
+    const handleShowCombinedInformes = async () => {
+        if (selectedIds.length === 0) return;
+        if (showCombinedPanel) { setShowCombinedPanel(false); return; }
+
+        setCombinedLoading(true);
+        setShowCombinedPanel(true);
+        try {
+            const results = await Promise.all(
+                selectedIds.map(async id => {
+                    const audit = audits.find(a => a.id === id)!;
+                    if (informesPorAudit[id] !== undefined) {
+                        return { auditId: id, month: audit.month, informes: informesPorAudit[id] };
+                    }
+                    const url = `/api/audit-informe?prestador=${encodeURIComponent(audit.prestador)}&mes=${encodeURIComponent(audit.month)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    const informes = data.informes || [];
+                    setInformesPorAudit(prev => ({ ...prev, [id]: informes }));
+                    return { auditId: id, month: audit.month, informes };
+                })
+            );
+            setCombinedInformes(results);
+        } catch {
+            toast({ title: "Error", description: "No se pudieron cargar los informes.", variant: "destructive" });
+        } finally {
+            setCombinedLoading(false);
+        }
+    };
+
+    const handleSaveNotas = async (informeNumero: string) => {
+        setSavingNota(true);
+        try {
+            const res = await fetch('/api/audit-informe', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: informeNumero, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+
+            setInformesPorAudit(prev => {
+                const updated = { ...prev };
+                for (const auditId in updated) {
+                    updated[auditId] = updated[auditId].map(inf =>
+                        inf.numero === informeNumero
+                            ? { ...inf, pdf_data: { ...inf.pdf_data, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi } }
+                            : inf
+                    );
+                }
+                return updated;
+            });
+            setCombinedInformes(prev => prev.map(entry => ({
+                ...entry,
+                informes: entry.informes.map(inf =>
+                    inf.numero === informeNumero
+                        ? { ...inf, pdf_data: { ...inf.pdf_data, notaEjecucionFinanciera: notaFin, notaAdicional: notaAdi } }
+                        : inf
+                )
+            })));
+            toast({ title: "✅ Notas guardadas", description: `Informe N° ${informeNumero} actualizado.` });
+            setEditingInforme(null);
+        } catch (e: any) {
+            toast({ title: "Error al guardar", description: e.message, variant: "destructive" });
+        } finally {
+            setSavingNota(false);
+        }
+    };
+
+    const handleLoad = async () => {
+        if (selectedIds.length === 0) return;
+        setIsContinuing(true);
+        try {
+            const results = await Promise.all(
+                selectedIds.map(id => {
+                    const audit = audits.find(a => a.id === id);
+                    const url = audit?.fsPath
+                        ? `/api/load-audit?fsPath=${encodeURIComponent(audit.fsPath)}`
+                        : `/api/load-audit?id=${id}`;
+                    return fetch(url).then(r => r.json());
+                })
+            );
+
+            const base = results[0];
+            const merged: SavedAuditData = { ...base.auditData };
+
+            if (results.length > 1) {
+                const allExecData: Record<string, any> = { ...(base.auditData.executionData || {}) };
+                for (let i = 1; i < results.length; i++) {
+                    const other = results[i].auditData?.executionData || {};
+                    Object.assign(allExecData, other);
+                }
+                merged.executionData = allExecData;
+            }
+
+            const prestadorName = base.prestador;
+            const allMonths = results.map(r => r.mes).join(' + ');
+            const hasExecData = merged.executionData && Object.keys(merged.executionData).length > 0;
+
+            if (base.informeRelacionado) {
+                merged.informeRestored = {
+                    ...base.informeRelacionado,
+                    notaEjecucionFinanciera: base.informeRelacionado.notaEjecucionFinanciera
+                        || merged.notasGuardadas?.notaEjecucionFinanciera || '',
+                    notaAdicional: base.informeRelacionado.notaAdicional
+                        || merged.notasGuardadas?.notaAdicional || '',
+                    valorCupsInesperadas: base.informeRelacionado.valorCupsInesperadas
+                        || (merged.notasGuardadas as any)?.valorCupsInesperadas || 0,
+                    cantidadCupsInesperadas: base.informeRelacionado.cantidadCupsInesperadas
+                        || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
+                };
+            } else if (merged.notasGuardadas) {
+                merged.informeRestored = {
+                    numero: merged.notasGuardadas.informeNum || '',
+                    notaEjecucionFinanciera: merged.notasGuardadas.notaEjecucionFinanciera || '',
+                    notaAdicional: merged.notasGuardadas.notaAdicional || '',
+                    valorCupsInesperadas: (merged.notasGuardadas as any).valorCupsInesperadas || 0,
+                    cantidadCupsInesperadas: (merged.notasGuardadas as any).cantidadCupsInesperadas || '',
+                };
+            }
+
+            onAuditLoad(merged, prestadorName, allMonths);
+
+            if (!hasExecData) {
+                toast({
+                    title: "⚠️ Auditoría sin datos de ejecución",
+                    description: "Esta auditoría fue guardada sin los datos de análisis. Carga los JSON nuevamente, realiza el análisis y guarda de nuevo.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({ title: "✅ Auditoría restaurada", description: `${prestadorName} — ${allMonths}` });
+            }
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" });
+        } finally {
+            setIsContinuing(false);
+        }
+    };
+
+    // Props comunes para InformeCard
+    const cardProps = { editingInforme, notaFin, notaAdi, savingNota, setEditingInforme, setNotaFin, setNotaAdi, handleSaveNotas };
+
+    const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
 
     return (
         <div className="space-y-4">
@@ -392,7 +408,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {audits.map((a, idx) => {
+                                {audits.map((a) => {
                                     const checked = selectedIds.includes(a.id);
                                     const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
                                     const disabled = !checked && selectedIds.length >= 3;
@@ -402,7 +418,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     const loadingInf = informesLoading[a.id];
 
                                     return (
-                                        <Fragment key={`frag-${a.id}-${idx}`}>
+                                        <Fragment key={a.id}>
                                             <tr
                                                 className={`border-t border-border transition-colors ${
                                                     checked
@@ -444,7 +460,6 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                                 </td>
                                             </tr>
 
-                                            {/* Panel de informe vinculado por fila */}
                                             {isExpanded && (
                                                 <tr className="border-t border-blue-100 bg-blue-50/30">
                                                     <td colSpan={7} className="px-4 py-3">
@@ -459,9 +474,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                                         ) : (
                                                             <div className="space-y-3">
                                                                 {informes.map((inf, i) => (
-                                                                    <Fragment key={inf.numero || String(i)}>
-                                                                        {renderInforme(inf)}
-                                                                    </Fragment>
+                                                                    <InformeCard
+                                                                        key={inf.numero || String(i)}
+                                                                        inf={inf}
+                                                                        {...cardProps}
+                                                                    />
                                                                 ))}
                                                             </div>
                                                         )}
@@ -517,7 +534,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 )}
             </div>
 
-            {/* Panel combinado de informes para todas las auditorías seleccionadas */}
+            {/* Panel combinado */}
             {showCombinedPanel && selectedIds.length > 1 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-4">
                     <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-2">
@@ -542,16 +559,17 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     ) : (
                                         <div className="space-y-3">
                                             {entry.informes.map((inf, i) => (
-                                                <Fragment key={inf.numero || String(i)}>
-                                                    {renderInforme(inf)}
-                                                </Fragment>
+                                                <InformeCard
+                                                    key={inf.numero || String(i)}
+                                                    inf={inf}
+                                                    {...cardProps}
+                                                />
                                             ))}
                                         </div>
                                     )}
                                 </div>
                             ))}
 
-                            {/* Totales consolidados */}
                             {combinedInformes.length > 1 && (
                                 <div className="rounded-lg border border-blue-300 bg-white p-3">
                                     <p className="text-xs font-bold text-blue-800 uppercase mb-2">Totales consolidados ({selectedIds.length} meses)</p>

@@ -64,6 +64,38 @@ const MONTH_ES: Record<string, string> = {
   'October': 'OCTUBRE', 'November': 'NOVIEMBRE', 'December': 'DICIEMBRE',
 };
 
+/** Número de mes (1-12) a partir del nombre en mayúsculas */
+const MONTH_NUM_MAP: Record<string, number> = {
+  'ENERO':1,'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,
+  'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'OCTUBRE':10,'NOVIEMBRE':11,'DICIEMBRE':12,
+};
+/** Nombre en minúsculas para textos */
+const MONTH_LOWER_MAP: Record<string, string> = {
+  'ENERO':'enero','FEBRERO':'febrero','MARZO':'marzo','ABRIL':'abril','MAYO':'mayo','JUNIO':'junio',
+  'JULIO':'julio','AGOSTO':'agosto','SEPTIEMBRE':'septiembre','OCTUBRE':'octubre','NOVIEMBRE':'noviembre','DICIEMBRE':'diciembre',
+};
+
+/**
+ * Calcula las fechas reales del período evaluado a partir de los meses cargados.
+ * @param months Array con { name: string } donde name es el nombre del mes en MAYÚSCULAS (ej. "ENERO").
+ * @param contractDateStr Fecha de inicio del contrato en formato "dd/mm/yyyy" para extraer el año.
+ */
+function calcPeriodDates(
+  months: Array<{ name: string }>,
+  contractDateStr: string
+): { fechaInicioPeriodo: string; fechaFinPeriodo: string } {
+  const parts = contractDateStr.split('/');
+  const year = parts.length === 3 ? (parseInt(parts[2]) || new Date().getFullYear()) : new Date().getFullYear();
+  const firstMonth = months.length > 0 ? months[0].name : 'ENERO';
+  const lastMonth  = months.length > 0 ? months[months.length - 1].name : firstMonth;
+  const lastMonthNum = MONTH_NUM_MAP[lastMonth] || 1;
+  const lastDay = new Date(year, lastMonthNum, 0).getDate(); // día 0 del mes siguiente = último día del mes actual
+  return {
+    fechaInicioPeriodo: `01/${MONTH_LOWER_MAP[firstMonth] || firstMonth.toLowerCase()}/${year}`,
+    fechaFinPeriodo: `${lastDay}/${MONTH_LOWER_MAP[lastMonth] || lastMonth.toLowerCase()}/${year}`,
+  };
+}
+
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
 const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n));
@@ -294,9 +326,29 @@ export default function CertificadoTrimestral({
     }
   }, [initialResponsable]);
 
+  // Limpia TODAS las notas y campos sensibles cuando cambia el prestador
+  // Evita que los datos de un prestador contaminen a otro
+  useEffect(() => {
+    setNotaEjecucionFinanciera('');
+    setNotaAdicional('');
+    setNotaEFLocked(false);
+    setNotaAdLocked(false);
+    setNotaEFPw('');
+    setNotaAdPw('');
+    setInformeNum('');
+    setContrato('');
+    setValorCupsInesperadas(0);
+    setCantidadCupsInesperadas('');
+  }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR]);
+
   // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
   useEffect(() => {
-    if (!initialInforme) return;
+    if (!initialInforme) {
+      // Sin informe vinculado: limpiar notas para evitar contaminación entre prestadores
+      setNotaEjecucionFinanciera('');
+      setNotaAdicional('');
+      return;
+    }
     if (initialInforme.numero)    setInformeNum(initialInforme.numero);
     if (initialInforme.contrato)  setContrato(initialInforme.contrato);
     if (initialInforme.responsable) setResponsable(initialInforme.responsable.toUpperCase());
@@ -469,6 +521,9 @@ export default function CertificadoTrimestral({
         value: m.totalValorEjecutado,
         cups: m.totalActividades ?? 0, // total de actividades ejecutadas ese mes
       }));
+
+      // ── Fechas reales del período evaluado (no las del contrato completo) ──
+      const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(mesData, fechaInicio);
 
       const empresa = String(selectedPrestador.PRESTADOR || '').trim();
       const nit = String(selectedPrestador.NIT || '').trim();
@@ -904,7 +959,7 @@ export default function CertificadoTrimestral({
           // Narrativa página 3 — ejecución financiera
           { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
           {
-            text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
+            text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmt(totalEjecutadoFinal)}${valorCupsInesperadas > 0 ? ` (incluye ${fmt(valorCupsInesperadas)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`,
             style: 'p',
           },
           {
@@ -1146,6 +1201,9 @@ export default function CertificadoTrimestral({
       descontar, reconocer, valorFinal, totalEjecutadoFinal, totalCups,
     } = pd;
 
+    // ── Fechas reales del período evaluado (no las del contrato completo) ──
+    const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
+
     const cantInespNum = parseInt(cantCupsIn) || 0;
     const labels = (md as any[]).map((m: any) => m.name);
 
@@ -1362,7 +1420,7 @@ export default function CertificadoTrimestral({
 
         // ══════════════════════ PÁGINA 3 ══════════════════════
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
-        { text: `Durante el período contractual comprendido entre ${fechaInicio} y ${fechaFin}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
+        { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
         { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${(md as any[]).map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsIn > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsIn)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
         { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(lastMonthPay > 0 ? lastMonthPay : 0)}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, se considera un valor a ${descontar > 0 ? `descontar de ${fmtL(descontar)} por ejecución inferior al 90%` : 'descontar de $0,00'} y un valor a ${reconocer > 0 ? `reconocer de ${fmtL(reconocer)} por ejecución superior al 110%` : 'reconocer de $0,00'}, resultando en un valor estimado final del ${periodoLabel.toLowerCase()} de ${fmtL(valorFinal)}.`, style: 'p' },
 

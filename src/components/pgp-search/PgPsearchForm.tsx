@@ -31,7 +31,6 @@ import { getNumericValue, serializeExecutionData, type SavedAuditData, type Regi
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
-import InformePGP from '../report/InformePGP';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
 import NotaTecnicaValidator from './NotaTecnicaValidator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -440,18 +439,72 @@ const PgPsearchForm = forwardRef<
     };
   }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData]);
 
-  // \u2500\u2500 Descarga de la matriz comparativa (formato MatrizRow) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // \u2500\u2500 Descarga consolidada (1 fila por CUPS, suma todos los meses) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadMatrizComparativa = useCallback(() => {
-    if (!showComparison || !pgpData) return;
-    toast({ title: "Generando Excel...", description: "Matriz NT vs Ejecuci\u00F3n." });
-    const rows = buildMatrizEjecucion({ executionDataByMonth, pgpData });
+    if (!showComparison || !comparisonSummary) return;
+    toast({ title: "Generando Excel...", description: "Matriz consolidada NT vs Ejecuci\u00F3n." });
+
+    // Helper: diagn\u00F3stico m\u00E1s frecuente de un CUPS en todos los meses
+    const getDiagnostico = (cup: string): string => {
+      const diagMap = new Map<string, number>();
+      executionDataByMonth.forEach(monthData => {
+        const cd = monthData.cupCounts.get(cup) || monthData.cupCounts.get(cup.toLowerCase());
+        if (cd) {
+          cd.diagnoses.forEach((count, diag) => {
+            diagMap.set(diag, (diagMap.get(diag) || 0) + count);
+          });
+        }
+      });
+      if (diagMap.size === 0) return '';
+      return [...diagMap.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
+    };
+
+    type ConsolidatedRow = {
+      CUPS: string; Descripcion: string; Diagnostico_Principal: string;
+      Cantidad_Esperada: number; Cantidad_Ejecutada: number; Diferencia: number;
+      percentage_ejecucion: number; '%_Ejecucion': string; Clasificacion: string;
+      Valor_Unitario: number; Valor_Esperado: number; Valor_Ejecutado: number; Valor_a_Reconocer: number;
+    };
+
+    const buildRow = (c: DeviatedCupInfo, clasificacion: string): ConsolidatedRow => {
+      const pct = c.expectedFrequency > 0 ? (c.realFrequency / c.expectedFrequency) * 100 : (c.realFrequency > 0 ? 9999 : 0);
+      return {
+        CUPS: c.cup, Descripcion: c.description || c.cup,
+        Diagnostico_Principal: getDiagnostico(c.cup),
+        Cantidad_Esperada: c.expectedFrequency, Cantidad_Ejecutada: c.realFrequency,
+        Diferencia: c.deviation,
+        percentage_ejecucion: Math.min(pct, 9999),
+        '%_Ejecucion': c.expectedFrequency > 0 ? `${pct.toFixed(0)}%` : 'N/A',
+        Clasificacion: clasificacion,
+        Valor_Unitario: c.unitValueFromNote || 0,
+        Valor_Esperado: c.expectedFrequency * (c.unitValueFromNote || 0),
+        Valor_Ejecutado: c.totalValue, Valor_a_Reconocer: c.valorReconocer || 0,
+      };
+    };
+
+    const rows: ConsolidatedRow[] = [
+      ...comparisonSummary.overExecutedCups.map(c   => buildRow(c, 'Sobre-ejecutado')),
+      ...comparisonSummary.underExecutedCups.map(c   => buildRow(c, 'Sub-ejecutado')),
+      ...comparisonSummary.missingCups.map(c         => buildRow(c, 'Faltante')),
+      ...comparisonSummary.normalExecutionCups.map(c  => buildRow(c, 'Ejecuci\u00F3n Normal')),
+      ...comparisonSummary.unexpectedCups.map(c => ({
+        CUPS: c.cup, Descripcion: c.description || c.cup,
+        Diagnostico_Principal: getDiagnostico(c.cup),
+        Cantidad_Esperada: 0, Cantidad_Ejecutada: c.realFrequency,
+        Diferencia: c.realFrequency, percentage_ejecucion: 9999,
+        '%_Ejecucion': 'N/A', Clasificacion: 'Inesperado',
+        Valor_Unitario: 0, Valor_Esperado: 0,
+        Valor_Ejecutado: c.totalValue, Valor_a_Reconocer: 0,
+      } as ConsolidatedRow)),
+    ];
+
     const csv = Papa.unparse(rows, { delimiter: ";" });
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.setAttribute("href", URL.createObjectURL(blob));
-    link.setAttribute("download", `matriz_comparativa_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
+    link.setAttribute("download", `matriz_consolidada_${selectedPrestador?.PRESTADOR || 'IPS'}.xls`);
     link.click();
-  }, [showComparison, pgpData, executionDataByMonth, selectedPrestador, toast]);
+  }, [showComparison, comparisonSummary, executionDataByMonth, selectedPrestador, toast]);
 
   // \u2500\u2500 Descarga detalle por usuario/servicio (requiere rawJsonData) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadExecutionDetail = useCallback(() => {
@@ -870,18 +923,6 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-4">
         {analysisHeader}
-        {/* Botón Descargar Matriz NT vs Ejecución */}
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadMatrizComparativa}
-            title="Descarga la matriz completa NT vs Ejecución por CUPS y mes"
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Descargar Matriz NT vs Ejecución (.xls)
-          </Button>
-        </div>
         <InformeDesviaciones comparisonSummary={comparisonSummary!} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
       </div>
     );
@@ -892,6 +933,18 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-4">
         {analysisHeader}
+        {/* Descarga matriz consolidada NT vs Ejecución */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadMatrizComparativa}
+            title="Descarga la matriz consolidada NT vs Ejecución (1 fila por CUPS, todas las clasificaciones)"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Descargar Matriz Consolidada (.xls)
+          </Button>
+        </div>
         <DiscountMatrix
           data={comparisonSummary!.matrizDescuentos}
           executionDataByMonth={executionDataByMonth}
@@ -908,38 +961,12 @@ const PgPsearchForm = forwardRef<
     );
   }
 
-  // ── informes (General): solo Registro de Informes ──
+  // ── informes: vista única — Certificado de Ejecución ──
   if (activeModule === "informes") {
     return (
       <div className="space-y-6">
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <CertificadoTrimestral
-            comparisonSummary={comparisonSummary}
-            pgpData={reportData}
-            selectedPrestador={selectedPrestador}
-            executionDataByMonth={executionDataByMonth}
-            userName={userName}
-            initialResponsable={initialAuditData?.auditor_nombre || userName}
-            initialInforme={initialAuditData?.informeRestored ?? null}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // ── cierre (Análisis): Generación de Certificados completa ──
-  if (activeModule === "cierre") {
-    return (
-      <div className="space-y-6">
-        {analysisHeader}
-        <div className="flex flex-col gap-6">
-          <div className="rounded-xl border border-border bg-card shadow-sm p-5">
-            <h3 className="font-semibold text-sm mb-4">Informe de Gestión Anual (PDF)</h3>
-            <InformePGP data={reportData} comparisonSummary={comparisonSummary!} />
-          </div>
-          <div className="rounded-xl border border-border bg-card shadow-sm p-5">
-            <h3 className="font-semibold text-sm mb-4">Certificado de Ejecución (DI-MT-SD-F-14)</h3>
-            <CertificadoTrimestral
               comparisonSummary={comparisonSummary}
               pgpData={reportData}
               selectedPrestador={selectedPrestador}
@@ -1036,7 +1063,6 @@ const PgPsearchForm = forwardRef<
             />
           </div>
         </div>
-      </div>
     );
   }
 
