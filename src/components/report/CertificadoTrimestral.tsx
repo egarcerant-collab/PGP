@@ -77,6 +77,8 @@ const MONTH_LOWER_MAP: Record<string, string> = {
 
 /**
  * Calcula las fechas reales del período evaluado a partir de los meses cargados.
+ * Usa el mes con MENOR número como inicio y el de MAYOR número como fin,
+ * independientemente del orden en que vengan en el array.
  * @param months Array con { name: string } donde name es el nombre del mes en MAYÚSCULAS (ej. "ENERO").
  * @param contractDateStr Fecha de inicio del contrato en formato "dd/mm/yyyy" para extraer el año.
  */
@@ -86,10 +88,20 @@ function calcPeriodDates(
 ): { fechaInicioPeriodo: string; fechaFinPeriodo: string } {
   const parts = contractDateStr.split('/');
   const year = parts.length === 3 ? (parseInt(parts[2]) || new Date().getFullYear()) : new Date().getFullYear();
-  const firstMonth = months.length > 0 ? months[0].name : 'ENERO';
-  const lastMonth  = months.length > 0 ? months[months.length - 1].name : firstMonth;
+
+  if (months.length === 0) {
+    return { fechaInicioPeriodo: `01/enero/${year}`, fechaFinPeriodo: `31/enero/${year}` };
+  }
+
+  // Ordenar por número de mes para garantizar inicio ≤ fin
+  const sorted = [...months].sort(
+    (a, b) => (MONTH_NUM_MAP[a.name] || 0) - (MONTH_NUM_MAP[b.name] || 0)
+  );
+  const firstMonth = sorted[0].name;
+  const lastMonth  = sorted[sorted.length - 1].name;
   const lastMonthNum = MONTH_NUM_MAP[lastMonth] || 1;
   const lastDay = new Date(year, lastMonthNum, 0).getDate(); // día 0 del mes siguiente = último día del mes actual
+
   return {
     fechaInicioPeriodo: `01/${MONTH_LOWER_MAP[firstMonth] || firstMonth.toLowerCase()}/${year}`,
     fechaFinPeriodo: `${lastDay}/${MONTH_LOWER_MAP[lastMonth] || lastMonth.toLowerCase()}/${year}`,
