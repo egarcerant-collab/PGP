@@ -290,6 +290,7 @@ export default function CertificadoTrimestral({
     initialResponsable ? initialResponsable.toUpperCase() : (userName ? userName.toUpperCase() : '')
   );
   const [supervisorName, setSupervisorName] = useState('');
+  const [showSupervisor, setShowSupervisor] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedNum, setSavedNum] = useState<string | null>(null);
@@ -351,6 +352,7 @@ export default function CertificadoTrimestral({
     setContrato('');
     setValorCupsInesperadas(0);
     setCantidadCupsInesperadas('');
+    setShowSupervisor(true);
   }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR]);
 
   // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
@@ -900,13 +902,13 @@ export default function CertificadoTrimestral({
           },
           {
             columns: [
-              {
+              ...(showSupervisor ? [{
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
                   { text: supervisorName || '', bold: true, alignment: 'center', fontSize: 7 },
                   { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true },
                 ],
-              },
+              }] : []),
               {
                 stack: [
                   { text: '________________________________', alignment: 'center', fontSize: 7.5 },
@@ -1103,6 +1105,7 @@ export default function CertificadoTrimestral({
         fechaInicio,
         fechaFin,
         supervisorName,
+        showSupervisor,
         advanceMonths,
         adv80,
         totalAdv,
@@ -1204,7 +1207,8 @@ export default function CertificadoTrimestral({
 
     const {
       mesData: md, monthlyNT, fechaInicio, fechaFin,
-      supervisorName: svName, advanceMonths, adv80, totalAdv,
+      supervisorName: svName, showSupervisor: showSvFromRecord,
+      advanceMonths, adv80, totalAdv,
       ntPeriodoFull, ntPeriodo, minPeriodo, maxPeriodo, lastMonthPay,
       notaAdicional: notaAd, notaEjecucionFinanciera: notaEF,
       valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
@@ -1409,7 +1413,7 @@ export default function CertificadoTrimestral({
         },
         {
           columns: [
-            { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] },
+            ...(showSvFromRecord !== false ? [{ stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] }] : []),
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Supervisor(a) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
           margin: [0, 0, 0, 5],
@@ -1485,8 +1489,25 @@ export default function CertificadoTrimestral({
             <Input value={responsable} onChange={e => setResponsable(e.target.value)} placeholder="Nombre del auditor..." className="border-blue-200 focus:border-blue-400" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-blue-700">Coordinadora(o) de la Dirección del Riesgo en Salud</Label>
-            <Input value={supervisorName} onChange={e => setSupervisorName(e.target.value)} placeholder="Nombre del coordinador(a)..." className="border-blue-200 focus:border-blue-400" />
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-blue-700">Coordinadora(o) de la Dirección del Riesgo en Salud</Label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showSupervisor}
+                  onChange={e => setShowSupervisor(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-blue-600"
+                />
+                <span className="text-[11px] text-slate-500">Mostrar en acta</span>
+              </label>
+            </div>
+            <Input
+              value={supervisorName}
+              onChange={e => setSupervisorName(e.target.value)}
+              placeholder="Nombre del coordinador(a)..."
+              disabled={!showSupervisor}
+              className={`border-blue-200 focus:border-blue-400 transition-opacity ${!showSupervisor ? 'opacity-40' : ''}`}
+            />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
