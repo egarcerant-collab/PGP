@@ -166,6 +166,8 @@ type InformeRecord = {
   descontar: number | null;
   reconocer: number | null;
   responsable: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pdf_data: Record<string, any> | null;
 };
 
 async function fetchInformesByPrestador(prestador: string, contrato: string): Promise<InformeRecord[]> {
@@ -177,7 +179,7 @@ async function fetchInformesByPrestador(prestador: string, contrato: string): Pr
 
     const { data, error } = await supabase
       .from('informes')
-      .select('numero, prestador, contrato, periodo, tipo_periodo, fecha, total_ejecutado, valor_final, descontar, reconocer, responsable');
+      .select('numero, prestador, contrato, periodo, tipo_periodo, fecha, total_ejecutado, valor_final, descontar, reconocer, responsable, pdf_data');
 
     if (error || !data?.length) return [];
 
@@ -200,6 +202,7 @@ async function fetchInformesByPrestador(prestador: string, contrato: string): Pr
         descontar: typeof r.descontar === 'number' ? r.descontar : parseNumberLoose(r.descontar),
         reconocer: typeof r.reconocer === 'number' ? r.reconocer : parseNumberLoose(r.reconocer),
         responsable: r.responsable ?? null,
+        pdf_data: r.pdf_data ?? null,
       }));
   } catch {
     return [];
@@ -315,40 +318,87 @@ function fillMesesFueraContrato(ws: ExcelJS.Worksheet, row: ProviderRow) {
   }
 }
 
+/** Escribe las observaciones del informe en la columna J de la fila indicada */
+function fillObservaciones(ws: ExcelJS.Worksheet, fila: number, info: InformeRecord) {
+  const partes: string[] = [];
+  if (info.responsable) partes.push(`Auditor: ${info.responsable}`);
+  if (info.fecha) partes.push(`Fecha auditoría: ${info.fecha}`);
+  if (info.valor_final !== null && info.valor_final !== undefined) {
+    partes.push(`Valor final: $${Number(info.valor_final).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  }
+  if (info.descontar && info.descontar > 0) {
+    partes.push(`Descuento: $${Number(info.descontar).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  }
+  if (info.reconocer && info.reconocer > 0) {
+    partes.push(`Reconocimiento: $${Number(info.reconocer).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  }
+  if (info.numero) partes.push(`Informe ${info.numero}`);
+  if (partes.length) {
+    const cell = ws.getCell(`J${fila}`);
+    cell.value = partes.join(' | ');
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  }
+}
+
+/**
+ * Llena la hoja 04_Seguimiento_Mensual con los valores de ejecución de TODOS los informes,
+ * sin importar si son MENSUAL, BIMESTRAL o TRIMESTRAL.
+ *
+ * - MENSUAL → escribe total_ejecutado en la fila del mes del informe.
+ * - BIMESTRAL / TRIMESTRAL → lee pdf_data.mesData para obtener el valor exacto de cada mes
+ *   y lo escribe en su fila correspondiente. Esto garantiza que se suman TODOS los meses.
+ */
 function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]) {
-  const mensuales = informes.filter(
-    (r) => normalizeKey(r.tipo_periodo || '') === 'MENSUAL'
-  );
+  for (const info of informes) {
+    const tipoPeriodo = normalizeKey(info.tipo_periodo || '');
 
-  for (const info of mensuales) {
-    const fila = detectMonthRow(info.periodo || '');
-    if (!fila) continue;
+    if (tipoPeriodo === 'MENSUAL') {
+      // Informe de un solo mes: usar total_ejecutado directamente
+      const fila = detectMonthRow(info.periodo || '');
+      if (!fila) continue;
 
-    // E: Valor ejecutado (INPUT)
-    if (info.total_ejecutado !== null && info.total_ejecutado !== undefined) {
-      const cell = ws.getCell(`E${fila}`);
-      cell.value = info.total_ejecutado;
-      cell.numFmt = '"$"#,##0.00';
+      if (info.total_ejecutado !== null && info.total_ejecutado !== undefined) {
+        const cell = ws.getCell(`E${fila}`);
+        cell.value = info.total_ejecutado;
+        cell.numFmt = '"$"#,##0.00';
+      }
+      fillObservaciones(ws, fila, info);
+      continue;
     }
 
-    // J: Observaciones — incluir auditor, fecha, valor final y ajustes
-    const partes: string[] = [];
-    if (info.responsable) partes.push(`Auditor: ${info.responsable}`);
-    if (info.fecha) partes.push(`Fecha auditoría: ${info.fecha}`);
-    if (info.valor_final !== null && info.valor_final !== undefined) {
-      partes.push(`Valor final: $${Number(info.valor_final).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    if (info.descontar && info.descontar > 0) {
-      partes.push(`Descuento: $${Number(info.descontar).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    if (info.reconocer && info.reconocer > 0) {
-      partes.push(`Reconocimiento: $${Number(info.reconocer).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    if (info.numero) partes.push(`Informe ${info.numero}`);
-    if (partes.length) {
-      const cell = ws.getCell(`J${fila}`);
-      cell.value = partes.join(' | ');
-      cell.alignment = { vertical: 'middle', wrapText: true };
+    // BIMESTRAL / TRIMESTRAL: leer los valores por mes desde pdf_data.mesData
+    // pdf_data.mesData = [{ name: "ENERO", value: X, cups: Y }, ...]
+    const mesData: Array<{ name: string; value: number }> | undefined =
+      Array.isArray(info.pdf_data?.mesData) ? info.pdf_data.mesData : undefined;
+
+    if (mesData && mesData.length > 0) {
+      for (let i = 0; i < mesData.length; i++) {
+        const m = mesData[i];
+        const fila = MES_A_FILA[normalizeKey(m.name || '')];
+        if (!fila) continue;
+
+        if (m.value !== null && m.value !== undefined) {
+          const cell = ws.getCell(`E${fila}`);
+          cell.value = m.value;
+          cell.numFmt = '"$"#,##0.00';
+        }
+
+        // Observaciones solo en el último mes del período
+        if (i === mesData.length - 1) {
+          fillObservaciones(ws, fila, info);
+        }
+      }
+    } else {
+      // Fallback: si no hay pdf_data, usar total_ejecutado en el primer mes del período
+      const fila = detectMonthRow(info.periodo || '');
+      if (!fila) continue;
+
+      if (info.total_ejecutado !== null && info.total_ejecutado !== undefined) {
+        const cell = ws.getCell(`E${fila}`);
+        cell.value = info.total_ejecutado;
+        cell.numFmt = '"$"#,##0.00';
+      }
+      fillObservaciones(ws, fila, info);
     }
   }
 }
@@ -432,8 +482,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Forzar recálculo al abrir
-    // @ts-expect-error propiedad interna de ExcelJS
-    workbook.calcProperties = { ...workbook.calcProperties, fullCalcOnLoad: true };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (workbook as any).calcProperties = { ...(workbook as any).calcProperties, fullCalcOnLoad: true };
 
     const contractForName = sanitizeFilePart(mainRow.contrato || 'SIN_CONTRATO');
     const providerForName = sanitizeFilePart(prestador || 'SIN_PRESTADOR');
