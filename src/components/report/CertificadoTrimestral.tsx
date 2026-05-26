@@ -2009,7 +2009,7 @@ export default function CertificadoTrimestral({
                         if (viewPwInput === '123456') {
                           setViewUnlocked(true); setViewPwError(false);
                           setViewEditing(false);
-                          setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
+                          setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '', showSupervisor: viewingInf.pdfData?.showSupervisor !== false });
                         } else setViewPwError(true);
                       }
                     }}
@@ -2023,7 +2023,7 @@ export default function CertificadoTrimestral({
                       if (viewPwInput === '123456') {
                         setViewUnlocked(true); setViewPwError(false);
                         setViewEditing(false);
-                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '', showSupervisor: viewingInf.pdfData?.showSupervisor !== false });
                       } else setViewPwError(true);
                     }}>Abrir</Button>
                   </div>
@@ -2074,8 +2074,25 @@ export default function CertificadoTrimestral({
                       <Input type="date" value={viewEditData.fecha || ''} onChange={e => setViewEditData((p: any) => ({ ...p, fecha: e.target.value }))} className="text-sm" />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Coordinador(a) / Supervisor(a)</Label>
-                      <Input value={viewEditData.supervisorName || ''} onChange={e => setViewEditData((p: any) => ({ ...p, supervisorName: e.target.value }))} placeholder="Nombre y cargo del coordinador(a)..." className="text-sm" />
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-xs text-muted-foreground">Coordinador(a) / Supervisor(a)</Label>
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={viewEditData.showSupervisor !== false}
+                            onChange={e => setViewEditData((p: any) => ({ ...p, showSupervisor: e.target.checked }))}
+                            className="w-3.5 h-3.5 accent-blue-600"
+                          />
+                          <span className="text-[11px] text-slate-500">Mostrar en acta</span>
+                        </label>
+                      </div>
+                      <Input
+                        value={viewEditData.supervisorName || ''}
+                        onChange={e => setViewEditData((p: any) => ({ ...p, supervisorName: e.target.value }))}
+                        placeholder="Nombre y cargo del coordinador(a)..."
+                        disabled={viewEditData.showSupervisor === false}
+                        className={`text-sm transition-opacity ${viewEditData.showSupervisor === false ? 'opacity-40' : ''}`}
+                      />
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
@@ -2128,7 +2145,7 @@ export default function CertificadoTrimestral({
                   <div className="flex gap-2 justify-end flex-wrap">
                     <Button size="sm" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50"
                       onClick={() => {
-                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '', showSupervisor: viewingInf.pdfData?.showSupervisor !== false });
                         setViewEditing(true);
                       }}>
                       ✏️ Editar

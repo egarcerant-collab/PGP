@@ -160,10 +160,14 @@ export async function PATCH(request: Request) {
       if (body.responsable!== undefined) fields.responsable  = body.responsable;
       if (body.fecha      !== undefined) fields.fecha        = body.fecha;
 
-      // supervisorName vive dentro de pdf_data — merge sin sobreescribir otros campos
-      if (body.supervisorName !== undefined) {
+      // supervisorName y showSupervisor viven dentro de pdf_data — merge sin sobreescribir otros campos
+      if (body.supervisorName !== undefined || body.showSupervisor !== undefined) {
         const { data: existing } = await db.from('informes').select('pdf_data').eq('numero', numero).maybeSingle();
-        fields.pdf_data = { ...(existing?.pdf_data || {}), supervisorName: body.supervisorName };
+        fields.pdf_data = {
+          ...(existing?.pdf_data || {}),
+          ...(body.supervisorName !== undefined ? { supervisorName: body.supervisorName } : {}),
+          ...(body.showSupervisor !== undefined ? { showSupervisor: body.showSupervisor } : {}),
+        };
       }
 
       const { error } = await db.from('informes').update(fields).eq('numero', numero);
