@@ -1217,6 +1217,12 @@ export default function CertificadoTrimestral({
       descontar, reconocer, valorFinal, totalEjecutadoFinal, totalCups,
     } = pd;
 
+    // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
+    // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
+    const showSv = inf.showSupervisor !== undefined
+      ? Boolean(inf.showSupervisor)
+      : (showSvFromRecord !== false);
+
     // ── Fechas reales del período evaluado (no las del contrato completo) ──
     const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
 
@@ -1413,7 +1419,7 @@ export default function CertificadoTrimestral({
         },
         {
           columns: [
-            ...(showSvFromRecord !== false ? [{ stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] }] : []),
+            ...(showSv ? [{ stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: svName || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Coordinadora(o) de la Dirección del Riesgo en Salud', alignment: 'center', fontSize: 7, italics: true }] }] : []),
             { stack: [{ text: '________________________________', alignment: 'center', fontSize: 7.5 }, { text: inf.responsable || '', bold: true, alignment: 'center', fontSize: 7 }, { text: 'Supervisor(a) del Contrato', alignment: 'center', fontSize: 6.5, color: '#555555' }] },
           ],
           margin: [0, 0, 0, 5],
@@ -2107,13 +2113,23 @@ export default function CertificadoTrimestral({
                             body: JSON.stringify({ numero: viewingInf.numero, ...viewEditData, updateFields: true }),
                           });
                           if (!res.ok) throw new Error('Error al guardar');
+                          // Merge también dentro de pdfData para que handleGenerateFromRecord
+                          // lea los valores actualizados (showSupervisor, supervisorName)
+                          const pdfDataMerge = {
+                            supervisorName: viewEditData.supervisorName,
+                            showSupervisor: viewEditData.showSupervisor,
+                          };
+                          const mergeInforme = (i: any) =>
+                            i.numero === viewingInf.numero
+                              ? { ...i, ...viewEditData, pdfData: { ...(i.pdfData || {}), ...pdfDataMerge } }
+                              : i;
                           // Actualizar historial local
-                          setHistorial(prev => prev.map(i => i.numero === viewingInf.numero ? { ...i, ...viewEditData } : i));
+                          setHistorial(prev => prev.map(mergeInforme));
                           // Actualizar también el selectedPrestadorGroup si está abierto
                           if (selectedPrestadorGroup) {
-                            setSelectedPrestadorGroup(prev => prev ? { ...prev, infs: prev.infs.map(i => i.numero === viewingInf.numero ? { ...i, ...viewEditData } : i) } : null);
+                            setSelectedPrestadorGroup(prev => prev ? { ...prev, infs: prev.infs.map(mergeInforme) } : null);
                           }
-                          setViewingInf((prev: any) => ({ ...prev, ...viewEditData }));
+                          setViewingInf((prev: any) => ({ ...prev, ...viewEditData, pdfData: { ...(prev.pdfData || {}), ...pdfDataMerge } }));
                           setViewEditing(false);
                           toast({ title: `Informe N° ${viewingInf.numero} actualizado` });
                         } catch {
