@@ -160,6 +160,12 @@ export async function PATCH(request: Request) {
       if (body.responsable!== undefined) fields.responsable  = body.responsable;
       if (body.fecha      !== undefined) fields.fecha        = body.fecha;
 
+      // supervisorName vive dentro de pdf_data — merge sin sobreescribir otros campos
+      if (body.supervisorName !== undefined) {
+        const { data: existing } = await db.from('informes').select('pdf_data').eq('numero', numero).maybeSingle();
+        fields.pdf_data = { ...(existing?.pdf_data || {}), supervisorName: body.supervisorName };
+      }
+
       const { error } = await db.from('informes').update(fields).eq('numero', numero);
       if (error) throw error;
     } else {

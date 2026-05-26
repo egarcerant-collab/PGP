@@ -1988,7 +1988,7 @@ export default function CertificadoTrimestral({
                         if (viewPwInput === '123456') {
                           setViewUnlocked(true); setViewPwError(false);
                           setViewEditing(false);
-                          setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                          setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
                         } else setViewPwError(true);
                       }
                     }}
@@ -2002,7 +2002,7 @@ export default function CertificadoTrimestral({
                       if (viewPwInput === '123456') {
                         setViewUnlocked(true); setViewPwError(false);
                         setViewEditing(false);
-                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
                       } else setViewPwError(true);
                     }}>Abrir</Button>
                   </div>
@@ -2052,6 +2052,10 @@ export default function CertificadoTrimestral({
                       <Label className="text-xs text-muted-foreground mb-1 block">Fecha</Label>
                       <Input type="date" value={viewEditData.fecha || ''} onChange={e => setViewEditData((p: any) => ({ ...p, fecha: e.target.value }))} className="text-sm" />
                     </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Coordinador(a) / Supervisor(a)</Label>
+                      <Input value={viewEditData.supervisorName || ''} onChange={e => setViewEditData((p: any) => ({ ...p, supervisorName: e.target.value }))} placeholder="Nombre y cargo del coordinador(a)..." className="text-sm" />
+                    </div>
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => setViewEditing(false)}>Cancelar</Button>
@@ -2095,12 +2099,15 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">NIT</span><span className="font-semibold">{viewingInf.nit || '—'}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Auditor Concurrente</span><span className="font-semibold text-blue-700">{viewingInf.responsable || '—'}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Fecha</span><span className="font-semibold">{viewingInf.fecha}</span></div>
+                    {viewingInf.pdfData?.supervisorName && (
+                      <div className="flex justify-between"><span className="text-muted-foreground">Coordinador(a)</span><span className="font-semibold text-indigo-700">{viewingInf.pdfData.supervisorName}</span></div>
+                    )}
                   </div>
                   <div className="flex gap-2 justify-end flex-wrap">
                     <Button size="sm" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50"
                       onClick={() => {
-                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '' });
+                        setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '' });
                         setViewEditing(true);
                       }}>
                       ✏️ Editar
