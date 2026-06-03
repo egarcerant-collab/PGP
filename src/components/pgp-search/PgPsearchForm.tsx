@@ -403,6 +403,34 @@ const PgPsearchForm = forwardRef<
     return calculateComparison(pgpData, executionDataByMonth);
   }, [pgpData, executionDataByMonth, showComparison]);
 
+  /** Lee el valor de CUPS Inesperadas guardado en localStorage (sección CUPS)
+   *  para que el Dashboard y la Matriz Financiera muestren el % real. */
+  const valorInesperadasStored = useMemo(() => {
+    if (typeof window === 'undefined') return 0;
+    const MMAP: Record<string, string> = {
+      'Enero':'ENERO','Febrero':'FEBRERO','Marzo':'MARZO','Abril':'ABRIL',
+      'Mayo':'MAYO','Junio':'JUNIO','Julio':'JULIO','Agosto':'AGOSTO',
+      'Septiembre':'SEPTIEMBRE','Octubre':'OCTUBRE','Noviembre':'NOVIEMBRE','Diciembre':'DICIEMBRE',
+      'January':'ENERO','February':'FEBRERO','March':'MARZO','April':'ABRIL',
+      'May':'MAYO','June':'JUNIO','July':'JULIO','August':'AGOSTO',
+      'September':'SEPTIEMBRE','October':'OCTUBRE','November':'NOVIEMBRE','December':'DICIEMBRE',
+    };
+    const prestKey   = (selectedPrestador?.PRESTADOR || 'default').replace(/\s+/g, '_');
+    const months     = comparisonSummary?.monthlyFinancials || [];
+    const periodoKey = months.map(m => MMAP[m.month] || m.month.toUpperCase()).join('-') || 'default';
+    // 1. Intentar clave exacta del período completo
+    const exact = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${periodoKey}`);
+    if (exact && Number(exact) > 0) return Number(exact);
+    // 2. Fallback: sumar mes a mes
+    let sum = 0;
+    for (const m of months) {
+      const mk = MMAP[m.month] || m.month.toUpperCase();
+      const v  = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${mk}`);
+      if (v && Number(v) > 0) sum += Number(v);
+    }
+    return sum;
+  }, [selectedPrestador?.PRESTADOR, comparisonSummary]);
+
   const reportData = useMemo((): ReportData | null => {
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
 
@@ -829,7 +857,7 @@ const PgPsearchForm = forwardRef<
         {/* Mini financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
         </div>
       </div>
     );
@@ -912,7 +940,7 @@ const PgPsearchForm = forwardRef<
         {/* Financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Matriz Financiera Mensual</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
         </div>
       </div>
     );

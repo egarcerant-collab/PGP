@@ -18,9 +18,12 @@ export interface MonthlyFinancialSummary {
 interface FinancialMatrixProps {
   monthlyFinancials: MonthlyFinancialSummary[];
   regimenByMonth?: Record<string, { subsidiado: number; contributivo: number }>;
+  /** Valor de CUPS / Tecnologías Inesperadas (manual) guardado en la sección CUPS.
+   *  Se suma al último mes para mostrar el % real incluyendo inesperadas. */
+  valorCupsInesperadas?: number;
 }
 
-const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, regimenByMonth }) => {
+const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, regimenByMonth, valorCupsInesperadas = 0 }) => {
     
     if (!monthlyFinancials || monthlyFinancials.length === 0) {
         return null;
@@ -58,7 +61,18 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, re
             <CardContent className="space-y-4">
                 {/* Monthly Summary Cards */}
                 <div className="space-y-4">
-                    {monthlyFinancials.map(summary => {
+                    {monthlyFinancials.map((summary, idx) => {
+                        // Sumar inesperadas al último mes (mes de cierre del período)
+                        const isLast = idx === monthlyFinancials.length - 1;
+                        const ejecutadoReal = isLast && valorCupsInesperadas > 0
+                          ? summary.totalValorEjecutado + valorCupsInesperadas
+                          : summary.totalValorEjecutado;
+                        const pctReal = summary.totalValorEsperado > 0
+                          ? (ejecutadoReal / summary.totalValorEsperado) * 100
+                          : summary.percentage;
+                        const adjustedSummary = isLast && valorCupsInesperadas > 0
+                          ? { ...summary, totalValorEjecutado: ejecutadoReal, percentage: pctReal }
+                          : summary;
                         const reg = regimenByMonth?.[summary.month];
                         return (
                          <div key={summary.month} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/20">
@@ -70,13 +84,13 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, re
                                 <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200">
                                     <Landmark className="h-6 w-6 mx-auto text-blue-500 mb-1" />
                                     <p className="text-sm text-muted-foreground">Valor Esperado</p>
-                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(summary.totalValorEsperado)}</p>
+                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(adjustedSummary.totalValorEsperado)}</p>
                                 </div>
-                                {getPercentageCard(summary.percentage)}
+                                {getPercentageCard(adjustedSummary.percentage)}
                                 <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200">
                                     <Wallet className="h-6 w-6 mx-auto text-green-500 mb-1" />
                                     <p className="text-sm text-muted-foreground">Valor Ejecutado</p>
-                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.totalValorEjecutado)}</p>
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(adjustedSummary.totalValorEjecutado)}</p>
                                 </div>
                             </div>
                             {reg && (reg.subsidiado > 0 || reg.contributivo > 0) && (
