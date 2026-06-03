@@ -881,13 +881,15 @@ export default function CertificadoTrimestral({
                   { text: '$ -', ...CS, alignment: 'right' },
                   { text: '$ -', ...CS, alignment: 'right' },
                 ],
-                ...(valorCupsInesperadas > 0 ? [[
-                  { text: `CUPS / Tecnologías Inesperadas   ${fmt(valorCupsInesperadas)}`, ...CS, color: '#1d4ed8', bold: true },
-                  { text: fmt(0), ...CS, alignment: 'right' },
-                  { text: fmt(valorCupsInesperadas), ...CS, alignment: 'right', color: '#1d4ed8', bold: true },
-                ]] : []),
                 [
-                  { text: `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`, ...CS, bold: true, fillColor: '#f0fdf4' },
+                  {
+                    // TOTAL EJECUTADO incluye inesperadas en el valor mostrado
+                    // pero el descuento se calcula sobre RIPS puro
+                    text: valorCupsInesperadas > 0
+                      ? `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)} (incl. ${fmt(valorCupsInesperadas)} tec. inesperadas)`
+                      : `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`,
+                    ...CS, bold: true, fillColor: '#f0fdf4',
+                  },
                   { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
                 ],
@@ -1465,8 +1467,12 @@ export default function CertificadoTrimestral({
               [{ text: `% MINIMO PERMITIDO 90%   ${fmtL(minPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{ text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmtL(ntPeriodoFull)}`, ...CS, bold: true }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right' }],
               [{ text: `% MAXIMO PERMITIDO 110%   ${fmtL(maxPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
-              ...(valCupsIn > 0 ? [[{ text: `CUPS / Tecnologías Inesperadas   ${fmtL(valCupsIn)}`, ...CS, color: '#1d4ed8', bold: true }, { text: fmtL(0), ...CS, alignment: 'right' }, { text: fmtL(valCupsIn), ...CS, alignment: 'right', color: '#1d4ed8', bold: true }]] : []),
-              [{ text: `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`, ...CS, bold: true, fillColor: '#f0fdf4' }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' }],
+              [{
+                text: valCupsIn > 0
+                  ? `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)} (incl. ${fmtL(valCupsIn)} tec. inesperadas)`
+                  : `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
+                ...CS, bold: true, fillColor: '#f0fdf4',
+              }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' }],
             ],
           },
           layout: 'lightHorizontalLines',
