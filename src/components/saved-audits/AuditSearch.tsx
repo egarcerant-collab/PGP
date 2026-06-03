@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Loader2, Play, RefreshCw, FolderOpen, ChevronDown, ChevronUp, FileText, Save, X } from "lucide-react";
+import { Loader2, Play, RefreshCw, FolderOpen, ChevronDown, ChevronUp, FileText, Save, X, LayoutList, LayoutGrid } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
@@ -161,6 +161,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isContinuing, setIsContinuing] = useState(false);
+    const [viewMode, setViewMode] = useState<'agrupada' | 'lista'>('agrupada');
     const { toast } = useToast();
 
     const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -379,6 +380,27 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
 
     const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
 
+    // ── Vista agrupada: agrupa auditorías por prestador ──────────────────────
+    const auditsByPrestador = audits.reduce<Record<string, AuditRecord[]>>((acc, a) => {
+        const key = a.prestador;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(a);
+        return acc;
+    }, {});
+
+    const MONTH_ORDER: Record<string, number> = {
+        Enero:1, Febrero:2, Marzo:3, Abril:4, Mayo:5, Junio:6,
+        Julio:7, Agosto:8, Septiembre:9, Octubre:10, Noviembre:11, Diciembre:12,
+    };
+    const MONTH_COLOR: Record<string, string> = {
+        Enero:'bg-blue-100 text-blue-800', Febrero:'bg-indigo-100 text-indigo-800',
+        Marzo:'bg-violet-100 text-violet-800', Abril:'bg-pink-100 text-pink-800',
+        Mayo:'bg-rose-100 text-rose-800', Junio:'bg-orange-100 text-orange-800',
+        Julio:'bg-amber-100 text-amber-800', Agosto:'bg-yellow-100 text-yellow-800',
+        Septiembre:'bg-lime-100 text-lime-800', Octubre:'bg-green-100 text-green-800',
+        Noviembre:'bg-teal-100 text-teal-800', Diciembre:'bg-cyan-100 text-cyan-800',
+    };
+
     return (
         <div className="space-y-4">
             {isLoading ? (
@@ -391,9 +413,116 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 </div>
             ) : (
                 <>
-                    <p className="text-xs text-muted-foreground">
-                        Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas. Usa <strong>▼</strong> para ver el informe financiero vinculado.
-                    </p>
+                    {/* Toggle vista */}
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                            {viewMode === 'lista'
+                                ? <>Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas.</>
+                                : <><strong>{Object.keys(auditsByPrestador).length}</strong> prestadores · <strong>{audits.length}</strong> auditorías</>}
+                        </p>
+                        <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-muted/40">
+                            <button
+                                onClick={() => setViewMode('agrupada')}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors
+                                    ${viewMode === 'agrupada' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                <LayoutGrid className="h-3.5 w-3.5" /> Agrupada
+                            </button>
+                            <button
+                                onClick={() => setViewMode('lista')}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors
+                                    ${viewMode === 'lista' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                <LayoutList className="h-3.5 w-3.5" /> Lista
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ── VISTA AGRUPADA ── */}
+                    {viewMode === 'agrupada' && (
+                        <div className="rounded-lg border border-border overflow-hidden">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted">
+                                    <tr>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-xs">Prestador</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-xs">Meses auditados</th>
+                                        <th className="px-4 py-2.5 text-center font-semibold text-xs w-16"># Aud.</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-xs">Auditor(es)</th>
+                                        <th className="px-4 py-2.5 text-center font-semibold text-xs w-28">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.entries(auditsByPrestador).map(([prestador, group]) => {
+                                        // Meses únicos, ordenados cronológicamente
+                                        const months = [...new Set(group.map(a => a.month))]
+                                            .sort((a, b) => (MONTH_ORDER[a] || 99) - (MONTH_ORDER[b] || 99));
+                                        // Auditores únicos
+                                        const auditores = [...new Set(group.map(a => (a as any).auditores || (a as any).auditor || '').filter(Boolean))];
+                                        // Seleccionar hasta 3 auditorías de este grupo (las más recientes)
+                                        const toSelect = group.slice(0, 3).map(a => a.id);
+                                        const allSelected = toSelect.every(id => selectedIds.includes(id));
+                                        return (
+                                            <tr key={prestador} className="border-t border-border hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-3">
+                                                    <span className="font-semibold text-sm">{prestador}</span>
+                                                    <div className="text-xs text-muted-foreground">{group[0]?.nit}</div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {months.map(m => (
+                                                            <span key={m} className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${MONTH_COLOR[m] || 'bg-gray-100 text-gray-700'}`}>
+                                                                {m.toUpperCase()}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
+                                                        {group.length}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-xs text-muted-foreground">
+                                                    {auditores.length > 0 ? auditores.join(', ') : '—'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 px-2 text-xs"
+                                                            onClick={() => {
+                                                                setSelectedIds(toSelect);
+                                                                setViewMode('lista');
+                                                            }}
+                                                            title="Ver en lista y seleccionar"
+                                                        >
+                                                            <LayoutList className="h-3 w-3 mr-1" /> Ver
+                                                        </Button>
+                                                        {group.length <= 3 && (
+                                                            <Button
+                                                                size="sm"
+                                                                className="h-7 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                                onClick={() => {
+                                                                    setSelectedIds(toSelect);
+                                                                    setViewMode('lista');
+                                                                }}
+                                                                title="Combinar y cargar auditorías"
+                                                            >
+                                                                <Play className="h-3 w-3 mr-1" /> Cargar
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* ── VISTA LISTA (existente) ── */}
+                    {viewMode === 'lista' && (
                     <div className="rounded-lg border border-border overflow-auto max-h-[520px]">
                         <table className="w-full text-sm">
                             <thead className="bg-muted sticky top-0 z-10">
@@ -491,6 +620,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                             </tbody>
                         </table>
                     </div>
+                    )} {/* fin viewMode=lista */}
                 </>
             )}
 
