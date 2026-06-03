@@ -2073,14 +2073,19 @@ export default function CertificadoTrimestral({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Valor Ejecutado</Label>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Valor Ejecutado (NT)</Label>
                         <Input type="number" value={viewEditData.totalEjecutado ?? viewingInf.totalEjecutado ?? 0} onChange={e => setViewEditData((p: any) => ({ ...p, totalEjecutado: Number(e.target.value) }))} className="text-sm" />
-                        <p className="text-[10px] text-slate-400 mt-0.5">Incluye CUPS inesperadas si aplica</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Solo RIPS, sin inesperadas</p>
                       </div>
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
-                        <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
+                        <Label className="text-xs text-muted-foreground mb-1 block">+ CUPS Inesperadas</Label>
+                        <Input type="number" value={viewEditData.valorCupsInesperadas ?? (viewingInf.pdfData?.valorCupsInesperadas || 0)} onChange={e => setViewEditData((p: any) => ({ ...p, valorCupsInesperadas: Number(e.target.value) }))} className="text-sm" placeholder="0" />
+                        <p className="text-[10px] text-orange-400 mt-0.5">Se guarda en pdf_data ✓</p>
                       </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
+                      <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -2137,8 +2142,9 @@ export default function CertificadoTrimestral({
                           // Merge también dentro de pdfData para que handleGenerateFromRecord
                           // lea los valores actualizados (showSupervisor, supervisorName)
                           const pdfDataMerge = {
-                            supervisorName: viewEditData.supervisorName,
-                            showSupervisor: viewEditData.showSupervisor,
+                            supervisorName:       viewEditData.supervisorName,
+                            showSupervisor:       viewEditData.showSupervisor,
+                            valorCupsInesperadas: viewEditData.valorCupsInesperadas,
                           };
                           const mergeInforme = (i: any) =>
                             i.numero === viewingInf.numero
