@@ -340,7 +340,10 @@ export default function CertificadoTrimestral({
   }, [initialResponsable]);
 
   // Limpia TODAS las notas y campos sensibles cuando cambia el prestador
-  // Evita que los datos de un prestador contaminen a otro
+  // Evita que los datos de un prestador contaminen a otro.
+  // Al mismo tiempo, restaura el valor de CUPS Inesperadas guardado en localStorage
+  // por InformeDesviaciones (sección CUPS) para que el certificado lo use sin
+  // que el usuario tenga que volver a introducirlo.
   useEffect(() => {
     setNotaEjecucionFinanciera('');
     setNotaAdicional('');
@@ -350,9 +353,16 @@ export default function CertificadoTrimestral({
     setNotaAdPw('');
     setInformeNum('');
     setContrato('');
-    setValorCupsInesperadas(0);
-    setCantidadCupsInesperadas('');
     setShowSupervisor(true);
+
+    // Leer valores de CUPS Inesperadas guardados en localStorage por la sección CUPS
+    const prestKey    = (selectedPrestador?.PRESTADOR || 'default').replace(/\s+/g, '_');
+    const storageKey  = `pgp-cups-inesperadas-manual-${prestKey}`;
+    const cantidadKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
+    const savedValor  = localStorage.getItem(storageKey);
+    const savedCant   = localStorage.getItem(cantidadKey);
+    setValorCupsInesperadas(savedValor && Number(savedValor) > 0 ? Number(savedValor) : 0);
+    setCantidadCupsInesperadas(savedCant || '');
   }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR]);
 
   // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
