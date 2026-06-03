@@ -33,6 +33,8 @@ interface InformeRestored {
   notaAdicional?: string;
   valorCupsInesperadas?: number;
   cantidadCupsInesperadas?: string;
+  /** total_ejecutado guardado en Supabase (incluye inesperadas si las hubo) */
+  totalEjecutadoGuardado?: number;
 }
 
 export interface NotasAuditoria {
@@ -413,9 +415,20 @@ export default function CertificadoTrimestral({
       setNotaEjecucionFinanciera(initialInforme.notaEjecucionFinanciera);
     if (initialInforme.notaAdicional !== undefined)
       setNotaAdicional(initialInforme.notaAdicional);
-    // Restaurar valor de CUPS / Tecnologías Inesperadas desde el informe
-    if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0)
+    // Restaurar CUPS Inesperadas — 3 fuentes en orden de prioridad:
+    // 1. pdf_data.valorCupsInesperadas (guardado explícitamente)
+    // 2. Diferencia entre total_ejecutado guardado y total RIPS actual
+    //    (para informes editados antes de que se guardara el campo explícito)
+    // 3. 0 (ninguna fuente disponible)
+    if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0) {
       setValorCupsInesperadas(initialInforme.valorCupsInesperadas);
+    } else if (initialInforme.totalEjecutadoGuardado && initialInforme.totalEjecutadoGuardado > 0) {
+      // Calcular el total RIPS del período restaurado desde comparisonSummary
+      const currentRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
+        .reduce((s, m) => s + m.totalValorEjecutado, 0);
+      const derivedInesperadas = initialInforme.totalEjecutadoGuardado - currentRIPSTotal;
+      if (derivedInesperadas > 0) setValorCupsInesperadas(Math.round(derivedInesperadas));
+    }
     if (initialInforme.cantidadCupsInesperadas !== undefined && initialInforme.cantidadCupsInesperadas !== '')
       setCantidadCupsInesperadas(initialInforme.cantidadCupsInesperadas);
     if (initialInforme.tipoPeriodo) {

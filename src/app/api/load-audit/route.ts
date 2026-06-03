@@ -98,6 +98,10 @@ export async function GET(request: Request) {
             notaAdicional: notaAd,
             valorCupsInesperadas,
             cantidadCupsInesperadas,
+            // Permite derivar inesperadas = totalEjecutadoGuardado - RIPS actual
+            // cuando pdf_data.valorCupsInesperadas es 0 (guardado antes del fix)
+            totalEjecutadoGuardado: typeof match.total_ejecutado === 'number'
+              ? match.total_ejecutado : 0,
           };
 
           // ── Auto-sincronización permanente ──────────────────────────────────
