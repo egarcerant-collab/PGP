@@ -638,13 +638,17 @@ export default function CertificadoTrimestral({
 
       const totalEjecutado = mesData.reduce((a, m) => a + m.value, 0);
       const totalCups = mesData.reduce((a, m) => a + m.cups, 0);
-      // Suma CUPS / Tecnologías Inesperadas al total ejecutado para el cálculo de bandas
+      // Total final = RIPS + inesperadas (para mostrar en tabla y narrativa)
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
 
-      // ── Cálculo DESCONTAR / RECONOCER según ejecución real vs banda 90-110% ──
-      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
-      const valorFinal = ntPeriodo - descontar + reconocer;
+      // ── Cálculo DESCONTAR / RECONOCER ──
+      // La comparación contra las bandas usa SOLO el valor RIPS (sin inesperadas).
+      // Las inesperadas son un reconocimiento separado que se suma al valor final.
+      // Esto evita que las inesperadas "oculten" un déficit de ejecución RIPS.
+      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
+      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      // valorFinal = NT − descuento_RIPS + reconocer_RIPS + inesperadas_reconocidas
+      const valorFinal = ntPeriodo - descontar + reconocer + valorCupsInesperadas;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
       const detalleCups = mesData.map((m, i) => {
@@ -1152,9 +1156,11 @@ export default function CertificadoTrimestral({
       const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
-      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
-      const valorFinal = ntPeriodo - descontar + reconocer;
+      // Comparación con bandas: solo RIPS (sin inesperadas)
+      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
+      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
+      // valorFinal incluye inesperadas reconocidas por separado
+      const valorFinal = ntPeriodo - descontar + reconocer + valorCupsInesperadas;
 
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
       const ciudadRaw = String(selectedPrestador.CIUDAD || (selectedPrestador as Record<string,string>)['MUNICIPIO'] || 'RIOHACHA').trim().toUpperCase();
@@ -1280,8 +1286,19 @@ export default function CertificadoTrimestral({
       valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
       periodoLabel, periodType: pt, empresa, nit: empresaNit,
       municipio, depto, contratoNum, periodo, n, expectedMonths,
-      descontar, reconocer, valorFinal, totalEjecutadoFinal, totalCups,
+      totalEjecutadoFinal, totalCups,
     } = pd;
+
+    // Recalcular descontar/reconocer/valorFinal con lógica correcta:
+    // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
+    const totalEjecutadoRIPS = totalEjecutadoFinal - valCupsIn;
+    const descontarR = totalEjecutadoRIPS < minPeriodo ? minPeriodo - totalEjecutadoRIPS : 0;
+    const reconocerR = totalEjecutadoRIPS > maxPeriodo ? totalEjecutadoRIPS - maxPeriodo : 0;
+    const valorFinalR = ntPeriodo - descontarR + reconocerR + valCupsIn;
+    // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
+    const descontar = descontarR;
+    const reconocer = reconocerR;
+    const valorFinal = valorFinalR;
 
     // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
     // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
