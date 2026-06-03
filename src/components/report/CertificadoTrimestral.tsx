@@ -815,8 +815,11 @@ export default function CertificadoTrimestral({
                   { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                   { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                 ],
-                ...mesData.map(m => {
-                  const pct = monthlyNT > 0 ? (m.value / monthlyNT) * 100 : 0;
+                ...mesData.map((m, i) => {
+                  // Las inesperadas se suman al último mes (mes de cierre del período)
+                  const isLast = i === mesData.length - 1;
+                  const valMes = isLast ? m.value + valorCupsInesperadas : m.value;
+                  const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                   const ok = pct >= 90 && pct <= 110;
                   const high = pct > 110;
                   const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
@@ -824,7 +827,7 @@ export default function CertificadoTrimestral({
                   return [
                     { text: m.name, fontSize: 7, fillColor: rowFill },
                     { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
-                    { text: fmt(m.value), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                    { text: fmt(valMes), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
                     { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
                   ];
                 }),
@@ -1402,8 +1405,10 @@ export default function CertificadoTrimestral({
                 { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                 { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
               ],
-              ...(md as any[]).map((m: any) => {
-                const pct = monthlyNT > 0 ? (m.value / monthlyNT) * 100 : 0;
+              ...(md as any[]).map((m: any, i: number) => {
+                const isLast = i === (md as any[]).length - 1;
+                const valMes = isLast ? m.value + valCupsIn : m.value;
+                const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                 const ok = pct >= 90 && pct <= 110;
                 const high = pct > 110;
                 const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
@@ -1411,7 +1416,7 @@ export default function CertificadoTrimestral({
                 return [
                   { text: m.name, fontSize: 7, fillColor: rowFill },
                   { text: fmtL(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
-                  { text: fmtL(m.value), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                  { text: fmtL(valMes), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
                   { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
                 ];
               }),
