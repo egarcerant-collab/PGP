@@ -415,10 +415,23 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
 
-    // Claves de localStorage basadas en el prestador
-    const prestKey   = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
-    const storageKey = `pgp-cups-inesperadas-manual-${prestKey}`;
-    const cantidadKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
+    // Claves de localStorage basadas en prestador + período cargado
+    // El período se deriva de los meses en comparisonSummary para que coincida
+    // exactamente con la clave que usa CertificadoTrimestral (selectedGroup.label)
+    const MONTH_ES_MAP: Record<string, string> = {
+      'Enero':'ENERO','Febrero':'FEBRERO','Marzo':'MARZO','Abril':'ABRIL',
+      'Mayo':'MAYO','Junio':'JUNIO','Julio':'JULIO','Agosto':'AGOSTO',
+      'Septiembre':'SEPTIEMBRE','Octubre':'OCTUBRE','Noviembre':'NOVIEMBRE','Diciembre':'DICIEMBRE',
+      'January':'ENERO','February':'FEBRERO','March':'MARZO','April':'ABRIL',
+      'May':'MAYO','June':'JUNIO','July':'JULIO','August':'AGOSTO',
+      'September':'SEPTIEMBRE','October':'OCTUBRE','November':'NOVIEMBRE','December':'DICIEMBRE',
+    };
+    const prestKey   = (selectedPrestador?.PRESTADOR || 'default').replace(/\s+/g, '_');
+    const periodoKey = (comparisonSummary?.monthlyFinancials || [])
+      .map(m => MONTH_ES_MAP[m.month] || m.month.toUpperCase())
+      .join('-') || 'default';
+    const storageKey  = `pgp-cups-inesperadas-manual-${prestKey}-${periodoKey}`;
+    const cantidadKey = `pgp-cups-inesperadas-cantidad-${prestKey}-${periodoKey}`;
 
     // Cargar valor y cantidad guardados al montar o cambiar prestador
     useEffect(() => {
