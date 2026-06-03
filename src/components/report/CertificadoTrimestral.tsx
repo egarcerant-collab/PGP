@@ -423,11 +423,18 @@ export default function CertificadoTrimestral({
     if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0) {
       setValorCupsInesperadas(initialInforme.valorCupsInesperadas);
     } else if (initialInforme.totalEjecutadoGuardado && initialInforme.totalEjecutadoGuardado > 0) {
-      // Calcular el total RIPS del período restaurado desde comparisonSummary
-      const currentRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
+      // Derivar inesperadas = total_ejecutado_guardado − total_RIPS del mismo período
+      // Filtrar solo los meses que pertenecen al período del informe (no todos los meses cargados)
+      const periodMonthNames = (initialInforme.periodo || '')
+        .toUpperCase().split('-').map((s: string) => s.trim()).filter(Boolean);
+      const periodRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
+        .filter(m => {
+          const mn = MONTH_ES[m.month] || m.month.toUpperCase();
+          return periodMonthNames.length === 0 || periodMonthNames.includes(mn);
+        })
         .reduce((s, m) => s + m.totalValorEjecutado, 0);
-      const derivedInesperadas = initialInforme.totalEjecutadoGuardado - currentRIPSTotal;
-      if (derivedInesperadas > 0) setValorCupsInesperadas(Math.round(derivedInesperadas));
+      const derivedInesperadas = initialInforme.totalEjecutadoGuardado - periodRIPSTotal;
+      if (derivedInesperadas > 100) setValorCupsInesperadas(Math.round(derivedInesperadas));
     }
     if (initialInforme.cantidadCupsInesperadas !== undefined && initialInforme.cantidadCupsInesperadas !== '')
       setCantidadCupsInesperadas(initialInforme.cantidadCupsInesperadas);
@@ -1605,27 +1612,42 @@ export default function CertificadoTrimestral({
           </div>
         </div>
 
-        {/* CUPS / Tecnologías Inesperadas — resumen cargado (readonly) */}
-        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-1">
+        {/* CUPS / Tecnologías Inesperadas — editable directamente aquí */}
+        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-2">
           <p className="text-xs font-semibold text-orange-800 flex items-center gap-1">
-            🟠 CUPS / Tecnologías Inesperadas <span className="font-normal text-orange-600">(cargado desde módulo CUPS / Tecnologías)</span>
+            🟠 CUPS / Tecnologías Inesperadas
+            <span className="font-normal text-orange-600">(editable · se pre-carga desde módulo CUPS si fue guardado)</span>
           </p>
           <div className="grid gap-2 sm:grid-cols-2 text-xs">
-            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
-              <span className="text-orange-400">$</span>
-              {valorCupsInesperadas > 0
-                ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valorCupsInesperadas)
-                : 'Sin valor — guarda en módulo CUPS / Tecnologías'}
+            <div className="space-y-0.5">
+              <label className="text-[10px] text-orange-700 font-semibold uppercase tracking-wide">Valor ($)</label>
+              <input
+                type="number"
+                min="0"
+                value={valorCupsInesperadas || ''}
+                onChange={e => setValorCupsInesperadas(e.target.value === '' ? 0 : Number(e.target.value))}
+                placeholder="0"
+                className={`w-full rounded-md border px-3 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-orange-300
+                  ${valorCupsInesperadas > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
+              />
             </div>
-            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 font-mono ${parseInt(cantidadCupsInesperadas) > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-border bg-muted/40 text-muted-foreground'}`}>
-              <span className="text-orange-400">#</span>
-              {parseInt(cantidadCupsInesperadas) > 0
-                ? `${parseInt(cantidadCupsInesperadas).toLocaleString('es-CO')} actividades inesperadas`
-                : 'Sin cantidad — ingresa en módulo CUPS / Tecnologías'}
+            <div className="space-y-0.5">
+              <label className="text-[10px] text-orange-700 font-semibold uppercase tracking-wide">Cantidad actividades</label>
+              <input
+                type="number"
+                min="0"
+                value={cantidadCupsInesperadas || ''}
+                onChange={e => setCantidadCupsInesperadas(e.target.value)}
+                placeholder="0"
+                className={`w-full rounded-md border px-3 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-orange-300
+                  ${parseInt(cantidadCupsInesperadas) > 0 ? 'border-orange-300 bg-white text-orange-900 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
+              />
             </div>
           </div>
           {(valorCupsInesperadas > 0 || parseInt(cantidadCupsInesperadas) > 0) && (
-            <p className="text-[10px] text-orange-600">El valor se suma al total ejecutado y ambos se grafican en naranja en los gráficos 1 y 2.</p>
+            <p className="text-[10px] text-orange-600 font-medium">
+              ✓ Total ejecutado = RIPS + ${new Intl.NumberFormat('es-CO').format(valorCupsInesperadas)} inesperadas. Se grafican en naranja.
+            </p>
           )}
         </div>
 
