@@ -151,14 +151,15 @@ export async function PATCH(request: Request) {
 
     if (updateFields) {
       const fields: Record<string, any> = {};
-      if (body.prestador  !== undefined) fields.prestador    = body.prestador;
-      if (body.periodo    !== undefined) fields.periodo      = body.periodo;
-      if (body.tipoPeriodo!== undefined) fields.tipo_periodo = body.tipoPeriodo;
-      if (body.valorFinal !== undefined) fields.valor_final  = body.valorFinal;
-      if (body.nit        !== undefined) fields.nit          = body.nit;
-      if (body.contrato   !== undefined) fields.contrato     = body.contrato;
-      if (body.responsable!== undefined) fields.responsable  = body.responsable;
-      if (body.fecha      !== undefined) fields.fecha        = body.fecha;
+      if (body.prestador      !== undefined) fields.prestador       = body.prestador;
+      if (body.periodo        !== undefined) fields.periodo         = body.periodo;
+      if (body.tipoPeriodo    !== undefined) fields.tipo_periodo    = body.tipoPeriodo;
+      if (body.totalEjecutado !== undefined) fields.total_ejecutado = body.totalEjecutado;
+      if (body.valorFinal     !== undefined) fields.valor_final     = body.valorFinal;
+      if (body.nit            !== undefined) fields.nit             = body.nit;
+      if (body.contrato       !== undefined) fields.contrato        = body.contrato;
+      if (body.responsable    !== undefined) fields.responsable     = body.responsable;
+      if (body.fecha          !== undefined) fields.fecha           = body.fecha;
 
       // supervisorName y showSupervisor viven dentro de pdf_data — merge sin sobreescribir otros campos
       if (body.supervisorName !== undefined || body.showSupervisor !== undefined) {

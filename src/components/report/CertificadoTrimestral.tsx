@@ -2067,9 +2067,16 @@ export default function CertificadoTrimestral({
                         </select>
                       </div>
                     </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
-                      <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Valor Ejecutado</Label>
+                        <Input type="number" value={viewEditData.totalEjecutado ?? viewingInf.totalEjecutado ?? 0} onChange={e => setViewEditData((p: any) => ({ ...p, totalEjecutado: Number(e.target.value) }))} className="text-sm" />
+                        <p className="text-[10px] text-slate-400 mt-0.5">Incluye CUPS inesperadas si aplica</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
+                        <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -2159,6 +2166,7 @@ export default function CertificadoTrimestral({
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Prestador</span><span className="font-semibold">{viewingInf.prestador}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Período</span><span className="font-semibold">{viewingInf.periodo}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Tipo</span><span className="font-semibold">{viewingInf.tipoPeriodo}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Valor Ejecutado</span><span className="font-semibold text-blue-700">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(viewingInf.totalEjecutado)}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">Valor Final</span><span className="font-semibold text-green-700">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(viewingInf.valorFinal)}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">NIT</span><span className="font-semibold">{viewingInf.nit || '—'}</span></div>
                     <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">N° Contrato</span><span className="font-semibold">{viewingInf.contrato || '—'}</span></div>
