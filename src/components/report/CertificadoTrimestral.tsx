@@ -354,20 +354,32 @@ export default function CertificadoTrimestral({
     // Las inesperadas se recargan en el efecto de abajo (período-específico)
   }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR]);
 
-  // Sincroniza valorCupsInesperadas desde localStorage cuando cambia el prestador
-  // o los meses cargados. La clave incluye el período (ej. "MARZO") para que las
-  // inesperadas de MARZO no contaminen a ENERO ni FEBRERO.
-  // Usa el mismo patrón de clave que InformeDesviaciones (sección CUPS).
+  // Sincroniza valorCupsInesperadas desde localStorage cuando cambia el prestador,
+  // los meses cargados o el período/índice seleccionado.
+  // La clave usa SOLO los meses del período seleccionado (ej. "MARZO"), NO todos
+  // los meses cargados (ej. "ENERO-FEBRERO-MARZO"), para que coincida con la clave
+  // que guardó InformeDesviaciones cuando solo ese período estaba cargado.
   useEffect(() => {
-    const prestKey   = (selectedPrestador?.PRESTADOR || 'default').replace(/\s+/g, '_');
-    const periodoKey = (comparisonSummary?.monthlyFinancials || [])
-      .map(m => MONTH_ES[m.month] || m.month.toUpperCase())
-      .join('-') || 'default';
+    const prestKey  = (selectedPrestador?.PRESTADOR || 'default').replace(/\s+/g, '_');
+    const allMonths = comparisonSummary?.monthlyFinancials || [];
+    const pSize     = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
+
+    // Replicar la lógica de periodGroups para obtener los meses del grupo seleccionado
+    const groups: Array<typeof allMonths> = [];
+    for (let i = 0; i + pSize <= allMonths.length; i += pSize) groups.push(allMonths.slice(i, i + pSize));
+    const rem = allMonths.length % pSize;
+    if (rem > 0) {
+      const last = allMonths.slice(allMonths.length - rem);
+      if (!groups.find(g => g.map(m => m.month).join('') === last.map(m => m.month).join(''))) groups.push(last);
+    }
+    const sliceMonths = groups[selectedPeriodIndex] ?? groups[0] ?? allMonths;
+    const periodoKey  = sliceMonths.map(m => MONTH_ES[m.month] || m.month.toUpperCase()).join('-') || 'default';
+
     const savedValor = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${periodoKey}`);
     const savedCant  = localStorage.getItem(`pgp-cups-inesperadas-cantidad-${prestKey}-${periodoKey}`);
     setValorCupsInesperadas(savedValor && Number(savedValor) > 0 ? Number(savedValor) : 0);
     setCantidadCupsInesperadas(savedCant || '');
-  }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR, comparisonSummary]);
+  }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR, comparisonSummary, periodType, selectedPeriodIndex]);
 
   // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
   useEffect(() => {
