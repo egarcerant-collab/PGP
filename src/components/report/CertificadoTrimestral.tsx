@@ -375,8 +375,25 @@ export default function CertificadoTrimestral({
     const sliceMonths = groups[selectedPeriodIndex] ?? groups[0] ?? allMonths;
     const periodoKey  = sliceMonths.map(m => MONTH_ES[m.month] || m.month.toUpperCase()).join('-') || 'default';
 
-    const savedValor = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${periodoKey}`);
-    const savedCant  = localStorage.getItem(`pgp-cups-inesperadas-cantidad-${prestKey}-${periodoKey}`);
+    // 1. Intentar la clave del período exacto (ej. "MARZO" si periodType=mensual)
+    let savedValor = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${periodoKey}`);
+    let savedCant  = localStorage.getItem(`pgp-cups-inesperadas-cantidad-${prestKey}-${periodoKey}`);
+
+    // 2. Fallback: si no hay clave exacta, buscar por cada mes individual y sumar
+    //    (cubre el caso en que el usuario guardó con solo un mes cargado)
+    if ((!savedValor || Number(savedValor) <= 0) && sliceMonths.length > 0) {
+      let sumVal = 0; let sumCant = 0;
+      for (const m of sliceMonths) {
+        const mk = MONTH_ES[m.month] || m.month.toUpperCase();
+        const v = localStorage.getItem(`pgp-cups-inesperadas-manual-${prestKey}-${mk}`);
+        const c = localStorage.getItem(`pgp-cups-inesperadas-cantidad-${prestKey}-${mk}`);
+        if (v && Number(v) > 0) sumVal  += Number(v);
+        if (c && Number(c) > 0) sumCant += Number(c);
+      }
+      if (sumVal > 0)  savedValor = String(sumVal);
+      if (sumCant > 0) savedCant  = String(sumCant);
+    }
+
     setValorCupsInesperadas(savedValor && Number(savedValor) > 0 ? Number(savedValor) : 0);
     setCantidadCupsInesperadas(savedCant || '');
   }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR, comparisonSummary, periodType, selectedPeriodIndex]);
