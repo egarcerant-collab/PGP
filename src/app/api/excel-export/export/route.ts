@@ -352,8 +352,12 @@ function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]
   for (const info of informes) {
     const tipoPeriodo = normalizeKey(info.tipo_periodo || '');
 
+    // Inesperadas guardadas en pdf_data — se suman al último mes
+    const valorInesp: number = Number(info.pdf_data?.valorCupsInesperadas || 0);
+
     if (tipoPeriodo === 'MENSUAL') {
-      // Informe de un solo mes: usar total_ejecutado directamente
+      // Informe de un solo mes: total_ejecutado ya incluye inesperadas
+      // (handleSave guarda totalEjecutadoFinal = RIPS + inesperadas)
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
 
@@ -367,7 +371,8 @@ function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]
     }
 
     // BIMESTRAL / TRIMESTRAL: leer los valores por mes desde pdf_data.mesData
-    // pdf_data.mesData = [{ name: "ENERO", value: X, cups: Y }, ...]
+    // pdf_data.mesData = [{ name: "ENERO", value: X, cups: Y }, ...] → valores RIPS puros
+    // Las inesperadas se suman al ÚLTIMO mes (mes de cierre del período)
     const mesData: Array<{ name: string; value: number }> | undefined =
       Array.isArray(info.pdf_data?.mesData) ? info.pdf_data.mesData : undefined;
 
@@ -377,14 +382,16 @@ function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]
         const fila = MES_A_FILA[normalizeKey(m.name || '')];
         if (!fila) continue;
 
-        if (m.value !== null && m.value !== undefined) {
-          const cell = ws.getCell(`E${fila}`);
-          cell.value = m.value;
-          cell.numFmt = '"$"#,##0.00';
-        }
+        const isLast = i === mesData.length - 1;
+        // Sumar inesperadas al último mes (mes de cierre)
+        const valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
+
+        const cell = ws.getCell(`E${fila}`);
+        cell.value = valorMes;
+        cell.numFmt = '"$"#,##0.00';
 
         // Observaciones solo en el último mes del período
-        if (i === mesData.length - 1) {
+        if (isLast) {
           fillObservaciones(ws, fila, info);
         }
       }
