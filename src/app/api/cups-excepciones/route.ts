@@ -19,6 +19,9 @@ async function writeExcepciones(excepciones: any[]) {
 }
 
 async function getCurrentUser() {
+  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
+    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
+  }
   try {
     const serverClient = await createSupabaseServerClient();
     const { data: { user } } = await serverClient.auth.getUser();

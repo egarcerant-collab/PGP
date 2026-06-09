@@ -6,6 +6,19 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxoha
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
 
 export async function middleware(request: NextRequest) {
+  // ── MODO LOCAL: saltar autenticación en desarrollo ──────────────────────
+  const isLocalBypass = process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true';
+  if (isLocalBypass) {
+    // Si llega a /login en modo local, redirigir directo a /
+    if (request.nextUrl.pathname.startsWith('/login')) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

@@ -1,74 +1,52 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getDrive, readJson, writeJson, deleteJson, getSubfolder, listFiles, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 const PASSWORD = '123456';
 
 async function getCurrentUser() {
-  try {
-    const serverClient = await createSupabaseServerClient();
-    const { data: { user } } = await serverClient.auth.getUser();
-    if (!user) return null;
-
-    let profile: { nombre: string; rol: string } | null = null;
-    try {
-      const { data, error } = await serverClient
-        .from('profiles')
-        .select('nombre, rol')
-        .eq('id', user.id)
-        .single();
-      if (!error && data) profile = data;
-    } catch {}
-
-    if (!profile) {
-      try {
-        const admin = createSupabaseAdminClient();
-        const { data } = await admin
-          .from('profiles')
-          .select('nombre, rol')
-          .eq('id', user.id)
-          .single();
-        profile = data ?? null;
-      } catch {}
-    }
-
-    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
-  } catch {
-    return null;
+  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
+    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
   }
+  try {
+    const sc = await createSupabaseServerClient();
+    const { data: { user } } = await sc.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await sc.from('profiles').select('nombre, rol').eq('id', user.id).single();
+    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
+  } catch { return null; }
 }
 
-// GET /api/save-audit?prestador=X&month=Y — verifica si ya existe una auditoría
+async function loadIndex(drive: any): Promise<any[]> {
+  return (await readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json')) ?? [];
+}
+
+// GET /api/save-audit?prestador=X&month=Y
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const prestador = searchParams.get('prestador') || '';
-    const month = searchParams.get('month') || '';
+    const month     = searchParams.get('month')     || '';
     if (!prestador || !month) return NextResponse.json({ exists: false });
 
+    const drive       = getDrive();
     const currentUser = await getCurrentUser();
-    const db = createSupabaseAdminClient();
+    const index       = await loadIndex(drive);
 
-    const { data } = await db
-      .from('auditorias')
-      .select('id, numero, datos')
-      .eq('prestador', prestador)
-      .eq('mes', month)
-      .maybeSingle();
+    const entry = index.find(r =>
+      r.prestador?.toLowerCase() === prestador.toLowerCase() &&
+      r.mes?.toLowerCase() === month.toLowerCase()
+    );
+    if (!entry) return NextResponse.json({ exists: false });
 
-    if (!data) return NextResponse.json({ exists: false });
-
-    const ownerNombre = (data.datos as any)?.auditor_nombre || '';
-    const ownerId     = (data.datos as any)?.auditor_id || '';
-    const isAdmin     = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
-    const isOwner     = currentUser?.id === ownerId;
+    const isAdmin      = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+    const isOwner      = currentUser?.id === entry.auditor_id;
     const canOverwrite = isAdmin || isOwner;
 
     return NextResponse.json({
       exists: true,
-      numero: data.numero,
-      ownerNombre,
+      numero: entry.numero,
+      ownerNombre: entry.auditor_nombre,
       canOverwrite,
     });
   } catch {
@@ -76,154 +54,125 @@ export async function GET(request: Request) {
   }
 }
 
+// POST /api/save-audit
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { auditData, prestadorName, month } = body;
-
     if (!auditData || !prestadorName || !month) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
-    const nit = auditData.selectedPrestador?.NIT || '';
-    const db = createSupabaseAdminClient();
+    const nit             = auditData.selectedPrestador?.NIT || '';
+    const drive           = getDrive();
+    const currentUser     = await getCurrentUser();
+    const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
 
-    // Obtener usuario actual para asociar la auditoría
-    const currentUser = await getCurrentUser();
     const auditDataWithOwner = {
       ...auditData,
-      auditor_id: currentUser?.id || null,
+      auditor_id:     currentUser?.id     || null,
       auditor_nombre: currentUser?.nombre || '',
     };
 
-    // Verificar si ya existe una auditoría con el mismo prestador y mes
-    const { data: duplicate } = await db
-      .from('auditorias')
-      .select('id, numero, datos')
-      .eq('prestador', prestadorName)
-      .eq('mes', month)
-      .maybeSingle();
+    const index  = await loadIndex(drive);
+    const dupIdx = index.findIndex(r =>
+      r.prestador?.toLowerCase() === prestadorName.toLowerCase() &&
+      r.mes?.toLowerCase() === month.toLowerCase()
+    );
 
-    if (duplicate) {
-      // Verificar que el usuario actual es el dueño o es admin
-      const existingOwnerId = (duplicate.datos as any)?.auditor_id;
-      const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
-      if (!isAdmin && existingOwnerId && currentUser?.id && existingOwnerId !== currentUser.id) {
+    if (dupIdx !== -1) {
+      const existing = index[dupIdx];
+      const isAdmin  = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+      if (!isAdmin && existing.auditor_id && currentUser?.id && existing.auditor_id !== currentUser.id) {
         return NextResponse.json({ message: 'No tienes permiso para modificar esta auditoría.' }, { status: 403 });
       }
 
-      // Sobreescribir manteniendo el auditor original
-      const preservedData = {
+      const preserved = {
         ...auditDataWithOwner,
-        auditor_id: existingOwnerId || currentUser?.id || null,
-        auditor_nombre: (duplicate.datos as any)?.auditor_nombre || currentUser?.nombre || '',
+        auditor_id:     existing.auditor_id     || currentUser?.id     || null,
+        auditor_nombre: existing.auditor_nombre || currentUser?.nombre || '',
       };
 
-      const { error: updateError } = await db
-        .from('auditorias')
-        .update({ datos: preservedData, nit })
-        .eq('id', duplicate.id);
-
-      if (updateError) throw updateError;
+      // Leer el archivo completo para no perder datos
+      const fullData = await readJson(drive, auditoriaFolder, `${existing.id}.json`) || existing;
+      await writeJson(drive, auditoriaFolder, `${existing.id}.json`, {
+        ...fullData,
+        datos: preserved,
+        nit,
+      });
 
       return NextResponse.json({
-        message: `Auditoría N° ${duplicate.numero} actualizada.`,
-        numero: duplicate.numero,
-        id: duplicate.id,
+        message: `Auditoría N° ${existing.numero} actualizada.`,
+        numero:  existing.numero,
+        id:      existing.id,
         updated: true,
-      }, { status: 200 });
+      });
     }
 
-    // Insertar nuevo registro con número secuencial
-    const { data: last } = await db
-      .from('auditorias')
-      .select('numero')
-      .order('numero', { ascending: false })
-      .limit(1);
+    // Nuevo registro
+    const lastNum = index.reduce((max: number, r: any) => Math.max(max, parseInt(r.numero, 10) || 0), 0);
+    const numero  = String(lastNum + 1).padStart(3, '0');
+    const id      = crypto.randomUUID();
+    const created_at = new Date().toISOString();
 
-    const lastNumber = last && last.length > 0 ? parseInt(last[0].numero, 10) || 0 : 0;
-    const numero = String(lastNumber + 1).padStart(3, '0');
+    const newEntry = {
+      id, numero,
+      prestador:      prestadorName,
+      nit,
+      mes:            month,
+      auditor_id:     currentUser?.id     || null,
+      auditor_nombre: currentUser?.nombre || '',
+      created_at,
+    };
 
-    const { data, error } = await db
-      .from('auditorias')
-      .insert([{ numero, prestador: prestadorName, nit, mes: month, datos: auditDataWithOwner }])
-      .select()
-      .single();
-
-    if (error) throw error;
+    index.push(newEntry);
+    await Promise.all([
+      writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', index),
+      writeJson(drive, auditoriaFolder, `${id}.json`, { ...newEntry, datos: auditDataWithOwner }),
+    ]);
 
     return NextResponse.json({
       message: `Auditoría N° ${numero} guardada exitosamente.`,
-      numero,
-      id: data.id,
-      updated: false,
-    }, { status: 200 });
-
+      numero, id, updated: false,
+    });
   } catch (error: any) {
-    console.error('Error al guardar auditoría:', error);
     return NextResponse.json({ message: 'Error interno.', error: error.message }, { status: 500 });
   }
 }
 
+// DELETE /api/save-audit?id=X&password=Y
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const id       = searchParams.get('id');
     const password = searchParams.get('password');
 
-    if (password !== PASSWORD) {
-      return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
-    }
+    if (password !== PASSWORD) return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 401 });
     if (!id) return NextResponse.json({ message: 'Falta ID.' }, { status: 400 });
 
-    const db = createSupabaseAdminClient();
+    const drive           = getDrive();
+    const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
 
     if (id === 'ALL') {
-      // Solo admins pueden eliminar todas
       const currentUser = await getCurrentUser();
-      const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
-      if (!isAdmin) {
+      if (currentUser?.rol !== 'superadmin' && currentUser?.rol !== 'admin') {
         return NextResponse.json({ message: 'Solo los administradores pueden eliminar todas las auditorías.' }, { status: 403 });
       }
-      await db.from('auditorias').delete().neq('id', 0);
-      try {
-        const reportsDir = path.join(process.cwd(), 'public', 'informes');
-        const monthDirs = await fs.readdir(reportsDir, { withFileTypes: true });
-        for (const monthDir of monthDirs) {
-          if (monthDir.isDirectory()) {
-            const monthPath = path.join(reportsDir, monthDir.name);
-            const files = await fs.readdir(monthPath);
-            for (const file of files) {
-              if (file.endsWith('.json')) {
-                await fs.unlink(path.join(monthPath, file)).catch(() => {});
-              }
-            }
-          }
-        }
-      } catch {}
+      const files = await listFiles(drive, auditoriaFolder);
+      await Promise.all(files.map(f => (drive.files.delete as any)({ fileId: f.id })));
+      await writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', []);
     } else {
-      const fsPath = searchParams.get('fsPath');
-      if (fsPath) {
-        const filePath = path.join(process.cwd(), 'public', fsPath);
-        await fs.unlink(filePath);
-      } else {
-        // Verificar propiedad antes de eliminar
-        const currentUser = await getCurrentUser();
-        const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
-        if (!isAdmin) {
-          const { data: record } = await db
-            .from('auditorias')
-            .select('datos')
-            .eq('id', id)
-            .maybeSingle();
-          const ownerId = (record?.datos as any)?.auditor_id;
-          if (ownerId && currentUser?.id && ownerId !== currentUser.id) {
-            return NextResponse.json({ message: 'No tienes permiso para eliminar esta auditoría.' }, { status: 403 });
-          }
-        }
-        const { error } = await db.from('auditorias').delete().eq('id', id);
-        if (error) throw error;
+      const currentUser = await getCurrentUser();
+      const isAdmin     = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+      const index       = await loadIndex(drive);
+      const entry       = index.find((r: any) => r.id === id);
+
+      if (!isAdmin && entry?.auditor_id && currentUser?.id && entry.auditor_id !== currentUser.id) {
+        return NextResponse.json({ message: 'No tienes permiso para eliminar esta auditoría.' }, { status: 403 });
       }
+
+      await deleteJson(drive, auditoriaFolder, `${id}.json`);
+      await writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', index.filter((r: any) => r.id !== id));
     }
 
     return NextResponse.json({ success: true });

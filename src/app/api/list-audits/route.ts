@@ -1,128 +1,50 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 async function getCurrentUser() {
-  try {
-    const serverClient = await createSupabaseServerClient();
-    const { data: { user } } = await serverClient.auth.getUser();
-    if (!user) return null;
-
-    // Intentar con cliente de servidor primero; si falla por RLS usar admin
-    let profile: { nombre: string; rol: string } | null = null;
-    try {
-      const { data, error } = await serverClient
-        .from('profiles')
-        .select('nombre, rol')
-        .eq('id', user.id)
-        .single();
-      if (!error && data) profile = data;
-    } catch {}
-
-    if (!profile) {
-      try {
-        const admin = createSupabaseAdminClient();
-        const { data } = await admin
-          .from('profiles')
-          .select('nombre, rol')
-          .eq('id', user.id)
-          .single();
-        profile = data ?? null;
-      } catch {}
-    }
-
-    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
-  } catch {
-    return null;
+  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
+    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
   }
+  try {
+    const sc = await createSupabaseServerClient();
+    const { data: { user } } = await sc.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await sc.from('profiles').select('nombre, rol').eq('id', user.id).single();
+    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
+  } catch { return null; }
 }
 
 export async function GET() {
-  const results: any[] = [];
-
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
 
-  // 1. Leer de Supabase
   try {
-    const db = createSupabaseAdminClient();
+    const drive = getDrive();
+    const index: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json')) ?? [];
 
-    let query = db
-      .from('auditorias')
-      .select('id, numero, prestador, nit, mes, created_at, datos')
-      .order('created_at', { ascending: false });
-
-    // Auditor normal → solo ve sus propias auditorías (filtro por auditor_id en datos)
+    let filtered = index;
     if (!isAdmin) {
-      if (!currentUser?.id) {
-        // Sin sesión válida → no exponer auditorías de nadie
-        return NextResponse.json([]);
-      }
-      query = query.filter('datos->>auditor_id', 'eq', currentUser.id);
+      if (!currentUser?.id) return NextResponse.json([]);
+      filtered = index.filter(r => r.auditor_id === currentUser.id);
     }
 
-    const { data } = await query;
+    const results = filtered
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map(r => ({
+        id:           r.id,
+        numero:       r.numero || '',
+        prestador:    r.prestador,
+        nit:          r.nit || '',
+        month:        r.mes,
+        fecha:        r.created_at ? r.created_at.slice(0, 10) : '',
+        source:       'drive',
+        auditorNombre: r.auditor_nombre || '',
+      }));
 
-    if (data && data.length > 0) {
-      data.forEach(r => {
-        const auditorNombre = (r.datos as any)?.auditor_nombre || '';
-        results.push({
-          id: r.id,
-          numero: r.numero || '',
-          prestador: r.prestador,
-          nit: r.nit || '',
-          month: r.mes,
-          fecha: r.created_at ? r.created_at.slice(0, 10) : '',
-          source: 'supabase',
-          auditorNombre,
-        });
-      });
-    }
+    return NextResponse.json(results);
   } catch (e) {
-    console.warn('Supabase list error:', e);
+    console.warn('Drive list-audits error:', e);
+    return NextResponse.json([]);
   }
-
-  // 2. Leer del filesystem (solo admins)
-  if (isAdmin) {
-    try {
-      const rootDir = process.cwd();
-      const reportsDir = path.join(rootDir, 'public', 'informes');
-      await fs.access(reportsDir);
-      const monthDirs = await fs.readdir(reportsDir, { withFileTypes: true });
-      let fsIndex = 90000;
-      for (const monthDir of monthDirs) {
-        if (monthDir.isDirectory()) {
-          const monthPath = path.join(reportsDir, monthDir.name);
-          try {
-            const files = await fs.readdir(monthPath);
-            for (const file of files) {
-              if (file.endsWith('.json')) {
-                const prestadorName = file.replace('.json', '');
-                const alreadyInSupabase = results.some(
-                  r => r.source === 'supabase' &&
-                    r.prestador?.toLowerCase() === prestadorName.toLowerCase() &&
-                    r.month === monthDir.name
-                );
-                if (!alreadyInSupabase) {
-                  results.push({
-                    id: fsIndex++,
-                    numero: '',
-                    prestador: prestadorName,
-                    nit: '',
-                    month: monthDir.name,
-                    fecha: '',
-                    source: 'filesystem',
-                    fsPath: `/informes/${monthDir.name}/${file}`,
-                  });
-                }
-              }
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-  }
-
-  return NextResponse.json(results);
 }
