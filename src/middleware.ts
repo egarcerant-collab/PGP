@@ -1,77 +1,76 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import crypto from 'crypto';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxohacipmnmqyef.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
+const COOKIE_NAME = 'pgp_session';
+const JWT_SECRET = process.env.JWT_SECRET || 'pgp-dusakawi-secret-2026';
+
+// ── JWT verify (sin importar auth-drive para mantener el middleware ligero) ──
+function verifyJWT(token: string): { rol?: string } | null {
+  try {
+    const [header, body, sig] = token.split('.');
+    if (!header || !body || !sig) return null;
+    const expected = crypto
+      .createHmac('sha256', JWT_SECRET)
+      .update(`${header}.${body}`)
+      .digest('base64url');
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    const payload = JSON.parse(Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export async function middleware(request: NextRequest) {
-  // ── MODO LOCAL: saltar autenticación en desarrollo ──────────────────────
+  const pathname = request.nextUrl.pathname;
+  const isLoginPage   = pathname.startsWith('/login');
+  const isExcelExport = pathname.startsWith('/excel-export');
+  const isPublic      = isLoginPage || isExcelExport;
+
+  // ── MODO LOCAL BYPASS (Supabase bloqueado) ───────────────────────────────
+  // Con bypass, cualquiera puede acceder PERO se puede usar auth Drive opcional.
   const isLocalBypass = process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true';
+
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const session = token ? verifyJWT(token) : null;
+
   if (isLocalBypass) {
-    // Si llega a /login en modo local, redirigir directo a /
-    if (request.nextUrl.pathname.startsWith('/login')) {
+    // Si ya hay sesión Drive y llega a /login → redirigir a /
+    if (session && isLoginPage) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
     }
+    // Sin sesión y sin bypass: /login está permitido para que el usuario se autentique
+    // Con bypass activo: si no hay sesión, igual dejamos pasar (modo sin auth)
     return NextResponse.next({ request });
   }
-  // ────────────────────────────────────────────────────────────────────────
 
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        supabaseResponse = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login');
-  const isExcelExport = request.nextUrl.pathname.startsWith('/excel-export');
-  const isPublic = isLoginPage || isExcelExport;
-
-  if (!user && !isPublic) {
+  // ── MODO PRODUCCIÓN: auth Drive requerido ───────────────────────────────
+  if (!session && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (session && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
   }
 
   // Proteger /admin — solo superadmin
-  if (user && request.nextUrl.pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('rol')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.rol !== 'superadmin') {
+  if (session && pathname.startsWith('/admin')) {
+    if (session.rol !== 'superadmin') {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
     }
   }
 
-  return supabaseResponse;
+  return NextResponse.next({ request });
 }
 
 export const config = {

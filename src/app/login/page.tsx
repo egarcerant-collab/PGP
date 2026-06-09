@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, ShieldCheck, Eye, EyeOff, UserPlus, LogIn, KeyRound, ArrowLeft, CheckCircle } from 'lucide-react';
 
 const GREEN = '#4CAF50';
@@ -36,19 +35,22 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setSuccess('');
     setLoading(true);
-    const supabase = createSupabaseClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      if (error.message.includes('Email not confirmed')) {
-        setError('Debes confirmar tu correo antes de ingresar.');
-      } else if (error.message.includes('Invalid login credentials')) {
-        setError('Correo o contraseña incorrectos.');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        setError(data.message || 'Correo o contraseña incorrectos.');
       } else {
-        setError('Error: ' + error.message);
+        window.location.href = '/';
       }
-    } else {
-      window.location.href = '/';
+    } catch {
+      setLoading(false);
+      setError('Error de conexión. Intenta de nuevo.');
     }
   };
 
@@ -57,17 +59,30 @@ export default function LoginPage() {
     setError(''); setSuccess('');
     if (!nombre.trim()) { setError('Escribe tu nombre completo.'); return; }
     setLoading(true);
-    const supabase = createSupabaseClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-    if (signUpError) { setLoading(false); setError('Error registro: ' + signUpError.message); return; }
-    if (data.user) {
-      const { error: rpcError } = await supabase.rpc('register_profile', {
-        user_id: data.user.id, user_email: email, user_nombre: nombre.trim(),
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, nombre: nombre.trim() }),
       });
-      if (rpcError) { setLoading(false); setError('Cuenta creada pero error al guardar perfil: ' + rpcError.message); return; }
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        setError(data.message || 'Error al crear la cuenta.');
+      } else {
+        setSuccess('Cuenta creada exitosamente. Iniciando sesión...');
+        // Login automático después del registro
+        const loginRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        if (loginRes.ok) window.location.href = '/';
+      }
+    } catch {
+      setLoading(false);
+      setError('Error de conexión. Intenta de nuevo.');
     }
-    setLoading(false);
-    window.location.href = '/';
   };
 
   const handleReset = async (e: React.FormEvent) => {
@@ -77,14 +92,19 @@ export default function LoginPage() {
     if (newPassword.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
     if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return; }
     setLoading(true);
-    const res = await fetch('/api/auth/reset-password', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, newPassword }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setError(data.message || 'Error al actualizar la contraseña.'); }
-    else { setSuccess('Contraseña actualizada. Ya puedes iniciar sesión con tu nueva contraseña.'); }
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, newPassword }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.message || 'Error al actualizar la contraseña.'); }
+      else { setSuccess('Contraseña actualizada. Ya puedes iniciar sesión.'); }
+    } catch {
+      setLoading(false);
+      setError('Error de conexión.');
+    }
   };
 
   const handleNewPassword = async (e: React.FormEvent) => {
@@ -93,11 +113,19 @@ export default function LoginPage() {
     if (newPassword.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
     if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return; }
     setLoading(true);
-    const supabase = createSupabaseClient();
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setLoading(false);
-    if (error) { setError('Error: ' + error.message); }
-    else { setSuccess('Contraseña actualizada. Redirigiendo...'); setTimeout(() => { window.location.href = '/'; }, 2000); }
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, newPassword }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.message || 'Error al actualizar.'); }
+      else { setSuccess('Contraseña actualizada. Redirigiendo...'); setTimeout(() => { window.location.href = '/'; }, 2000); }
+    } catch {
+      setLoading(false);
+      setError('Error de conexión.');
+    }
   };
 
   const switchMode = (m: Mode) => { setMode(m); setError(''); setSuccess(''); };
