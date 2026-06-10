@@ -529,16 +529,24 @@ export default function CertificadoTrimestral({
   const periodSize = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
 
   const periodGroups = useMemo(() => {
+    const sortedByNum = (slice: MonthlyFinancialSummary[]) =>
+      [...slice].sort((a, b) =>
+        (MONTH_NUM_MAP[MONTH_ES[a.month] || a.month.toUpperCase()] || 0) -
+        (MONTH_NUM_MAP[MONTH_ES[b.month] || b.month.toUpperCase()] || 0)
+      );
+    const makeLabel = (slice: MonthlyFinancialSummary[]) =>
+      sortedByNum(slice).map(m => MONTH_ES[m.month] || m.month.toUpperCase()).join('-');
+
     const groups: { label: string; months: MonthlyFinancialSummary[] }[] = [];
     for (let i = 0; i + periodSize <= months.length; i += periodSize) {
       const slice = months.slice(i, i + periodSize);
-      groups.push({ label: slice.map(m => MONTH_ES[m.month] || m.month.toUpperCase()).join('-'), months: slice });
+      groups.push({ label: makeLabel(slice), months: sortedByNum(slice) });
     }
     const rem = months.length % periodSize;
     if (rem > 0) {
       const slice = months.slice(months.length - rem);
-      const label = slice.map(m => MONTH_ES[m.month] || m.month.toUpperCase()).join('-');
-      if (!groups.find(g => g.label === label)) groups.push({ label, months: slice });
+      const label = makeLabel(slice);
+      if (!groups.find(g => g.label === label)) groups.push({ label, months: sortedByNum(slice) });
     }
     return groups;
   }, [months, periodSize]);
@@ -642,13 +650,12 @@ export default function CertificadoTrimestral({
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
 
       // ── Cálculo DESCONTAR / RECONOCER ──
-      // La comparación contra las bandas usa SOLO el valor RIPS (sin inesperadas).
-      // Las inesperadas son un reconocimiento separado que se suma al valor final.
-      // Esto evita que las inesperadas "oculten" un déficit de ejecución RIPS.
-      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
-      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
-      // valorFinal = NT − descuento_RIPS + reconocer_RIPS + inesperadas_reconocidas
-      const valorFinal = ntPeriodo - descontar + reconocer + valorCupsInesperadas;
+      // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
+      // Si RIPS + inesperadas >= 90% → sin descuento.
+      // Ej: 1,072M(RIPS) + 80M(inesp) = 1,153M / 1,277M(NT) = 90.2% → sin descuento.
+      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+      const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
       const detalleCups = mesData.map((m, i) => {
@@ -1158,11 +1165,10 @@ export default function CertificadoTrimestral({
       const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
-      // Comparación con bandas: solo RIPS (sin inesperadas)
-      const descontar = totalEjecutado < minPeriodo ? minPeriodo - totalEjecutado : 0;
-      const reconocer = totalEjecutado > maxPeriodo ? totalEjecutado - maxPeriodo : 0;
-      // valorFinal incluye inesperadas reconocidas por separado
-      const valorFinal = ntPeriodo - descontar + reconocer + valorCupsInesperadas;
+      // Comparación: RIPS + inesperadas vs bandas (90-110%)
+      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+      const valorFinal = ntPeriodo - descontar + reconocer;
 
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
       const ciudadRaw = String(selectedPrestador.CIUDAD || (selectedPrestador as Record<string,string>)['MUNICIPIO'] || 'RIOHACHA').trim().toUpperCase();
@@ -1293,10 +1299,10 @@ export default function CertificadoTrimestral({
 
     // Recalcular descontar/reconocer/valorFinal con lógica correcta:
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
-    const totalEjecutadoRIPS = totalEjecutadoFinal - valCupsIn;
-    const descontarR = totalEjecutadoRIPS < minPeriodo ? minPeriodo - totalEjecutadoRIPS : 0;
-    const reconocerR = totalEjecutadoRIPS > maxPeriodo ? totalEjecutadoRIPS - maxPeriodo : 0;
-    const valorFinalR = ntPeriodo - descontarR + reconocerR + valCupsIn;
+    // Comparación: RIPS + inesperadas vs bandas (90-110%)
+    const descontarR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+    const reconocerR = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+    const valorFinalR = ntPeriodo - descontarR + reconocerR;
     // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
     const descontar = descontarR;
     const reconocer = reconocerR;
