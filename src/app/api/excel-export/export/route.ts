@@ -374,53 +374,59 @@ function fillObservaciones(ws: ExcelJS.Worksheet, fila: number, info: InformeRec
 /**
  * Llena la hoja 04_Seguimiento_Mensual.
  * Retorna { totalEjecutado, mesesConDatos } para incluir en headers de respuesta.
+ *
+ * Estrategia de prioridad por fila:
+ *   1. Override manual (audit UI) — prioridad absoluta
+ *   2. Entre informes que cubren el mismo mes: gana el de fecha más reciente.
+ *      Esto permite que un MENSUAL creado después de un TRIMESTRAL lo supere.
+ * Observaciones: se recogen independientemente (solo cuando el informe las tiene,
+ *   es decir MENSUAL siempre, TRIMESTRAL sólo para su último mes).
  */
 function fillSeguimientoMensual(
   ws: ExcelJS.Worksheet,
   informes: InformeRecord[],
   overrides: Map<number, number>,
 ): { totalEjecutado: number; mesesConDatos: number } {
-  let totalEjecutado = 0;
-  let mesesConDatos = 0;
+  type ValueEntry = { valor: number; fecha: string; info: InformeRecord };
+  const rowValues = new Map<number, ValueEntry>();
+  const rowObs    = new Map<number, InformeRecord>();
 
-  const writeCell = (fila: number, valor: number) => {
-    const cell = ws.getCell(`E${fila}`);
-    cell.value = valor;
-    cell.numFmt = '"$"#,##0.00';
-    totalEjecutado += valor;
-    mesesConDatos++;
+  const proposeValue = (fila: number, valor: number, info: InformeRecord) => {
+    if (valor <= 0) return;
+    const fecha = info.fecha || '';
+    const existing = rowValues.get(fila);
+    if (!existing || fecha >= existing.fecha) {
+      rowValues.set(fila, { valor, fecha, info });
+    }
+  };
+
+  const proposeObs = (fila: number, info: InformeRecord) => {
+    const fecha = info.fecha || '';
+    const existingFecha = rowObs.get(fila)?.fecha || '';
+    if (fecha >= existingFecha) rowObs.set(fila, info);
   };
 
   for (const info of informes) {
     const tipoPeriodo = normalizeKey(info.tipo_periodo || '');
-
     const valorInesp: number = Number(info.pdf_data?.valorCupsInesperadas || 0);
 
     if (tipoPeriodo === 'MENSUAL') {
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
 
-      const valorManual = overrides.get(fila);
       let valorFinal: number;
-      if (valorManual && valorManual > 0) {
-        // Override manual del usuario (totalRealValue guardado en la auditoría)
-        valorFinal = valorManual;
-      } else if (info.total_ejecutado_final && info.total_ejecutado_final > 0) {
-        // pdf_data.totalEjecutadoFinal ya incluye inesperadas (fuente más precisa)
+      if (info.total_ejecutado_final && info.total_ejecutado_final > 0) {
         valorFinal = info.total_ejecutado_final;
       } else {
-        // Fallback: total_ejecutado base + inesperadas de pdf_data
         valorFinal = (info.total_ejecutado ?? 0) + valorInesp;
       }
 
-      if (valorFinal > 0) {
-        writeCell(fila, valorFinal);
-      }
-      fillObservaciones(ws, fila, info);
+      proposeValue(fila, valorFinal, info);
+      proposeObs(fila, info);
       continue;
     }
 
-    // BIMESTRAL / TRIMESTRAL: leer los valores por mes desde pdf_data.mesData
+    // BIMESTRAL / TRIMESTRAL
     const mesData: Array<{ name: string; value: number }> | undefined =
       Array.isArray(info.pdf_data?.mesData) ? info.pdf_data.mesData : undefined;
 
@@ -431,34 +437,43 @@ function fillSeguimientoMensual(
         if (!fila) continue;
 
         const isLast = i === mesData.length - 1;
-        const valorManual = overrides.get(fila);
-        let valorMes: number;
-        if (valorManual && valorManual > 0) {
-          valorMes = valorManual;
-        } else {
-          valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
-        }
+        const valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
 
-        writeCell(fila, valorMes);
-
-        if (isLast) {
-          fillObservaciones(ws, fila, info);
-        }
+        proposeValue(fila, valorMes, info);
+        if (isLast) proposeObs(fila, info);
       }
     } else {
-      // Fallback: total_ejecutado en el primer mes del período
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
-
-      const valorManual = overrides.get(fila);
-      const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
-
+      const valorFinal = info.total_ejecutado;
       if (valorFinal !== null && valorFinal !== undefined) {
-        writeCell(fila, Number(valorFinal));
+        proposeValue(fila, Number(valorFinal), info);
       }
-      fillObservaciones(ws, fila, info);
+      proposeObs(fila, info);
     }
   }
+
+  // Aplicar overrides manuales (audit UI) — siempre ganan
+  for (const [fila, manualVal] of overrides.entries()) {
+    if (manualVal > 0 && rowValues.has(fila)) {
+      rowValues.set(fila, { ...rowValues.get(fila)!, valor: manualVal });
+    }
+  }
+
+  // Escribir celdas
+  let totalEjecutado = 0;
+  let mesesConDatos  = 0;
+  for (const [fila, { valor }] of rowValues.entries()) {
+    const cell = ws.getCell(`E${fila}`);
+    cell.value = valor;
+    cell.numFmt = '"$"#,##0.00';
+    totalEjecutado += valor;
+    mesesConDatos++;
+  }
+  for (const [fila, obsInfo] of rowObs.entries()) {
+    fillObservaciones(ws, fila, obsInfo);
+  }
+
   return { totalEjecutado, mesesConDatos };
 }
 
