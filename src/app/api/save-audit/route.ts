@@ -1,21 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getDrive, readJson, writeJson, deleteJson, getSubfolder, listFiles, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getCurrentUser } from '@/lib/get-current-user';
 
 const PASSWORD = '123456';
-
-async function getCurrentUser() {
-  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
-    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
-  }
-  try {
-    const sc = await createSupabaseServerClient();
-    const { data: { user } } = await sc.auth.getUser();
-    if (!user) return null;
-    const { data: profile } = await sc.from('profiles').select('nombre, rol').eq('id', user.id).single();
-    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
-  } catch { return null; }
-}
 
 async function loadIndex(drive: any): Promise<any[]> {
   return (await readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json')) ?? [];
@@ -30,7 +17,7 @@ export async function GET(request: Request) {
     if (!prestador || !month) return NextResponse.json({ exists: false });
 
     const drive       = getDrive();
-    const currentUser = await getCurrentUser();
+    const currentUser = await getCurrentUser(request);
     const index       = await loadIndex(drive);
 
     const entry = index.find(r =>
@@ -65,7 +52,7 @@ export async function POST(request: Request) {
 
     const nit             = auditData.selectedPrestador?.NIT || '';
     const drive           = getDrive();
-    const currentUser     = await getCurrentUser();
+    const currentUser     = await getCurrentUser(request);
     const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
 
     const auditDataWithOwner = {
@@ -93,13 +80,24 @@ export async function POST(request: Request) {
         auditor_nombre: existing.auditor_nombre || currentUser?.nombre || '',
       };
 
+      // Actualizar índice con datos frescos del usuario que sobreescribe
+      index[dupIdx] = {
+        ...existing,
+        nit,
+        auditor_id:     preserved.auditor_id     || existing.auditor_id,
+        auditor_nombre: preserved.auditor_nombre || existing.auditor_nombre,
+      };
+
       // Leer el archivo completo para no perder datos
       const fullData = await readJson(drive, auditoriaFolder, `${existing.id}.json`) || existing;
-      await writeJson(drive, auditoriaFolder, `${existing.id}.json`, {
-        ...fullData,
-        datos: preserved,
-        nit,
-      });
+      await Promise.all([
+        writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', index),
+        writeJson(drive, auditoriaFolder, `${existing.id}.json`, {
+          ...fullData,
+          datos: preserved,
+          nit,
+        }),
+      ]);
 
       return NextResponse.json({
         message: `Auditoría N° ${existing.numero} actualizada.`,
@@ -154,7 +152,7 @@ export async function DELETE(request: Request) {
     const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
 
     if (id === 'ALL') {
-      const currentUser = await getCurrentUser();
+      const currentUser = await getCurrentUser(request);
       if (currentUser?.rol !== 'superadmin' && currentUser?.rol !== 'admin') {
         return NextResponse.json({ message: 'Solo los administradores pueden eliminar todas las auditorías.' }, { status: 403 });
       }
@@ -162,7 +160,7 @@ export async function DELETE(request: Request) {
       await Promise.all(files.map(f => (drive.files.delete as any)({ fileId: f.id })));
       await writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', []);
     } else {
-      const currentUser = await getCurrentUser();
+      const currentUser = await getCurrentUser(request);
       const isAdmin     = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
       const index       = await loadIndex(drive);
       const entry       = index.find((r: any) => r.id === id);
