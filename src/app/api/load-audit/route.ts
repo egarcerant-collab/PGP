@@ -25,12 +25,12 @@ export async function GET(request: Request) {
       const informes: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
       const prestador  = (data.prestador || '').trim().toLowerCase();
       const mesNorm    = (data.mes || '').trim().toUpperCase();
-      const mesesAudit = mesNorm.split('-').map(m => m.trim());
+      const mesesAudit = mesNorm.split('-').map((m: string) => m.trim());
 
-      const candidatos = informes.filter(inf => {
+      const candidatos = informes.filter((inf: any) => {
         const nameMatch = inf.prestador?.toLowerCase().includes(prestador);
         const partes    = (inf.periodo || '').toUpperCase().split('-').map((p: string) => p.trim());
-        return nameMatch && (partes.join('-') === mesNorm || mesesAudit.some(m => partes.includes(m)));
+        return nameMatch && (partes.join('-') === mesNorm || mesesAudit.some((m: string) => partes.includes(m)));
       });
 
       if (candidatos.length > 0) {

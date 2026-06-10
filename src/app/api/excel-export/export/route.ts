@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import fs from 'fs/promises';
-import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, readJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -199,6 +199,42 @@ async function fetchInformesByPrestador(prestador: string, contrato: string): Pr
   }
 }
 
+// Construye mapa fila→totalRealValue desde executionData de las auditorías guardadas.
+// Permite que valores ingresados manualmente en la UI aparezcan en el Excel.
+async function fetchTotalRealOverrides(prestador: string): Promise<Map<number, number>> {
+  const overrides = new Map<number, number>();
+  try {
+    const drive = getDrive();
+    const index: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json')) ?? [];
+    const pKey = normalizeKey(prestador);
+
+    const matching = index.filter((r: any) => normalizeKey(r.prestador || '') === pKey);
+    if (!matching.length) return overrides;
+
+    const auditFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
+    await Promise.all(matching.map(async (entry: any) => {
+      try {
+        const data: any = await readJson(drive, auditFolder, `${entry.id}.json`);
+        const execData = data?.datos?.executionData;
+        if (!execData) return;
+
+        for (const [mesNumStr, execEntry] of Object.entries(execData as Record<string, any>)) {
+          const totalReal = Number((execEntry as any)?.totalRealValue || 0);
+          if (totalReal <= 0) continue;
+          const mesNum = parseInt(mesNumStr, 10);
+          if (!mesNum || mesNum < 1 || mesNum > 12) continue;
+          // mesNum 1=Enero→fila 5, 2=Febrero→fila 6, ...
+          const fila = mesNum + 4;
+          if (!overrides.has(fila) || totalReal > (overrides.get(fila) ?? 0)) {
+            overrides.set(fila, totalReal);
+          }
+        }
+      } catch { /* ignorar errores individuales */ }
+    }));
+  } catch { /* no bloquear exportación */ }
+  return overrides;
+}
+
 function setIfExists(ws: ExcelJS.Worksheet, addr: string, value: any) {
   const cell = ws.getCell(addr);
   cell.value = value;
@@ -331,29 +367,32 @@ function fillObservaciones(ws: ExcelJS.Worksheet, fila: number, info: InformeRec
 }
 
 /**
- * Llena la hoja 04_Seguimiento_Mensual con los valores de ejecución de TODOS los informes,
- * sin importar si son MENSUAL, BIMESTRAL o TRIMESTRAL.
- *
- * - MENSUAL → escribe total_ejecutado en la fila del mes del informe.
- * - BIMESTRAL / TRIMESTRAL → lee pdf_data.mesData para obtener el valor exacto de cada mes
- *   y lo escribe en su fila correspondiente. Esto garantiza que se suman TODOS los meses.
+ * Llena la hoja 04_Seguimiento_Mensual.
+ * - MENSUAL → total_ejecutado (o totalRealValue manual si existe) en la fila del mes.
+ * - BIMESTRAL / TRIMESTRAL → pdf_data.mesData para valores por mes + override manual.
+ * - overrides: mapa fila→totalRealValue desde executionData de auditorías (ingresos manuales UI).
  */
-function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]) {
+function fillSeguimientoMensual(
+  ws: ExcelJS.Worksheet,
+  informes: InformeRecord[],
+  overrides: Map<number, number>,
+) {
   for (const info of informes) {
     const tipoPeriodo = normalizeKey(info.tipo_periodo || '');
 
-    // Inesperadas guardadas en pdf_data — se suman al último mes
     const valorInesp: number = Number(info.pdf_data?.valorCupsInesperadas || 0);
 
     if (tipoPeriodo === 'MENSUAL') {
-      // Informe de un solo mes: total_ejecutado ya incluye inesperadas
-      // (handleSave guarda totalEjecutadoFinal = RIPS + inesperadas)
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
 
-      if (info.total_ejecutado !== null && info.total_ejecutado !== undefined) {
+      // Preferir totalRealValue ingresado manualmente en la UI
+      const valorManual = overrides.get(fila);
+      const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
+
+      if (valorFinal !== null && valorFinal !== undefined) {
         const cell = ws.getCell(`E${fila}`);
-        cell.value = info.total_ejecutado;
+        cell.value = valorFinal;
         cell.numFmt = '"$"#,##0.00';
       }
       fillObservaciones(ws, fila, info);
@@ -361,8 +400,6 @@ function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]
     }
 
     // BIMESTRAL / TRIMESTRAL: leer los valores por mes desde pdf_data.mesData
-    // pdf_data.mesData = [{ name: "ENERO", value: X, cups: Y }, ...] → valores RIPS puros
-    // Las inesperadas se suman al ÚLTIMO mes (mes de cierre del período)
     const mesData: Array<{ name: string; value: number }> | undefined =
       Array.isArray(info.pdf_data?.mesData) ? info.pdf_data.mesData : undefined;
 
@@ -373,26 +410,33 @@ function fillSeguimientoMensual(ws: ExcelJS.Worksheet, informes: InformeRecord[]
         if (!fila) continue;
 
         const isLast = i === mesData.length - 1;
-        // Sumar inesperadas al último mes (mes de cierre)
-        const valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
+        const valorManual = overrides.get(fila);
+        let valorMes: number;
+        if (valorManual && valorManual > 0) {
+          valorMes = valorManual;
+        } else {
+          valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
+        }
 
         const cell = ws.getCell(`E${fila}`);
         cell.value = valorMes;
         cell.numFmt = '"$"#,##0.00';
 
-        // Observaciones solo en el último mes del período
         if (isLast) {
           fillObservaciones(ws, fila, info);
         }
       }
     } else {
-      // Fallback: si no hay pdf_data, usar total_ejecutado en el primer mes del período
+      // Fallback: total_ejecutado en el primer mes del período
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
 
-      if (info.total_ejecutado !== null && info.total_ejecutado !== undefined) {
+      const valorManual = overrides.get(fila);
+      const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
+
+      if (valorFinal !== null && valorFinal !== undefined) {
         const cell = ws.getCell(`E${fila}`);
-        cell.value = info.total_ejecutado;
+        cell.value = valorFinal;
         cell.numFmt = '"$"#,##0.00';
       }
       fillObservaciones(ws, fila, info);
@@ -445,13 +489,15 @@ export async function POST(request: NextRequest) {
       fillDatosContrato(wsDatos, mainRow);
     }
 
-    // 04_Seguimiento_Mensual → informes mensuales desde Supabase
-    const informes = await fetchInformesByPrestador(mainRow.prestador, mainRow.contrato);
+    // 04_Seguimiento_Mensual → informes + overrides manuales de auditorías
+    const [informes, overrides] = await Promise.all([
+      fetchInformesByPrestador(mainRow.prestador, mainRow.contrato),
+      fetchTotalRealOverrides(mainRow.prestador),
+    ]);
     const wsMensual = workbook.getWorksheet('04_Seguimiento_Mensual');
     if (wsMensual) {
-      // Primero zerear meses fuera del período contractual (ej. contratos de 11 meses)
       fillMesesFueraContrato(wsMensual, mainRow);
-      fillSeguimientoMensual(wsMensual, informes);
+      fillSeguimientoMensual(wsMensual, informes, overrides);
     }
 
     // Las hojas 03 / 05 / 06 / 07 mantienen sus fórmulas intactas y se recalcularán
