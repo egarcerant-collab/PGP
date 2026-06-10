@@ -159,6 +159,7 @@ type InformeRecord = {
   tipo_periodo: string | null;
   fecha: string | null;
   total_ejecutado: number | null;
+  total_ejecutado_final: number | null; // pdf_data.totalEjecutadoFinal (incluye inesperadas)
   valor_final: number | null;
   descontar: number | null;
   reconocer: number | null;
@@ -188,6 +189,10 @@ async function fetchInformesByPrestador(prestador: string, contrato: string): Pr
         tipo_periodo: r.tipo_periodo ?? null,
         fecha: r.fecha ?? null,
         total_ejecutado: typeof r.total_ejecutado === 'number' ? r.total_ejecutado : parseNumberLoose(r.total_ejecutado),
+        total_ejecutado_final: (() => {
+          const v = r.pdf_data?.totalEjecutadoFinal;
+          return typeof v === 'number' ? v : parseNumberLoose(v);
+        })(),
         valor_final: typeof r.valor_final === 'number' ? r.valor_final : parseNumberLoose(r.valor_final),
         descontar: typeof r.descontar === 'number' ? r.descontar : parseNumberLoose(r.descontar),
         reconocer: typeof r.reconocer === 'number' ? r.reconocer : parseNumberLoose(r.reconocer),
@@ -396,11 +401,15 @@ function fillSeguimientoMensual(
       if (!fila) continue;
 
       const valorManual = overrides.get(fila);
-      // Si hay override manual se usa tal cual; si no, total_ejecutado + inesperadas
       let valorFinal: number;
       if (valorManual && valorManual > 0) {
+        // Override manual del usuario (totalRealValue guardado en la auditoría)
         valorFinal = valorManual;
+      } else if (info.total_ejecutado_final && info.total_ejecutado_final > 0) {
+        // pdf_data.totalEjecutadoFinal ya incluye inesperadas (fuente más precisa)
+        valorFinal = info.total_ejecutado_final;
       } else {
+        // Fallback: total_ejecutado base + inesperadas de pdf_data
         valorFinal = (info.total_ejecutado ?? 0) + valorInesp;
       }
 
