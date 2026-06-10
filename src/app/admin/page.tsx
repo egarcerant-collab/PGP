@@ -227,6 +227,10 @@ export default function AdminPage() {
   const [migratePreview, setMigratePreview] = useState<any>(null);
   const [migrateResult, setMigrateResult] = useState<any>(null);
 
+  // ── Importar desde CSV ──
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvResult, setCsvResult] = useState<any>(null);
+
   const handleDownloadBackup = async () => {
     setBackupLoading(true);
     try {
@@ -356,6 +360,102 @@ export default function AdminPage() {
       addToast(`Error en migración: ${e.message}`, 'error');
     } finally {
       setMigrateLoading(false);
+    }
+  };
+
+  // Parser CSV robusto (maneja comillas dobles dentro de campos)
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let cur = '';
+    let inQ = false;
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 2; }
+        else if (ch === '"') { inQ = false; i++; }
+        else { cur += ch; i++; }
+      } else {
+        if (ch === '"') { inQ = true; i++; }
+        else if (ch === ',') { result.push(cur); cur = ''; i++; }
+        else { cur += ch; i++; }
+      }
+    }
+    result.push(cur);
+    return result;
+  };
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>, tipo: 'informes' | 'auditorias') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setCsvLoading(true);
+    setCsvResult(null);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = parseCSVLine(lines[0]);
+      const rows = lines.slice(1).map(line => {
+        const vals = parseCSVLine(line);
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h.trim()] = vals[i] ?? ''; });
+        return obj;
+      }).filter(r => r.id || r.numero);
+
+      const payload: Record<string, any[]> = {};
+
+      if (tipo === 'informes') {
+        payload.informes = rows.map(r => ({
+          id:              r.id,
+          numero:          r.numero,
+          prestador:       r.prestador,
+          nit:             r.nit,
+          contrato:        r.contrato,
+          municipio:       r.municipio,
+          departamento:    r.departamento,
+          periodo:         r.periodo,
+          tipo_periodo:    r.tipo_periodo,
+          fecha:           r.fecha,
+          nt_periodo:      parseFloat(r.nt_periodo) || 0,
+          total_ejecutado: parseFloat(r.total_ejecutado) || 0,
+          descontar:       parseFloat(r.descontar) || 0,
+          reconocer:       parseFloat(r.reconocer) || 0,
+          valor_final:     parseFloat(r.valor_final) || 0,
+          total_anticipos: parseFloat(r.total_anticipos) || 0,
+          responsable:     r.responsable,
+          created_at:      r.created_at,
+          pdf_data:        (() => { try { return JSON.parse(r.pdf_data); } catch { return {}; } })(),
+        }));
+      } else {
+        payload.auditorias = rows.map(r => ({
+          id:         r.id,
+          numero:     r.numero,
+          prestador:  r.prestador,
+          nit:        r.nit,
+          mes:        r.mes,
+          created_at: r.created_at,
+          auditor_id: r.auditor_id,
+          datos:      (() => { try { return JSON.parse(r.datos); } catch { return {}; } })(),
+        }));
+      }
+
+      const res = await fetch('/api/admin/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      setCsvResult(data);
+      const r = data.result;
+      if (tipo === 'informes') {
+        addToast(`Informes: ${r?.informes?.importados ?? 0} importados, ${r?.informes?.omitidos ?? 0} ya existían`, data.ok ? 'success' : 'error');
+      } else {
+        addToast(`Auditorías: ${r?.auditorias?.importados ?? 0} importadas, ${r?.auditorias?.omitidos ?? 0} ya existían`, data.ok ? 'success' : 'error');
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err?.message || 'Error al procesar CSV'}`, 'error');
+    } finally {
+      setCsvLoading(false);
     }
   };
 
@@ -821,6 +921,55 @@ export default function AdminPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Importar desde CSV ── */}
+        <div className="mt-10">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+            <Upload className="h-4 w-4 text-teal-600" />
+            Importar desde CSV (Supabase Export)
+          </h2>
+          <p className="text-slate-500 text-sm mb-4">
+            Sube los CSV exportados de Supabase para importar informes y auditorías faltantes. No duplica registros existentes.
+          </p>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="border-2 border-dashed border-teal-200 rounded-lg p-4 text-center hover:border-teal-400 transition-colors">
+                <p className="text-xs font-semibold text-teal-700 uppercase mb-1">informes_rows.csv</p>
+                <p className="text-xs text-slate-400 mb-3">Tabla de informes financieros</p>
+                <label className={`inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg px-3 py-2 cursor-pointer transition-colors ${csvLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {csvLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Subir informes CSV
+                  <input type="file" accept=".csv" className="hidden" onChange={e => handleImportCSV(e, 'informes')} disabled={csvLoading} />
+                </label>
+              </div>
+              <div className="border-2 border-dashed border-teal-200 rounded-lg p-4 text-center hover:border-teal-400 transition-colors">
+                <p className="text-xs font-semibold text-teal-700 uppercase mb-1">auditorias_rows.csv</p>
+                <p className="text-xs text-slate-400 mb-3">Tabla de auditorías guardadas</p>
+                <label className={`inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg px-3 py-2 cursor-pointer transition-colors ${csvLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {csvLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Subir auditorías CSV
+                  <input type="file" accept=".csv" className="hidden" onChange={e => handleImportCSV(e, 'auditorias')} disabled={csvLoading} />
+                </label>
+              </div>
+            </div>
+            {csvResult && (
+              <div className={`rounded-lg p-3 text-xs border ${csvResult.ok ? 'bg-teal-50 border-teal-200' : 'bg-red-50 border-red-200'}`}>
+                <p className={`font-semibold mb-1 ${csvResult.ok ? 'text-teal-800' : 'text-red-700'}`}>
+                  {csvResult.ok ? '✅ Importación exitosa' : '⚠️ Importación con errores'}
+                </p>
+                {csvResult.result?.informes && (
+                  <p className="text-slate-600">Informes: {csvResult.result.informes.importados} importados, {csvResult.result.informes.omitidos} ya existían</p>
+                )}
+                {csvResult.result?.auditorias && (
+                  <p className="text-slate-600">Auditorías: {csvResult.result.auditorias.importados} importadas, {csvResult.result.auditorias.omitidos} ya existían</p>
+                )}
+                {[...(csvResult.result?.informes?.errores || []), ...(csvResult.result?.auditorias?.errores || [])].map((e: string, i: number) => (
+                  <p key={i} className="text-red-600 mt-1">{e}</p>
+                ))}
               </div>
             )}
           </div>
