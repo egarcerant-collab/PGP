@@ -405,7 +405,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
         <div className="space-y-4">
             {isLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground text-sm py-8 justify-center">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Cargando auditorías desde Supabase...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Cargando auditorías...
                 </div>
             ) : audits.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
