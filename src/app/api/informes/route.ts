@@ -1,20 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getDrive, readJson, writeJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
-
-async function getCurrentUser() {
-  // Modo local sin autenticación
-  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
-    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
-  }
-  try {
-    const sc = await createSupabaseServerClient();
-    const { data: { user } } = await sc.auth.getUser();
-    if (!user) return null;
-    const { data: profile } = await sc.from('profiles').select('nombre, rol').eq('id', user.id).single();
-    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
-  } catch { return null; }
-}
+import { getCurrentUser } from '@/lib/get-current-user';
 
 type Informe = Record<string, any>;
 
@@ -23,10 +9,10 @@ async function loadInformes(drive: any): Promise<Informe[]> {
 }
 
 // GET /api/informes
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const drive = getDrive();
-    const currentUser = await getCurrentUser();
+    const currentUser = await getCurrentUser(request);
     const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
     let data = await loadInformes(drive);
 
@@ -182,7 +168,7 @@ export async function DELETE(request: Request) {
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
 
     const drive = getDrive();
-    const currentUser = await getCurrentUser();
+    const currentUser = await getCurrentUser(request);
     const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
     let informes = await loadInformes(drive);
 

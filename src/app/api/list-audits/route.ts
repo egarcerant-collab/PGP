@@ -1,22 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getCurrentUser } from '@/lib/get-current-user';
 
-async function getCurrentUser() {
-  if (process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') {
-    return { id: 'local', nombre: 'Eduardo Garcerant', rol: 'superadmin' };
-  }
-  try {
-    const sc = await createSupabaseServerClient();
-    const { data: { user } } = await sc.auth.getUser();
-    if (!user) return null;
-    const { data: profile } = await sc.from('profiles').select('nombre, rol').eq('id', user.id).single();
-    return { id: user.id, nombre: profile?.nombre || '', rol: profile?.rol || 'auditor' };
-  } catch { return null; }
-}
-
-export async function GET() {
-  const currentUser = await getCurrentUser();
+export async function GET(request: Request) {
+  const currentUser = await getCurrentUser(request);
   const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
 
   try {
