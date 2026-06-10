@@ -396,10 +396,16 @@ function fillSeguimientoMensual(
       if (!fila) continue;
 
       const valorManual = overrides.get(fila);
-      const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
+      // Si hay override manual se usa tal cual; si no, total_ejecutado + inesperadas
+      let valorFinal: number;
+      if (valorManual && valorManual > 0) {
+        valorFinal = valorManual;
+      } else {
+        valorFinal = (info.total_ejecutado ?? 0) + valorInesp;
+      }
 
-      if (valorFinal !== null && valorFinal !== undefined) {
-        writeCell(fila, Number(valorFinal));
+      if (valorFinal > 0) {
+        writeCell(fila, valorFinal);
       }
       fillObservaciones(ws, fila, info);
       continue;
