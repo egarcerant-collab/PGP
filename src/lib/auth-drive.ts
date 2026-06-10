@@ -87,12 +87,9 @@ export function verifyJWT(token: string): SessionUser | null {
 // ── Operaciones sobre usuarios.json en Drive ─────────────────────────────
 
 export async function loadUsuarios(): Promise<DriveUser[]> {
-  try {
-    const drive = getDrive();
-    return (await readJson<DriveUser[]>(drive, ROOT_FOLDER_ID, USUARIOS_FILE)) ?? [];
-  } catch {
-    return [];
-  }
+  // NO capturamos errores aquí — que suban al handler del login
+  const drive = getDrive();
+  return (await readJson<DriveUser[]>(drive, ROOT_FOLDER_ID, USUARIOS_FILE)) ?? [];
 }
 
 export async function saveUsuarios(usuarios: DriveUser[]): Promise<void> {
