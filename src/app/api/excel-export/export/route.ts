@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import fs from 'fs/promises';
-import { createClient } from '@supabase/supabase-js';
+import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const EXCEL_EXPORT_COOKIE = 'excel_export_auth';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxohacipmnmqyef.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
 
 // Ruta de la plantilla base (copia exacta de VITAL SALUD SM.xlsx)
 const TEMPLATE_PATH = path.join(process.cwd(), 'src', 'app', 'api', 'excel-export', '_template', 'plantilla.xlsx');
@@ -172,16 +169,9 @@ type InformeRecord = {
 
 async function fetchInformesByPrestador(prestador: string, contrato: string): Promise<InformeRecord[]> {
   try {
-    // cache: 'no-store' evita que Next.js reutilice el resultado entre prestadores distintos
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) },
-    });
-
-    const { data, error } = await supabase
-      .from('informes')
-      .select('numero, prestador, contrato, periodo, tipo_periodo, fecha, total_ejecutado, valor_final, descontar, reconocer, responsable, pdf_data');
-
-    if (error || !data?.length) return [];
+    const drive = getDrive();
+    const data: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
+    if (!data.length) return [];
 
     const pKey = normalizeKey(prestador);
     const cKey = normalizeKey(contrato);

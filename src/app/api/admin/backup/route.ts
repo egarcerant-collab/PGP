@@ -1,60 +1,51 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/get-current-user';
+import { getDrive, readJson, writeJson, getSubfolder, listFiles, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
-async function verifyAdmin(): Promise<boolean> {
-  try {
-    const serverClient = await createSupabaseServerClient();
-    const { data: { user } } = await serverClient.auth.getUser();
-    if (!user) return false;
-    const { data: profile } = await serverClient
-      .from('profiles')
-      .select('rol')
-      .eq('id', user.id)
-      .single();
-    return profile?.rol === 'superadmin' || profile?.rol === 'admin';
-  } catch {
-    return false;
-  }
-}
-
-// GET /api/admin/backup — descarga backup completo (auditorias + informes)
-export async function GET() {
-  if (!await verifyAdmin()) {
+// GET /api/admin/backup — descarga backup completo de Drive
+export async function GET(request: Request) {
+  const user = await getCurrentUser(request);
+  if (user?.rol !== 'superadmin' && user?.rol !== 'admin') {
     return NextResponse.json({ message: 'No autorizado.' }, { status: 403 });
   }
 
   try {
-    const db = createSupabaseAdminClient();
-    const [{ data: auditorias, error: e1 }, { data: informes, error: e2 }] = await Promise.all([
-      db.from('auditorias').select('*').order('created_at', { ascending: true }),
-      db.from('informes').select('*').order('numero', { ascending: true }),
+    const drive           = getDrive();
+    const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
+
+    const [informes, auditIndex, auditFiles] = await Promise.all([
+      readJson(drive, ROOT_FOLDER_ID, 'informes.json'),
+      readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json'),
+      listFiles(drive, auditoriaFolder),
     ]);
 
-    if (e1) throw e1;
-    if (e2) throw e2;
-
-    // Limpiar pgpData de auditorias antiguas para reducir tamaño del backup
-    const auditoriasSanitizadas = (auditorias || []).map(r => {
-      const datos = r.datos as any;
-      if (datos && datos.pgpData) {
-        const { pgpData: _, ...datosSinPgp } = datos;
-        return { ...r, datos: datosSinPgp };
-      }
-      return r;
-    });
+    // Leer archivos individuales y limpiar pgpData
+    const auditorias = (await Promise.all(
+      auditFiles
+        .filter(f => f.name.endsWith('.json'))
+        .map(async f => {
+          const data = await readJson(drive, auditoriaFolder, f.name);
+          if (!data) return null;
+          if (data.datos?.pgpData) {
+            const { pgpData: _, ...datosSinPgp } = data.datos;
+            return { ...data, datos: datosSinPgp };
+          }
+          return data;
+        })
+    )).filter(Boolean);
 
     const backup = {
-      version: '1.1',
-      fecha: new Date().toISOString(),
-      organizacion: 'Dusakawi EPS',
-      auditorias: auditoriasSanitizadas,
-      informes: informes || [],
+      version:         '2.0',
+      storage:         'gdrive',
+      fecha:           new Date().toISOString(),
+      organizacion:    'Dusakawi EPS',
+      auditoriasIndex: auditIndex || [],
+      auditorias,
+      informes:        informes || [],
     };
 
-    const json = JSON.stringify(backup, null, 2);
     const fecha = new Date().toISOString().slice(0, 10);
-
-    return new NextResponse(json, {
+    return new NextResponse(JSON.stringify(backup, null, 2), {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="backup_dsk_${fecha}.json"`,
@@ -65,58 +56,56 @@ export async function GET() {
   }
 }
 
-// POST /api/admin/backup — restaura desde un backup JSON
+// POST /api/admin/backup — restaura desde backup JSON
 export async function POST(request: Request) {
-  if (!await verifyAdmin()) {
+  const user = await getCurrentUser(request);
+  if (user?.rol !== 'superadmin' && user?.rol !== 'admin') {
     return NextResponse.json({ message: 'No autorizado.' }, { status: 403 });
   }
 
   try {
     const backup = await request.json();
-
     if (!backup.version || (!backup.auditorias && !backup.informes)) {
       return NextResponse.json({ message: 'Archivo de backup inválido.' }, { status: 400 });
     }
 
-    const db = createSupabaseAdminClient();
-    const resultados = { auditorias: 0, informes: 0, errores: [] as string[] };
+    const drive           = getDrive();
+    const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
+    const resultados      = { auditorias: 0, informes: 0, errores: [] as string[] };
 
-    // Restaurar auditorias en lotes de 20
-    const auditorias: any[] = backup.auditorias || [];
-    for (let i = 0; i < auditorias.length; i += 20) {
-      const lote = auditorias.slice(i, i + 20).map((r: any) => {
-        // Limpiar pgpData si existe (campo obsoleto)
-        const datos = r.datos as any;
-        if (datos && datos.pgpData) {
-          const { pgpData: _, ...datosSinPgp } = datos;
+    if (Array.isArray(backup.informes) && backup.informes.length > 0) {
+      await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', backup.informes);
+      resultados.informes = backup.informes.length;
+    }
+
+    if (Array.isArray(backup.auditorias) && backup.auditorias.length > 0) {
+      const cleaned = backup.auditorias.map((r: any) => {
+        if (r.datos?.pgpData) {
+          const { pgpData: _, ...datosSinPgp } = r.datos;
           return { ...r, datos: datosSinPgp };
         }
         return r;
       });
-      const { error } = await db.from('auditorias').upsert(lote, { onConflict: 'id' });
-      if (error) {
-        resultados.errores.push(`Lote auditorias ${i}-${i + 20}: ${error.message}`);
-      } else {
-        resultados.auditorias += lote.length;
-      }
+
+      const newIndex = cleaned.map((r: any) => ({
+        id:             r.id,
+        numero:         r.numero,
+        prestador:      r.prestador,
+        nit:            r.nit,
+        mes:            r.mes,
+        auditor_id:     r.datos?.auditor_id     || null,
+        auditor_nombre: r.datos?.auditor_nombre || '',
+        created_at:     r.created_at,
+      }));
+
+      await Promise.all([
+        writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', newIndex),
+        ...cleaned.map((r: any) => writeJson(drive, auditoriaFolder, `${r.id}.json`, r)),
+      ]);
+      resultados.auditorias = cleaned.length;
     }
 
-    // Restaurar informes en lotes de 20
-    const informes: any[] = backup.informes || [];
-    for (let i = 0; i < informes.length; i += 20) {
-      const lote = informes.slice(i, i + 20);
-      const { error } = await db.from('informes').upsert(lote, { onConflict: 'numero' });
-      if (error) {
-        resultados.errores.push(`Lote informes ${i}-${i + 20}: ${error.message}`);
-      } else {
-        resultados.informes += lote.length;
-      }
-    }
-
-    return NextResponse.json({
-      success: resultados.errores.length === 0,
-      ...resultados,
-    });
+    return NextResponse.json({ success: resultados.errores.length === 0, ...resultados });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
   }

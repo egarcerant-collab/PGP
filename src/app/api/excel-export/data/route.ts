@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { createClient } from '@supabase/supabase-js';
+import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,9 +9,6 @@ const EXCEL_EXPORT_COOKIE = 'excel_export_auth';
 const GOOGLE_SHEET_ID = '10Icu1DO4llbolO60VsdFcN5vxuYap1vBZs6foZ-XD04';
 const GOOGLE_SHEET_GID = '0';
 const GOOGLE_SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv&gid=${GOOGLE_SHEET_GID}`;
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxohacipmnmqyef.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
 
 export type ProviderRow = {
   nit: string;
@@ -177,12 +174,9 @@ function parseProvidersFromCsv(csvText: string): ProviderRow[] {
 
 async function getExecutionSummary(): Promise<ExecutionSummary[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data, error } = await supabase
-      .from('informes')
-      .select('prestador, contrato, total_ejecutado, valor_final, descontar, reconocer');
-
-    if (error || !data?.length) return [];
+    const drive = getDrive();
+    const data: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
+    if (!data.length) return [];
 
     const grouped = new Map<string, ExecutionSummary>();
 

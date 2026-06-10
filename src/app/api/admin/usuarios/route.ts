@@ -1,112 +1,102 @@
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/get-current-user';
+import {
+  loadUsuarios,
+  saveUsuarios,
+  createUser,
+  hashPassword,
+  DriveUser,
+} from '@/lib/auth-drive';
 
-// Helper to check if requester is superadmin
-async function checkSuperAdmin() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('rol')
-    .eq('id', user.id)
-    .single();
-  if (profile?.rol !== 'superadmin') return null;
-  return user;
+async function checkSuperAdmin(request: Request): Promise<boolean> {
+  const user = await getCurrentUser(request);
+  return user?.rol === 'superadmin';
 }
 
-export async function GET() {
-  const user = await checkSuperAdmin();
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+// GET /api/admin/usuarios — lista todos los usuarios
+export async function GET(request: Request) {
+  if (!await checkSuperAdmin(request)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
 
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from('profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ usuarios: data });
+  try {
+    const usuarios = await loadUsuarios();
+    const safe = usuarios.map(({ passwordHash: _, ...u }) => u);
+    return NextResponse.json({ usuarios: safe });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
 
+// POST /api/admin/usuarios — crea un usuario nuevo
 export async function POST(request: Request) {
-  const user = await checkSuperAdmin();
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  if (!await checkSuperAdmin(request)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
 
   const { email, password, nombre, rol } = await request.json();
   if (!email || !password || !nombre || !rol) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
+  try {
+    await createUser(email, password, nombre, rol);
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  }
+}
 
-  // Create auth user
-  const { data: newUser, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-
-  if (createError) return NextResponse.json({ error: createError.message }, { status: 500 });
-
-  // Create profile
-  const { error: profileError } = await admin.from('profiles').insert({
-    id: newUser.user.id,
-    email,
-    nombre,
-    rol,
-    activo: true,
-  });
-
-  if (profileError) {
-    // Rollback: delete the auth user if profile creation failed
-    await admin.auth.admin.deleteUser(newUser.user.id);
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+// PUT /api/admin/usuarios — actualiza nombre, rol, activo (y password si se envía)
+export async function PUT(request: Request) {
+  if (!await checkSuperAdmin(request)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
 
-  return NextResponse.json({ success: true });
-}
-
-export async function PUT(request: Request) {
-  const user = await checkSuperAdmin();
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-
-  const { id, nombre, rol, activo } = await request.json();
+  const { id, nombre, rol, activo, password } = await request.json();
   if (!id) return NextResponse.json({ error: 'Falta ID' }, { status: 400 });
 
-  const admin = createSupabaseAdminClient();
+  try {
+    const usuarios = await loadUsuarios();
+    const idx = usuarios.findIndex(u => u.id === id);
+    if (idx === -1) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
 
-  const updateData: Record<string, unknown> = {};
-  if (nombre !== undefined) updateData.nombre = nombre;
-  if (rol !== undefined) updateData.rol = rol;
-  if (activo !== undefined) updateData.activo = activo;
+    if (nombre  !== undefined) usuarios[idx].nombre  = nombre;
+    if (rol     !== undefined) usuarios[idx].rol     = rol as DriveUser['rol'];
+    if (activo  !== undefined) usuarios[idx].activo  = activo;
+    if (password)              usuarios[idx].passwordHash = hashPassword(password);
 
-  const { error } = await admin.from('profiles').update(updateData).eq('id', id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ success: true });
+    await saveUsuarios(usuarios);
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
 
+// DELETE /api/admin/usuarios?id=X — elimina usuario
 export async function DELETE(request: Request) {
-  const user = await checkSuperAdmin();
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  const currentUser = await getCurrentUser(request);
+  if (currentUser?.rol !== 'superadmin') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Falta ID' }, { status: 400 });
 
-  // Prevent self-deletion
-  if (id === user.id) {
+  if (id === currentUser.id) {
     return NextResponse.json({ error: 'No puedes eliminarte a ti mismo' }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
-
-  // Delete from auth (cascades to profiles via FK)
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ success: true });
+  try {
+    const usuarios = await loadUsuarios();
+    const filtered = usuarios.filter(u => u.id !== id);
+    if (filtered.length === usuarios.length) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+    }
+    await saveUsuarios(filtered);
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
