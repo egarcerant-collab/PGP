@@ -368,15 +368,24 @@ function fillObservaciones(ws: ExcelJS.Worksheet, fila: number, info: InformeRec
 
 /**
  * Llena la hoja 04_Seguimiento_Mensual.
- * - MENSUAL → total_ejecutado (o totalRealValue manual si existe) en la fila del mes.
- * - BIMESTRAL / TRIMESTRAL → pdf_data.mesData para valores por mes + override manual.
- * - overrides: mapa fila→totalRealValue desde executionData de auditorías (ingresos manuales UI).
+ * Retorna { totalEjecutado, mesesConDatos } para incluir en headers de respuesta.
  */
 function fillSeguimientoMensual(
   ws: ExcelJS.Worksheet,
   informes: InformeRecord[],
   overrides: Map<number, number>,
-) {
+): { totalEjecutado: number; mesesConDatos: number } {
+  let totalEjecutado = 0;
+  let mesesConDatos = 0;
+
+  const writeCell = (fila: number, valor: number) => {
+    const cell = ws.getCell(`E${fila}`);
+    cell.value = valor;
+    cell.numFmt = '"$"#,##0.00';
+    totalEjecutado += valor;
+    mesesConDatos++;
+  };
+
   for (const info of informes) {
     const tipoPeriodo = normalizeKey(info.tipo_periodo || '');
 
@@ -386,14 +395,11 @@ function fillSeguimientoMensual(
       const fila = detectMonthRow(info.periodo || '');
       if (!fila) continue;
 
-      // Preferir totalRealValue ingresado manualmente en la UI
       const valorManual = overrides.get(fila);
       const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
 
       if (valorFinal !== null && valorFinal !== undefined) {
-        const cell = ws.getCell(`E${fila}`);
-        cell.value = valorFinal;
-        cell.numFmt = '"$"#,##0.00';
+        writeCell(fila, Number(valorFinal));
       }
       fillObservaciones(ws, fila, info);
       continue;
@@ -418,9 +424,7 @@ function fillSeguimientoMensual(
           valorMes = (m.value || 0) + (isLast ? valorInesp : 0);
         }
 
-        const cell = ws.getCell(`E${fila}`);
-        cell.value = valorMes;
-        cell.numFmt = '"$"#,##0.00';
+        writeCell(fila, valorMes);
 
         if (isLast) {
           fillObservaciones(ws, fila, info);
@@ -435,13 +439,12 @@ function fillSeguimientoMensual(
       const valorFinal = (valorManual && valorManual > 0) ? valorManual : info.total_ejecutado;
 
       if (valorFinal !== null && valorFinal !== undefined) {
-        const cell = ws.getCell(`E${fila}`);
-        cell.value = valorFinal;
-        cell.numFmt = '"$"#,##0.00';
+        writeCell(fila, Number(valorFinal));
       }
       fillObservaciones(ws, fila, info);
     }
   }
+  return { totalEjecutado, mesesConDatos };
 }
 
 export async function POST(request: NextRequest) {
@@ -495,9 +498,11 @@ export async function POST(request: NextRequest) {
       fetchTotalRealOverrides(mainRow.prestador),
     ]);
     const wsMensual = workbook.getWorksheet('04_Seguimiento_Mensual');
+    let totalEjecutado = 0;
+    let mesesConDatos = 0;
     if (wsMensual) {
       fillMesesFueraContrato(wsMensual, mainRow);
-      fillSeguimientoMensual(wsMensual, informes, overrides);
+      ({ totalEjecutado, mesesConDatos } = fillSeguimientoMensual(wsMensual, informes, overrides));
     }
 
     // Las hojas 03 / 05 / 06 / 07 mantienen sus fórmulas intactas y se recalcularán
@@ -541,6 +546,9 @@ export async function POST(request: NextRequest) {
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${fileName}"`,
         'Cache-Control': 'no-store',
+        'X-Total-Ejecutado': String(Math.round(totalEjecutado)),
+        'X-Meses-Con-Datos': String(mesesConDatos),
+        'Access-Control-Expose-Headers': 'X-Total-Ejecutado, X-Meses-Con-Datos',
       },
     });
   } catch (error: any) {

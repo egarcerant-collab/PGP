@@ -96,6 +96,7 @@ export default function ExcelExportPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');
+  const [exportMsg, setExportMsg] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -212,6 +213,7 @@ export default function ExcelExportPage() {
 
     setIsExporting(true);
     setLoadError('');
+    setExportMsg('');
 
     try {
       const response = await fetch('/api/excel-export/export', {
@@ -229,6 +231,9 @@ export default function ExcelExportPage() {
         throw new Error(data?.message || 'No fue posible exportar el archivo.');
       }
 
+      const totalRaw = response.headers.get('X-Total-Ejecutado');
+      const mesesRaw = response.headers.get('X-Meses-Con-Datos');
+
       const blob = await response.blob();
       const disposition = response.headers.get('Content-Disposition') || '';
       const match = disposition.match(/filename="?([^";]+)"?/i);
@@ -244,6 +249,13 @@ export default function ExcelExportPage() {
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(url);
+
+      if (totalRaw) {
+        const total = Number(totalRaw);
+        const meses = Number(mesesRaw || 0);
+        const totalFmt = currencyCO.format(total);
+        setExportMsg(`Excel descargado — ${meses} mes${meses !== 1 ? 'es' : ''} con datos · Total ejecutado incluido: ${totalFmt}`);
+      }
     } catch (error: any) {
       setLoadError(error?.message || 'No fue posible exportar el archivo.');
     } finally {
@@ -371,6 +383,11 @@ export default function ExcelExportPage() {
             )}
 
             {loadError && <p className="text-sm text-destructive">{loadError}</p>}
+            {exportMsg && (
+              <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800 font-medium">
+                {exportMsg}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -378,7 +395,7 @@ export default function ExcelExportPage() {
           <CardHeader>
             <CardTitle className="text-base">Datos del prestador</CardTitle>
             <CardDescription>
-              Campos base y relación de ejecución (si existe en Supabase) para el prestador seleccionado.
+              Campos base y relación de ejecución para el prestador seleccionado.
             </CardDescription>
           </CardHeader>
           <CardContent>
