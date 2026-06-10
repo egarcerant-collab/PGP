@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Loader2, UserPlus, Trash2, Edit2, Check, X, Shield,
   Users, ArrowLeft, ToggleLeft, ToggleRight, RefreshCw,
-  Download, Upload, HardDrive,
+  Download, Upload, HardDrive, DatabaseZap,
 } from 'lucide-react';
 
 interface UserProfile {
@@ -222,6 +222,11 @@ export default function AdminPage() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<{ resumen: any; detalles: string[] } | null>(null);
 
+  // ── Migración Supabase → Drive ──
+  const [migrateLoading, setMigrateLoading] = useState(false);
+  const [migratePreview, setMigratePreview] = useState<any>(null);
+  const [migrateResult, setMigrateResult] = useState<any>(null);
+
   const handleDownloadBackup = async () => {
     setBackupLoading(true);
     try {
@@ -314,6 +319,43 @@ export default function AdminPage() {
       addToast(`Error: ${err?.message || 'Error de conexión'}`, 'error');
     } finally {
       setSyncLoading(false);
+    }
+  };
+
+  const handleMigratePreview = async () => {
+    setMigrateLoading(true);
+    setMigratePreview(null);
+    try {
+      const res = await fetch('/api/admin/migrate-supabase');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      setMigratePreview(data);
+    } catch (e: any) {
+      addToast(`Error: ${e.message}`, 'error');
+    } finally {
+      setMigrateLoading(false);
+    }
+  };
+
+  const handleMigrateRun = async () => {
+    const ok = window.confirm(
+      '¿Confirmar migración?\n\nSe importarán los informes y auditorías de Supabase hacia Google Drive.\nNo se duplicarán registros que ya existan en Drive.'
+    );
+    if (!ok) return;
+    setMigrateLoading(true);
+    setMigrateResult(null);
+    try {
+      const res = await fetch('/api/admin/migrate-supabase', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      setMigrateResult(data);
+      const inf = data.resultados?.informes?.importados ?? 0;
+      const aud = data.resultados?.auditorias?.importados ?? 0;
+      addToast(`Migración completa: ${inf} informes, ${aud} auditorías importadas`, data.ok ? 'success' : 'error');
+    } catch (e: any) {
+      addToast(`Error en migración: ${e.message}`, 'error');
+    } finally {
+      setMigrateLoading(false);
     }
   };
 
@@ -697,6 +739,93 @@ export default function AdminPage() {
             )}
           </div>
         </div>
+
+        {/* ── Migración Supabase → Drive ── */}
+        <div className="mt-10">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+            <DatabaseZap className="h-4 w-4 text-purple-600" />
+            Recuperar Datos de Supabase
+          </h2>
+          <p className="text-slate-500 text-sm mb-4">
+            Importa los informes y auditorías que estaban guardadas en Supabase hacia Google Drive.
+            Úsalo para recuperar datos de sesiones anteriores. No duplica registros existentes.
+          </p>
+
+          <div className="bg-white border border-purple-200 rounded-xl p-5 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 rounded-lg p-2 shrink-0">
+                <DatabaseZap className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Migración Supabase → Drive</p>
+                <p className="text-xs text-slate-400">
+                  Primero verifica cuántos registros hay disponibles, luego ejecuta la importación.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={handleMigratePreview}
+                disabled={migrateLoading}
+                className="flex items-center gap-2 border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50 text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                {migrateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
+                Verificar registros
+              </button>
+              <button
+                onClick={handleMigrateRun}
+                disabled={migrateLoading}
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                {migrateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Ejecutar migración
+              </button>
+            </div>
+
+            {migratePreview && (
+              <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-xs space-y-1">
+                <p className="font-semibold text-purple-800 mb-2">Registros disponibles:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white rounded p-2 border border-purple-100">
+                    <p className="text-purple-500 font-medium uppercase text-[10px]">Supabase</p>
+                    <p className="text-slate-700">Informes: <strong>{migratePreview.supabase?.informes ?? '?'}</strong></p>
+                    <p className="text-slate-700">Auditorías: <strong>{migratePreview.supabase?.auditorias ?? '?'}</strong></p>
+                  </div>
+                  <div className="bg-white rounded p-2 border border-purple-100">
+                    <p className="text-emerald-500 font-medium uppercase text-[10px]">Drive (actual)</p>
+                    <p className="text-slate-700">Informes: <strong>{migratePreview.drive?.informes ?? 0}</strong></p>
+                    <p className="text-slate-700">Auditorías: <strong>{migratePreview.drive?.auditorias ?? 0}</strong></p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {migrateResult && (
+              <div className={`rounded-lg p-3 text-xs border ${migrateResult.ok ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                <p className={`font-semibold mb-1 ${migrateResult.ok ? 'text-emerald-800' : 'text-red-700'}`}>
+                  {migrateResult.ok ? '✅ Migración exitosa' : '⚠️ Migración con errores'}
+                </p>
+                <p className="text-slate-600">
+                  Informes: {migrateResult.resultados?.informes?.importados ?? 0} importados,{' '}
+                  {migrateResult.resultados?.informes?.omitidos ?? 0} ya existían
+                </p>
+                <p className="text-slate-600">
+                  Auditorías: {migrateResult.resultados?.auditorias?.importados ?? 0} importadas,{' '}
+                  {migrateResult.resultados?.auditorias?.omitidos ?? 0} ya existían
+                </p>
+                {(migrateResult.resultados?.informes?.errores?.length > 0 || migrateResult.resultados?.auditorias?.errores?.length > 0) && (
+                  <div className="mt-2 text-red-600 space-y-0.5">
+                    {[...(migrateResult.resultados.informes.errores || []), ...(migrateResult.resultados.auditorias.errores || [])].map((e: string, i: number) => (
+                      <p key={i}>{e}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
       </main>
 
       {/* Create User Modal */}
