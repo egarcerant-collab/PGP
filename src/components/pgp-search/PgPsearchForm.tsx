@@ -642,9 +642,11 @@ const PgPsearchForm = forwardRef<
       if (!selectedPrestador || executionDataByMonth.size === 0) {
         return { error: 'Faltan datos de ejecución.' };
       }
-      const monthKey = months[0] || Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
-      const date = new Date(2024, parseInt(monthKey) - 1, 1);
-      const monthName = date.toLocaleString('es-CO', { month: 'long' });
+      const allMonthKeys = (months.length > 0 ? months : [...executionDataByMonth.keys()])
+        .map(k => parseInt(k)).sort((a, b) => a - b);
+      const monthName = allMonthKeys
+        .map(k => new Date(2024, k - 1, 1).toLocaleString('es-CO', { month: 'long' }))
+        .join('-');
 
       // ── Verificar si ya existe una auditoría para este prestador/mes ──
       try {
@@ -1003,9 +1005,11 @@ const PgPsearchForm = forwardRef<
                   alert('Primero carga los archivos JSON del prestador.');
                   return;
                 }
-                const monthKey = Array.from(executionDataByMonth.keys())[0] || '1';
-                const date = new Date(2024, parseInt(monthKey) - 1, 1);
-                const monthName = date.toLocaleString('es-CO', { month: 'long' });
+                const allMonthKeys = [...executionDataByMonth.keys()]
+                  .map(k => parseInt(k)).sort((a, b) => a - b);
+                const monthName = allMonthKeys.length > 0
+                  ? allMonthKeys.map(k => new Date(2024, k - 1, 1).toLocaleString('es-CO', { month: 'long' })).join('-')
+                  : new Date(2024, 0, 1).toLocaleString('es-CO', { month: 'long' });
 
                 // ── Verificar si ya existe una auditoría para este prestador/mes ──
                 try {

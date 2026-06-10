@@ -138,6 +138,31 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH /api/save-audit — corrige el campo `mes` de una entrada del índice
+export async function PATCH(request: Request) {
+  try {
+    const currentUser = await getCurrentUser(request);
+    const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
+    if (!isAdmin) return NextResponse.json({ message: 'No autorizado.' }, { status: 403 });
+
+    const { id, mes } = await request.json();
+    if (!id || !mes) return NextResponse.json({ message: 'Faltan id y mes.' }, { status: 400 });
+
+    const drive = getDrive();
+    const index = await loadIndex(drive);
+    const idx = index.findIndex((r: any) => r.id === id || r.numero === id);
+    if (idx === -1) return NextResponse.json({ message: 'Auditoría no encontrada.' }, { status: 404 });
+
+    const anterior = index[idx].mes;
+    index[idx] = { ...index[idx], mes };
+    await writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', index);
+
+    return NextResponse.json({ success: true, anterior, nuevo: mes, numero: index[idx].numero });
+  } catch (e: any) {
+    return NextResponse.json({ message: e.message }, { status: 500 });
+  }
+}
+
 // DELETE /api/save-audit?id=X&password=Y
 export async function DELETE(request: Request) {
   try {
