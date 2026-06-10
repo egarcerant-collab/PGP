@@ -14,10 +14,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Correo y contraseña requeridos.' }, { status: 400 });
     }
 
-    // Crear admin por defecto si no hay usuarios
+    // Crear admin por defecto si no hay usuarios (falla silenciosamente)
     await ensureDefaultAdmin();
 
-    const user = await findUserByEmail(email);
+    let user;
+    try {
+      user = await findUserByEmail(email);
+    } catch (driveErr: any) {
+      return NextResponse.json({
+        message: 'Error conectando con Google Drive. Verifica las credenciales del servidor.',
+      }, { status: 503 });
+    }
+
     if (!user || !user.activo) {
       return NextResponse.json({ message: 'Correo o contraseña incorrectos.' }, { status: 401 });
     }

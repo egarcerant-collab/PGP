@@ -136,13 +136,17 @@ export { COOKIE_NAME };
 // ── Inicializar admin por defecto si usuarios.json está vacío ─────────────
 
 export async function ensureDefaultAdmin(): Promise<void> {
-  const usuarios = await loadUsuarios();
-  if (usuarios.length === 0) {
-    await createUser(
-      'egarcerant@dusakawiepsi.com',
-      'Wanoseshas2015.',
-      'Eduardo Garcerant',
-      'superadmin'
-    );
+  try {
+    const usuarios = await loadUsuarios();
+    if (usuarios.length === 0) {
+      await createUser(
+        'egarcerant@dusakawiepsi.com',
+        'Wanoseshas2015.',
+        'Eduardo Garcerant',
+        'superadmin'
+      );
+    }
+  } catch {
+    // Si Drive no está disponible, continuar sin crear admin por defecto
   }
 }
