@@ -601,11 +601,27 @@ export default function CertificadoTrimestral({
 
       // ── Actividades por mes: suma de Cantidad_Ejecutada de todos los CUPS ──
       // Viene de comparisonSummary.monthlyFinancials.totalActividades (suma de Cant. Validada)
-      const mesData = selectedGroup.months.map(m => ({
-        name: MONTH_ES[m.month] || m.month.toUpperCase(),
-        value: m.totalValorEjecutado,
-        cups: m.totalActividades ?? 0, // total de actividades ejecutadas ese mes
-      }));
+      // Fallback: si RIPS no tiene valor válido para un mes, usar el mesData guardado en el informe.
+      const _savedInfRef = initialInforme?.numero
+        ? historial.find((h: any) => h.numero === initialInforme.numero)
+        : null;
+      const _savedMes: Array<{ name: string; value: number }> =
+        Array.isArray(_savedInfRef?.pdfData?.mesData) ? _savedInfRef.pdfData.mesData : [];
+
+      const mesData = selectedGroup.months.map(m => {
+        const monthName = MONTH_ES[m.month] || m.month.toUpperCase();
+        const rawValue = m.totalValorEjecutado;
+        let value = (typeof rawValue === 'number' && isFinite(rawValue) && rawValue > 0) ? rawValue : 0;
+        if (value === 0) {
+          const sv = _savedMes.find(d => d.name === monthName);
+          if (sv?.value && typeof sv.value === 'number' && isFinite(sv.value) && sv.value > 0) value = sv.value;
+        }
+        return {
+          name: monthName,
+          value,
+          cups: (typeof m.totalActividades === 'number' && isFinite(m.totalActividades)) ? m.totalActividades : 0,
+        };
+      });
 
       // ── Fechas reales del período evaluado (no las del contrato completo) ──
       const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(mesData, fechaInicio);
@@ -1156,11 +1172,14 @@ export default function CertificadoTrimestral({
       const totalAdv       = adv80 * advanceMonths;
       const lastMonthPay   = ntPeriodoFull - totalAdv;
 
-      const mesData = selectedGroup?.months.map(m => ({
-        name: MONTH_ES[m.month] || m.month.toUpperCase(),
-        value: m.totalValorEjecutado,
-        cups: m.totalActividades ?? 0,
-      })) || [];
+      const mesData = (selectedGroup?.months || []).map(m => {
+        const rawVal = m.totalValorEjecutado;
+        return {
+          name: MONTH_ES[m.month] || m.month.toUpperCase(),
+          value: (typeof rawVal === 'number' && isFinite(rawVal)) ? rawVal : 0,
+          cups: (typeof m.totalActividades === 'number' && isFinite(m.totalActividades)) ? m.totalActividades : 0,
+        };
+      });
 
       const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
