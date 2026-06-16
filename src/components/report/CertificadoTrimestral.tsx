@@ -396,9 +396,29 @@ export default function CertificadoTrimestral({
       if (sumCant > 0) savedCant  = String(sumCant);
     }
 
+    // 3. Fallback: informe vinculado — solo cuando localStorage no tiene nada.
+    // localStorage SIEMPRE gana sobre el informe (el valor manual del usuario manda).
+    if ((!savedValor || Number(savedValor) <= 0) && initialInforme) {
+      if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0) {
+        savedValor = String(initialInforme.valorCupsInesperadas);
+        if (!savedCant && initialInforme.cantidadCupsInesperadas) savedCant = initialInforme.cantidadCupsInesperadas;
+      } else if (initialInforme.totalEjecutadoGuardado && initialInforme.totalEjecutadoGuardado > 0) {
+        const periodMonthNames = (initialInforme.periodo || '')
+          .toUpperCase().split('-').map((s: string) => s.trim()).filter(Boolean);
+        const periodRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
+          .filter(m => {
+            const mn = MONTH_ES[m.month] || m.month.toUpperCase();
+            return periodMonthNames.length === 0 || periodMonthNames.includes(mn);
+          })
+          .reduce((s, m) => s + (isNaN(m.totalValorEjecutado) ? 0 : m.totalValorEjecutado), 0);
+        const derivedInesp = initialInforme.totalEjecutadoGuardado - periodRIPSTotal;
+        if (derivedInesp > 100) savedValor = String(Math.round(derivedInesp));
+      }
+    }
+
     setValorCupsInesperadas(savedValor && Number(savedValor) > 0 ? Number(savedValor) : 0);
     setCantidadCupsInesperadas(savedCant || '');
-  }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR, comparisonSummary, periodType, selectedPeriodIndex]);
+  }, [selectedPrestador?.NIT ?? selectedPrestador?.PRESTADOR, comparisonSummary, periodType, selectedPeriodIndex, initialInforme]);
 
   // Pre-llena el formulario con datos del informe vinculado al cargar auditoría
   useEffect(() => {
@@ -415,29 +435,8 @@ export default function CertificadoTrimestral({
       setNotaEjecucionFinanciera(initialInforme.notaEjecucionFinanciera);
     if (initialInforme.notaAdicional !== undefined)
       setNotaAdicional(initialInforme.notaAdicional);
-    // Restaurar CUPS Inesperadas — 3 fuentes en orden de prioridad:
-    // 1. pdf_data.valorCupsInesperadas (guardado explícitamente)
-    // 2. Diferencia entre total_ejecutado guardado y total RIPS actual
-    //    (para informes editados antes de que se guardara el campo explícito)
-    // 3. 0 (ninguna fuente disponible)
-    if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0) {
-      setValorCupsInesperadas(initialInforme.valorCupsInesperadas);
-    } else if (initialInforme.totalEjecutadoGuardado && initialInforme.totalEjecutadoGuardado > 0) {
-      // Derivar inesperadas = total_ejecutado_guardado − total_RIPS del mismo período
-      // Filtrar solo los meses que pertenecen al período del informe (no todos los meses cargados)
-      const periodMonthNames = (initialInforme.periodo || '')
-        .toUpperCase().split('-').map((s: string) => s.trim()).filter(Boolean);
-      const periodRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
-        .filter(m => {
-          const mn = MONTH_ES[m.month] || m.month.toUpperCase();
-          return periodMonthNames.length === 0 || periodMonthNames.includes(mn);
-        })
-        .reduce((s, m) => s + m.totalValorEjecutado, 0);
-      const derivedInesperadas = initialInforme.totalEjecutadoGuardado - periodRIPSTotal;
-      if (derivedInesperadas > 100) setValorCupsInesperadas(Math.round(derivedInesperadas));
-    }
-    if (initialInforme.cantidadCupsInesperadas !== undefined && initialInforme.cantidadCupsInesperadas !== '')
-      setCantidadCupsInesperadas(initialInforme.cantidadCupsInesperadas);
+    // CUPS Inesperadas: gestionadas exclusivamente por el efecto de período
+    // (localStorage > informe guardado). No se sobreescriben aquí.
     if (initialInforme.tipoPeriodo) {
       const tp = initialInforme.tipoPeriodo.toLowerCase();
       if (tp.includes('bimen') || tp.includes('bimest')) setPeriodType('bimensual');
