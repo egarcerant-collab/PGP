@@ -415,7 +415,11 @@ function fillSeguimientoMensual(
       if (!fila) continue;
 
       let valorFinal: number;
-      if (info.total_ejecutado_final && info.total_ejecutado_final > 0) {
+      // 1. pdf_data.totalEjecutadoFinal — valor final confirmado (misma fuente que load-audit)
+      const tefDirect = Number(info.pdf_data?.totalEjecutadoFinal || 0);
+      if (tefDirect > 0) {
+        valorFinal = tefDirect;
+      } else if (info.total_ejecutado_final && info.total_ejecutado_final > 0) {
         valorFinal = info.total_ejecutado_final;
       } else {
         valorFinal = (info.total_ejecutado ?? 0) + valorInesp;
@@ -450,6 +454,27 @@ function fillSeguimientoMensual(
         proposeValue(fila, Number(valorFinal), info);
       }
       proposeObs(fila, info);
+    }
+  }
+
+  // Post-pass: informes MENSUAL con pdf_data.totalEjecutadoFinal confirmado
+  // siempre ganan sobre la estimación del TRIMESTRAL para ese mes.
+  // Misma lógica que load-audit usa para poblar totalRealValue.
+  for (const info of informes) {
+    if (normalizeKey(info.tipo_periodo || '') !== 'MENSUAL') continue;
+    const tef = Number(info.pdf_data?.totalEjecutadoFinal || 0);
+    if (tef <= 0) continue;
+    const fila = detectMonthRow(info.periodo || '');
+    if (!fila) continue;
+    const fecha = info.fecha || '';
+    const existing = rowValues.get(fila);
+    const existingTipo = existing?.info.tipo_periodo
+      ? normalizeKey(existing.info.tipo_periodo)
+      : '';
+    // Sobrescribir si: no hay valor previo, el existente NO es MENSUAL (es TRIMESTRAL/BIMESTRAL),
+    // o el MENSUAL actual es más reciente que el MENSUAL existente.
+    if (!existing || existingTipo !== 'MENSUAL' || fecha >= existing.fecha) {
+      rowValues.set(fila, { valor: tef, fecha, info });
     }
   }
 
