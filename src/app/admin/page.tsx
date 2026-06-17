@@ -226,6 +226,7 @@ export default function AdminPage() {
   const [migrateLoading, setMigrateLoading] = useState(false);
   const [migratePreview, setMigratePreview] = useState<any>(null);
   const [migrateResult, setMigrateResult] = useState<any>(null);
+  const [forceNumerosInput, setForceNumerosInput] = useState('');
 
   // ── Importar desde CSV ──
   const [csvLoading, setCsvLoading] = useState(false);
@@ -342,14 +343,24 @@ export default function AdminPage() {
   };
 
   const handleMigrateRun = async () => {
+    const forceList = forceNumerosInput.split(',').map(s => s.trim()).filter(Boolean);
+    const forceMsg = forceList.length > 0
+      ? `\n\nFORZAR sobreescritura de informes: ${forceList.join(', ')}`
+      : '\nNo se duplicarán registros que ya existan en Drive.';
     const ok = window.confirm(
-      '¿Confirmar migración?\n\nSe importarán los informes y auditorías de Supabase hacia Google Drive.\nNo se duplicarán registros que ya existan en Drive.'
+      `¿Confirmar migración?\n\nSe importarán los informes y auditorías de Supabase hacia Google Drive.${forceMsg}`
     );
     if (!ok) return;
     setMigrateLoading(true);
     setMigrateResult(null);
     try {
-      const res = await fetch('/api/admin/migrate-supabase', { method: 'POST' });
+      const body: any = {};
+      if (forceList.length > 0) body.forceNumeros = forceList;
+      const res = await fetch('/api/admin/migrate-supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
       setMigrateResult(data);
@@ -862,6 +873,22 @@ export default function AdminPage() {
                   Primero verifica cuántos registros hay disponibles, luego ejecuta la importación.
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
+                Forzar recarga de informes específicos (opcional)
+              </label>
+              <input
+                type="text"
+                value={forceNumerosInput}
+                onChange={e => setForceNumerosInput(e.target.value)}
+                placeholder="Ej: 029, 031  (separados por coma)"
+                className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
+              />
+              <p className="text-[11px] text-slate-400">
+                Si ingresas números aquí, esos informes se sobreescribirán desde Supabase aunque ya existan en Drive.
+              </p>
             </div>
 
             <div className="flex gap-3 flex-wrap">

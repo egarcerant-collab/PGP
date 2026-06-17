@@ -18,6 +18,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Solo superadmin puede ejecutar esta migración.' }, { status: 403 });
   }
 
+  let body: any = {};
+  try { body = await request.json(); } catch { /* sin body */ }
+  // forceNumeros: array de números de informe a sobreescribir aunque ya existan en Drive
+  const forceNumeros: Set<string> = new Set(Array.isArray(body.forceNumeros) ? body.forceNumeros : []);
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -43,11 +48,11 @@ export async function POST(request: Request) {
     const existingNums = new Set(driveInformes.map((r: any) => r.numero));
 
     for (const inf of (sbInformes || [])) {
-      if (existingNums.has(inf.numero)) {
+      if (existingNums.has(inf.numero) && !forceNumeros.has(inf.numero)) {
         resultados.informes.omitidos++;
         continue;
       }
-      driveInformes.push({
+      const newEntry = {
         numero:          inf.numero,
         prestador:       inf.prestador,
         nit:             inf.nit,
@@ -65,7 +70,13 @@ export async function POST(request: Request) {
         responsable:     inf.responsable,
         fecha:           inf.fecha,
         pdf_data:        inf.pdf_data || {},
-      });
+      };
+      const existingIdx = driveInformes.findIndex((r: any) => r.numero === inf.numero);
+      if (existingIdx >= 0) {
+        driveInformes[existingIdx] = newEntry;
+      } else {
+        driveInformes.push(newEntry);
+      }
       existingNums.add(inf.numero);
       resultados.informes.importados++;
     }
