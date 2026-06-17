@@ -454,16 +454,6 @@ export default function CertificadoTrimestral({
     }
   }, [initialInforme]);
 
-  // Carga el valor y la cantidad de CUPS Inesperadas guardados (módulo CUPS o entrada manual)
-  useEffect(() => {
-    const prestKey = selectedPrestador?.PRESTADOR?.replace(/\s+/g, '_') || 'default';
-    const valKey  = `pgp-cups-inesperadas-manual-${prestKey}`;
-    const cantKey = `pgp-cups-inesperadas-cantidad-${prestKey}`;
-    const savedVal  = localStorage.getItem(valKey);
-    const savedCant = localStorage.getItem(cantKey);
-    setValorCupsInesperadas(savedVal && !isNaN(Number(savedVal)) && Number(savedVal) > 0 ? Number(savedVal) : 0);
-    setCantidadCupsInesperadas(savedCant || '');
-  }, [selectedPrestador]);
 
   const handleSaveCantidad = (val: string) => {
     setCantidadCupsInesperadas(val);
