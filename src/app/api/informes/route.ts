@@ -127,18 +127,24 @@ export async function PATCH(request: Request) {
       if (body.tipoPeriodo    !== undefined) f.tipo_periodo    = body.tipoPeriodo;
       if (body.totalEjecutado !== undefined) f.total_ejecutado = body.totalEjecutado;
       if (body.valorFinal     !== undefined) f.valor_final     = body.valorFinal;
+      if (body.descontar      !== undefined) f.descontar       = body.descontar;
       if (body.nit            !== undefined) f.nit             = body.nit;
       if (body.contrato       !== undefined) f.contrato        = body.contrato;
       if (body.responsable    !== undefined) f.responsable     = body.responsable;
       if (body.fecha          !== undefined) f.fecha           = body.fecha;
 
-      if (body.supervisorName !== undefined || body.showSupervisor !== undefined || body.valorCupsInesperadas !== undefined) {
-        f.pdf_data = {
-          ...(informes[idx].pdf_data || {}),
-          ...(body.supervisorName       !== undefined ? { supervisorName:       body.supervisorName }       : {}),
-          ...(body.showSupervisor       !== undefined ? { showSupervisor:       body.showSupervisor }       : {}),
-          ...(body.valorCupsInesperadas !== undefined ? { valorCupsInesperadas: body.valorCupsInesperadas } : {}),
-        };
+      // pdfDataOverride: reemplaza campos específicos dentro de pdf_data
+      const pdfPatch: Record<string, any> = {};
+      if (body.supervisorName             !== undefined) pdfPatch.supervisorName             = body.supervisorName;
+      if (body.showSupervisor             !== undefined) pdfPatch.showSupervisor             = body.showSupervisor;
+      if (body.valorCupsInesperadas       !== undefined) pdfPatch.valorCupsInesperadas       = body.valorCupsInesperadas;
+      if (body.cantidadCupsInesperadas    !== undefined) pdfPatch.cantidadCupsInesperadas    = body.cantidadCupsInesperadas;
+      if (body.totalEjecutadoFinal        !== undefined) pdfPatch.totalEjecutadoFinal        = body.totalEjecutadoFinal;
+      if (body.notaEjecucionFinanciera    !== undefined) pdfPatch.notaEjecucionFinanciera    = body.notaEjecucionFinanciera;
+      if (body.notaAdicional              !== undefined) pdfPatch.notaAdicional              = body.notaAdicional;
+      if (body.pdfDataOverride            !== undefined) Object.assign(pdfPatch, body.pdfDataOverride);
+      if (Object.keys(pdfPatch).length > 0) {
+        f.pdf_data = { ...(informes[idx].pdf_data || {}), ...pdfPatch };
       }
 
       informes[idx] = { ...informes[idx], ...f };
