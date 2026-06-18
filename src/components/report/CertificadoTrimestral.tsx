@@ -602,8 +602,30 @@ export default function CertificadoTrimestral({
         const rawValue = m.totalValorEjecutado;
         let value = (typeof rawValue === 'number' && isFinite(rawValue) && rawValue > 0) ? rawValue : 0;
         if (value === 0) {
+          // Fallback 1: mesData guardado en el propio informe trimestral
           const sv = _savedMes.find(d => d.name === monthName);
           if (sv?.value && typeof sv.value === 'number' && isFinite(sv.value) && sv.value > 0) value = sv.value;
+        }
+        if (value === 0) {
+          // Fallback 2: informe MENSUAL de ese mes en el historial (ej. informe 036 ABRIL)
+          const prestador = selectedPrestador?.PRESTADOR || '';
+          const mensualInf = [...historial]
+            .filter((h: any) =>
+              h.prestador === prestador &&
+              (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+              (h.periodo || '').toUpperCase() === monthName
+            )
+            .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+          if (mensualInf) {
+            // Preferir el mesData guardado del MENSUAL (valor RIPS base sin inesperadas)
+            const mesEntry = Array.isArray(mensualInf.pdfData?.mesData)
+              ? mensualInf.pdfData.mesData.find((d: any) => d.name === monthName)
+              : null;
+            const candidate = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+              ? mesEntry.value
+              : (isFinite(mensualInf.totalEjecutado) && mensualInf.totalEjecutado > 0 ? mensualInf.totalEjecutado : 0);
+            if (candidate > 0) value = candidate;
+          }
         }
         return {
           name: monthName,
