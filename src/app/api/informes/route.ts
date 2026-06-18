@@ -87,6 +87,19 @@ export async function POST(request: Request) {
       pdf_data:       body.pdfData      || {},
     };
 
+    // Si se especifica un número explícito (restauración), úsalo aunque no coincida por prestador+periodo
+    if (body.numero) {
+      const numIdx = informes.findIndex(r => r.numero === body.numero);
+      const entry = { ...base, numero: body.numero, fecha: body.fecha || new Date().toISOString().slice(0, 10) };
+      if (numIdx !== -1) {
+        informes[numIdx] = entry;
+      } else {
+        informes.push(entry);
+      }
+      await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+      return NextResponse.json({ success: true, numero: body.numero, updated: numIdx !== -1 });
+    }
+
     if (dupIdx !== -1) {
       informes[dupIdx] = { ...informes[dupIdx], ...base, fecha: new Date().toISOString().slice(0, 10) };
       await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
