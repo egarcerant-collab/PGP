@@ -111,8 +111,8 @@ function calcPeriodDates(
 }
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
-const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(n));
+  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(isFinite(n) ? n : 0);
+const fmtN = (n: number) => new Intl.NumberFormat('es-CO').format(Math.round(isFinite(n) ? n : 0));
 
 /** Dibuja una gráfica de barras simple y devuelve base64 PNG */
 function drawBarChart(
@@ -649,10 +649,10 @@ export default function CertificadoTrimestral({
         return `Durante el mes de ${m.name}, el comportamiento presentó una variación correspondiente a ${fmtN(m.cups)} actividades, para un total consolidado de ${fmt(m.value)}.`;
       }).join(' ');
 
-      const totalEjecutado = mesData.reduce((a, m) => a + m.value, 0);
-      const totalCups = mesData.reduce((a, m) => a + m.cups, 0);
+      const totalEjecutado = mesData.reduce((a, m) => a + (isFinite(m.value) ? m.value : 0), 0);
+      const totalCups = mesData.reduce((a, m) => a + (isFinite(m.cups) ? m.cups : 0), 0);
       // Total final = RIPS + inesperadas (para mostrar en tabla y narrativa)
-      const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
+      const totalEjecutadoFinal = totalEjecutado + (isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0);
 
       // ── Cálculo DESCONTAR / RECONOCER ──
       // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
@@ -834,7 +834,9 @@ export default function CertificadoTrimestral({
                 ...mesData.map((m, i) => {
                   // Las inesperadas se suman al último mes (mes de cierre del período)
                   const isLast = i === mesData.length - 1;
-                  const valMes = isLast ? m.value + valorCupsInesperadas : m.value;
+                  const safeVal   = isFinite(m.value)             ? m.value             : 0;
+                  const safeInesp = isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0;
+                  const valMes = isLast ? safeVal + safeInesp : safeVal;
                   const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                   const ok = pct >= 90 && pct <= 110;
                   const high = pct > 110;
