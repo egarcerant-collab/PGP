@@ -2018,31 +2018,32 @@ export default function CertificadoTrimestral({
                         </div>
                       </div>
                       {/* Tabla informes del trimestre */}
+                      <div className="overflow-x-auto">
                       <table className="w-full text-xs bg-white">
                         <thead className="bg-muted/50">
                           <tr>
                             <th className="px-3 py-1.5 text-left font-semibold">N°</th>
-                            <th className="px-3 py-1.5 text-left font-semibold">Período</th>
+                            <th className="px-3 py-1.5 text-left font-semibold max-w-[120px]">Período</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Tipo</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Ejecutado</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
-                            <th className="px-3 py-1.5"></th>
+                            <th className="px-3 py-1.5 sticky right-0 bg-white"></th>
                           </tr>
                         </thead>
                         <tbody>
                           {trim.infs.map((inf: any) => (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
-                              <td className="px-3 py-1.5 font-medium">{inf.periodo}</td>
+                              <td className="px-3 py-1.5 font-medium max-w-[120px] truncate" title={inf.periodo}>{inf.periodo}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-blue-700">{fmtCOP2(inf.totalEjecutado)}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
-                              <td className="px-3 py-1.5">
-                                <div className="flex items-center gap-1.5">
+                              <td className="px-3 py-1.5 sticky right-0 bg-white shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.04)]">
+                                <div className="flex items-center gap-1.5 whitespace-nowrap">
                                   <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); setViewEditing(false); setViewEditData({}); }} className="text-blue-400 hover:text-blue-600" title="Ver / Editar">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
                                   <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
@@ -2053,6 +2054,7 @@ export default function CertificadoTrimestral({
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </div>
                   ))}
                 </div>
