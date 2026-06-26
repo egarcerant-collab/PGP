@@ -507,10 +507,8 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
           {/* Checkbox: desactivar restricción de duplicados */}
           <div
-            onClick={() => isAdmin && setAllowDuplicates(v => !v)}
-            className={`flex items-start gap-3 rounded-lg border-2 p-3 transition-all select-none ${
-              isAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
-            } ${
+            onClick={() => setAllowDuplicates(v => !v)}
+            className={`flex items-start gap-3 rounded-lg border-2 p-3 transition-all select-none cursor-pointer ${
               allowDuplicates
                 ? 'border-green-400 bg-green-50'
                 : 'border-slate-200 bg-slate-50 hover:border-slate-300'
@@ -536,7 +534,6 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
                     ? 'Restricción de duplicados DESACTIVADA'
                     : 'Restricción de duplicados ACTIVA'}
                 </span>
-                {!isAdmin && <span className="text-xs text-slate-400">(Solo admin puede modificar)</span>}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {allowDuplicates
