@@ -13,6 +13,10 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 if ((pdfFonts as any).pdfMake && pdfMake.vfs) {
@@ -1987,9 +1991,33 @@ export default function CertificadoTrimestral({
               .sort((a: any, b: any) => (MONTH_ORDER[a.periodo.split('-')[0].trim().toUpperCase()] || 0) - (MONTH_ORDER[b.periodo.split('-')[0].trim().toUpperCase()] || 0)),
           })).filter(t => t.infs.length > 0);
 
+          // ─── datos para la gráfica mensual ────────────────────────────────
+          const MONTHS_FULL = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+          const monthlyMap: Record<string, {nt: number; ejecutado: number}> = {};
+          for (const inf of selectedPrestadorGroup.infs) {
+            const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
+            const n = months.length || 1;
+            const ntPerMonth = isFinite(inf.ntPeriodo) ? inf.ntPeriodo / n : 0;
+            for (const month of months) {
+              if (!monthlyMap[month]) monthlyMap[month] = { nt: 0, ejecutado: 0 };
+              monthlyMap[month].nt = ntPerMonth;
+              const mesEntry = Array.isArray(inf.pdfData?.mesData)
+                ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
+                : null;
+              const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+                ? mesEntry.value
+                : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / n : 0);
+              monthlyMap[month].ejecutado = mesVal;
+            }
+          }
+          const chartData = MONTHS_FULL
+            .filter(m => monthlyMap[m])
+            .map(m => ({ mes: m.substring(0,3), nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
+          const fmtMillones = (v: number) => `$${(v / 1_000_000).toFixed(1)}M`;
+
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
                   <div>
@@ -1998,6 +2026,30 @@ export default function CertificadoTrimestral({
                   </div>
                   <button onClick={() => setSelectedPrestadorGroup(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
                 </div>
+
+                {/* Gráfica NT Esperado vs Valor Ejecutado */}
+                {chartData.length >= 2 && (
+                  <div className="px-6 pt-4 pb-2 border-b border-border/60">
+                    <p className="text-xs font-semibold text-slate-600 mb-2">Comportamiento mensual — NT Esperado vs Valor Ejecutado</p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                        <YAxis tickFormatter={fmtMillones} tick={{ fontSize: 10 }} width={56} />
+                        <Tooltip
+                          formatter={(value: number, name: string) => [
+                            new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value),
+                            name === 'nt' ? 'NT Esperado' : 'Valor Ejecutado',
+                          ]}
+                          labelFormatter={(label: string) => `Mes: ${label}`}
+                        />
+                        <Legend formatter={(value: string) => value === 'nt' ? 'NT Esperado' : 'Valor Ejecutado'} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="ejecutado" fill="#3b82f6" radius={[3,3,0,0]} maxBarSize={40} />
+                        <Line dataKey="nt" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: '#f97316' }} strokeDasharray="5 4" type="monotone" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
                 {/* Contenido agrupado por trimestre */}
                 <div className="overflow-auto flex-1 px-6 py-4 space-y-4">
