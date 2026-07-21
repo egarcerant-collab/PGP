@@ -1993,11 +1993,15 @@ export default function CertificadoTrimestral({
 
           // ─── datos para la gráfica mensual ────────────────────────────────
           const MONTHS_FULL = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+          const TIPO_MESES: Record<string, number> = { MENSUAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3 };
           const monthlyMap: Record<string, {nt: number; ejecutado: number}> = {};
           for (const inf of selectedPrestadorGroup.infs) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
-            const n = months.length || 1;
-            const ntPerMonth = isFinite(inf.ntPeriodo) ? inf.ntPeriodo / n : 0;
+            // El ntPeriodo siempre corresponde al tipo completo (ej. TRIMESTRAL=3 meses)
+            const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
+            const ntPerMonth = isFinite(inf.ntPeriodo) ? inf.ntPeriodo / tipoN : 0;
+            // Para ejecutado, dividir entre los meses reales del periodo
+            const periodoN = months.length || 1;
             for (const month of months) {
               if (!monthlyMap[month]) monthlyMap[month] = { nt: 0, ejecutado: 0 };
               monthlyMap[month].nt = ntPerMonth;
@@ -2006,7 +2010,7 @@ export default function CertificadoTrimestral({
                 : null;
               const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
-                : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / n : 0);
+                : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / periodoN : 0);
               monthlyMap[month].ejecutado = mesVal;
             }
           }
