@@ -305,6 +305,8 @@ export default function CertificadoTrimestral({
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [selectedPrestadorGroup, setSelectedPrestadorGroup] = useState<{ name: string; infs: any[] } | null>(null);
+  // { [numero]: trimIdx } — override manual del trimestre para un informe
+  const [modalTrimOverrides, setModalTrimOverrides] = useState<Record<string, number>>({});
   const [reopenInf, setReopenInf] = useState<any | null>(null);
   const [reopenPwInput, setReopenPwInput] = useState('');
   const [reopenPwError, setReopenPwError] = useState(false);
@@ -1978,16 +1980,32 @@ export default function CertificadoTrimestral({
             { label: 'Trimestre 3', meses: ['JULIO','AGOSTO','SEPTIEMBRE'], color: 'bg-amber-50 border-amber-200',  badge: 'bg-amber-100 text-amber-800 border-amber-200' },
             { label: 'Trimestre 4', meses: ['OCTUBRE','NOVIEMBRE','DICIEMBRE'], color: 'bg-rose-50 border-rose-200', badge: 'bg-rose-100 text-rose-800 border-rose-200' },
           ];
-          // Asigna cada informe al trimestre de su mes más temprano (cronológico)
+          // Asigna cada informe al trimestre de su mes más temprano (cronológico), con override manual
           const getEarliestMonthNum = (periodo: string) => {
             const nums = periodo.split('-').map(m => MONTH_ORDER[m.trim().toUpperCase()] || 0).filter(Boolean);
             return nums.length ? Math.min(...nums) : 0;
           };
-          const getTrimestreIdx = (periodo: string) => Math.floor((getEarliestMonthNum(periodo) - 1) / 3);
+          const getAutoTrimestreIdx = (periodo: string) => Math.floor((getEarliestMonthNum(periodo) - 1) / 3);
+          const getInfTrimestreIdx = (inf: any) =>
+            modalTrimOverrides[inf.numero] !== undefined
+              ? modalTrimOverrides[inf.numero]
+              : getAutoTrimestreIdx(inf.periodo);
+          const cycleInfTrimestre = (inf: any) => {
+            const cur = getInfTrimestreIdx(inf);
+            const next = (cur + 1) % 4;
+            setModalTrimOverrides(prev => ({ ...prev, [inf.numero]: next }));
+          };
+          const TRIM_LABELS = ['T1','T2','T3','T4'];
+          const TRIM_COLORS = [
+            'bg-blue-100 text-blue-700 border-blue-300',
+            'bg-violet-100 text-violet-700 border-violet-300',
+            'bg-amber-100 text-amber-700 border-amber-300',
+            'bg-rose-100 text-rose-700 border-rose-300',
+          ];
           const fmtCOP2 = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
           const byTrimestre = TRIMESTRES.map((t, idx) => ({
             ...t,
-            infs: selectedPrestadorGroup.infs.filter((i: any) => getTrimestreIdx(i.periodo) === idx)
+            infs: selectedPrestadorGroup.infs.filter((i: any) => getInfTrimestreIdx(i) === idx)
               .sort((a: any, b: any) => getEarliestMonthNum(a.periodo) - getEarliestMonthNum(b.periodo)),
           })).filter(t => t.infs.length > 0);
 
@@ -2033,7 +2051,7 @@ export default function CertificadoTrimestral({
                     <h3 className="font-bold text-base text-slate-800">{selectedPrestadorGroup.name}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">{selectedPrestadorGroup.infs.length} informe{selectedPrestadorGroup.infs.length !== 1 ? 's' : ''} · {byTrimestre.length} trimestre{byTrimestre.length !== 1 ? 's' : ''} auditado{byTrimestre.length !== 1 ? 's' : ''}</p>
                   </div>
-                  <button onClick={() => setSelectedPrestadorGroup(null)} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
+                  <button onClick={() => { setSelectedPrestadorGroup(null); setModalTrimOverrides({}); }} className="text-muted-foreground hover:text-slate-800 text-xl font-bold leading-none">×</button>
                 </div>
 
                 {/* Gráfica NT Esperado vs Valor Ejecutado */}
@@ -2105,6 +2123,11 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               <td className="px-3 py-1.5 sticky right-0 bg-white shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.04)]">
                                 <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                  <button
+                                    onClick={() => cycleInfTrimestre(inf)}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border cursor-pointer ${TRIM_COLORS[getInfTrimestreIdx(inf)]}`}
+                                    title="Clic para mover al siguiente trimestre"
+                                  >{TRIM_LABELS[getInfTrimestreIdx(inf)]}</button>
                                   <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); setViewEditing(false); setViewEditData({}); }} className="text-blue-400 hover:text-blue-600" title="Ver / Editar">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
                                   <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
