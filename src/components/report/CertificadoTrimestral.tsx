@@ -1978,40 +1978,45 @@ export default function CertificadoTrimestral({
             { label: 'Trimestre 3', meses: ['JULIO','AGOSTO','SEPTIEMBRE'], color: 'bg-amber-50 border-amber-200',  badge: 'bg-amber-100 text-amber-800 border-amber-200' },
             { label: 'Trimestre 4', meses: ['OCTUBRE','NOVIEMBRE','DICIEMBRE'], color: 'bg-rose-50 border-rose-200', badge: 'bg-rose-100 text-rose-800 border-rose-200' },
           ];
-          // Asigna cada informe a un trimestre según el primer mes del período
-          const getTrimestreIdx = (periodo: string) => {
-            const firstMonth = periodo.split('-')[0].trim().toUpperCase();
-            const monthNum = MONTH_ORDER[firstMonth] || 0;
-            return Math.floor((monthNum - 1) / 3); // 0-3
+          // Asigna cada informe al trimestre de su mes más temprano (cronológico)
+          const getEarliestMonthNum = (periodo: string) => {
+            const nums = periodo.split('-').map(m => MONTH_ORDER[m.trim().toUpperCase()] || 0).filter(Boolean);
+            return nums.length ? Math.min(...nums) : 0;
           };
+          const getTrimestreIdx = (periodo: string) => Math.floor((getEarliestMonthNum(periodo) - 1) / 3);
           const fmtCOP2 = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
           const byTrimestre = TRIMESTRES.map((t, idx) => ({
             ...t,
             infs: selectedPrestadorGroup.infs.filter((i: any) => getTrimestreIdx(i.periodo) === idx)
-              .sort((a: any, b: any) => (MONTH_ORDER[a.periodo.split('-')[0].trim().toUpperCase()] || 0) - (MONTH_ORDER[b.periodo.split('-')[0].trim().toUpperCase()] || 0)),
+              .sort((a: any, b: any) => getEarliestMonthNum(a.periodo) - getEarliestMonthNum(b.periodo)),
           })).filter(t => t.infs.length > 0);
 
           // ─── datos para la gráfica mensual ────────────────────────────────
           const MONTHS_FULL = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
           const TIPO_MESES: Record<string, number> = { MENSUAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3 };
-          const monthlyMap: Record<string, {nt: number; ejecutado: number}> = {};
-          for (const inf of selectedPrestadorGroup.infs) {
+          // Prioridad: MENSUAL gana sobre BIMESTRAL sobre TRIMESTRAL para el mismo mes
+          const TIPO_PRIO: Record<string, number> = { TRIMESTRAL: 0, BIMESTRAL: 1, MENSUAL: 2 };
+          const monthlyMap: Record<string, {nt: number; ejecutado: number; prio: number}> = {};
+          // Procesar de menor a mayor prioridad para que MENSUAL sobreescriba
+          const infsSorted = [...selectedPrestadorGroup.infs].sort((a: any, b: any) =>
+            (TIPO_PRIO[(a.tipoPeriodo || '').toUpperCase()] || 0) - (TIPO_PRIO[(b.tipoPeriodo || '').toUpperCase()] || 0)
+          );
+          for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
-            // El ntPeriodo siempre corresponde al tipo completo (ej. TRIMESTRAL=3 meses)
             const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
             const ntPerMonth = isFinite(inf.ntPeriodo) ? inf.ntPeriodo / tipoN : 0;
-            // Para ejecutado, dividir entre los meses reales del periodo
             const periodoN = months.length || 1;
+            const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
             for (const month of months) {
-              if (!monthlyMap[month]) monthlyMap[month] = { nt: 0, ejecutado: 0 };
-              monthlyMap[month].nt = ntPerMonth;
+              const cur = monthlyMap[month];
+              if (cur && cur.prio > prio) continue; // ya hay uno más específico → skip
               const mesEntry = Array.isArray(inf.pdfData?.mesData)
                 ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
                 : null;
               const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
                 : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / periodoN : 0);
-              monthlyMap[month].ejecutado = mesVal;
+              monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
           const chartData = MONTHS_FULL
