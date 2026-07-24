@@ -2045,8 +2045,27 @@ export default function CertificadoTrimestral({
           }
           const chartData = MONTHS_FULL
             .filter(m => monthlyMap[m])
-            .map(m => ({ mes: m.substring(0,3), nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
+            .map(m => ({ mes: m.substring(0,3), full: m, nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
           const fmtMillones = (v: number) => `$${(v / 1_000_000).toFixed(1)}M`;
+
+          // ── Porcentajes por mes y por trimestre ──────────────────────────────
+          const pctColor = (p: number) =>
+            p >= 90 && p <= 110 ? 'bg-green-100 text-green-800 border-green-300'
+            : p > 110 ? 'bg-blue-100 text-blue-800 border-blue-300'
+            : 'bg-red-100 text-red-700 border-red-300';
+          const pctTrimColor = (p: number) =>
+            p >= 90 && p <= 110 ? 'bg-green-600' : p > 110 ? 'bg-blue-600' : 'bg-red-600';
+
+          const trimPcts = TRIMESTRES.map((t, idx) => {
+            const relevant = chartData.filter(d => {
+              const monthNum = MONTHS_FULL.indexOf(d.full) + 1;
+              return Math.floor((monthNum - 1) / 3) === idx;
+            });
+            const totalEjec = relevant.reduce((s, d) => s + d.ejecutado, 0);
+            const totalNT   = relevant.reduce((s, d) => s + d.nt, 0);
+            const pct = totalNT > 0 ? (totalEjec / totalNT) * 100 : 0;
+            return { label: t.label, pct, totalEjec, totalNT, hasData: relevant.length > 0 };
+          }).filter(t => t.hasData);
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -2064,6 +2083,29 @@ export default function CertificadoTrimestral({
                 {chartData.length >= 2 && (
                   <div className="px-6 pt-4 pb-2 border-b border-border/60">
                     <p className="text-xs font-semibold text-slate-600 mb-2">Comportamiento mensual — NT Esperado vs Valor Ejecutado</p>
+
+                    {/* Porcentajes por mes */}
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {chartData.map(d => {
+                        const p = d.nt > 0 ? (d.ejecutado / d.nt) * 100 : 0;
+                        return (
+                          <span key={d.mes} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${pctColor(p)}`}>
+                            {d.mes} <span className="font-bold">{p.toFixed(1)}%</span>
+                          </span>
+                        );
+                      })}
+                      {/* Separador + resumen por trimestre */}
+                      {trimPcts.length > 0 && (
+                        <>
+                          <span className="text-slate-300 self-center">|</span>
+                          {trimPcts.map(t => (
+                            <span key={t.label} className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full text-white ${pctTrimColor(t.pct)}`}>
+                              {t.label}: {t.pct.toFixed(1)}%
+                            </span>
+                          ))}
+                        </>
+                      )}
+                    </div>
                     <ResponsiveContainer width="100%" height={200}>
                       <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
