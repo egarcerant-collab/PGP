@@ -2081,33 +2081,23 @@ export default function CertificadoTrimestral({
 
                 {/* Gráfica NT Esperado vs Valor Ejecutado */}
                 {chartData.length >= 2 && (
-                  <div className="px-6 pt-4 pb-2 border-b border-border/60">
-                    <p className="text-xs font-semibold text-slate-600 mb-2">Comportamiento mensual — NT Esperado vs Valor Ejecutado</p>
-
-                    {/* Porcentajes por mes */}
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {chartData.map(d => {
-                        const p = d.nt > 0 ? (d.ejecutado / d.nt) * 100 : 0;
-                        return (
-                          <span key={d.mes} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${pctColor(p)}`}>
-                            {d.mes} <span className="font-bold">{p.toFixed(1)}%</span>
-                          </span>
-                        );
-                      })}
-                      {/* Separador + resumen por trimestre */}
+                  <div className="px-6 pt-4 pb-3 border-b border-border/60">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-slate-600">Comportamiento mensual — NT Esperado vs Valor Ejecutado</p>
+                      {/* Resumen por trimestre */}
                       {trimPcts.length > 0 && (
-                        <>
-                          <span className="text-slate-300 self-center">|</span>
+                        <div className="flex gap-1.5">
                           {trimPcts.map(t => (
-                            <span key={t.label} className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full text-white ${pctTrimColor(t.pct)}`}>
+                            <span key={t.label} className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md text-white ${pctTrimColor(t.pct)}`}>
                               {t.label}: {t.pct.toFixed(1)}%
                             </span>
                           ))}
-                        </>
+                        </div>
                       )}
                     </div>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                    {/* Gráfica con % de cada mes encima de su barra */}
+                    <ResponsiveContainer width="100%" height={210}>
+                      <ComposedChart data={chartData} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={fmtMillones} tick={{ fontSize: 10 }} width={56} />
@@ -2119,7 +2109,20 @@ export default function CertificadoTrimestral({
                           labelFormatter={(label: string) => `Mes: ${label}`}
                         />
                         <Legend formatter={(value: string) => value === 'nt' ? 'NT Esperado' : 'Valor Ejecutado'} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="ejecutado" fill="#3b82f6" radius={[3,3,0,0]} maxBarSize={40} />
+                        <Bar dataKey="ejecutado" fill="#3b82f6" radius={[3,3,0,0]} maxBarSize={40}
+                          label={(props: any) => {
+                            const { x, y, width, index } = props;
+                            const d = chartData[index];
+                            if (!d || d.nt <= 0) return <text />;
+                            const p = (d.ejecutado / d.nt) * 100;
+                            const col = p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c';
+                            return (
+                              <text x={x + width / 2} y={y - 5} fill={col} textAnchor="middle" fontSize={10} fontWeight="bold">
+                                {p.toFixed(1)}%
+                              </text>
+                            );
+                          }}
+                        />
                         <Line dataKey="nt" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: '#f97316' }} strokeDasharray="5 4" type="monotone" />
                       </ComposedChart>
                     </ResponsiveContainer>
