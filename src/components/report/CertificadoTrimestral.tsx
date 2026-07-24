@@ -2080,16 +2080,34 @@ export default function CertificadoTrimestral({
           const pctTrimColor = (p: number) =>
             p >= 90 && p <= 110 ? 'bg-green-600' : p > 110 ? 'bg-blue-600' : 'bg-red-600';
 
-          const trimPcts = TRIMESTRES.map((t, idx) => {
-            const relevant = chartData.filter(d => {
-              const monthNum = MONTHS_FULL.indexOf(d.full) + 1;
-              return Math.floor((monthNum - 1) / 3) === idx;
-            });
-            const totalEjec = relevant.reduce((s, d) => s + d.ejecutado, 0);
-            const totalNT   = relevant.reduce((s, d) => s + d.nt, 0);
-            const pct = totalNT > 0 ? (totalEjec / totalNT) * 100 : 0;
-            return { label: t.label, pct, totalEjec, totalNT, hasData: relevant.length > 0 };
-          }).filter(t => t.hasData);
+          // Mapa mes → trimestre según asignación real del informe (respeta overrides T1/T2/T3/T4)
+          const monthToTrimIdx: Record<string, number> = {};
+          for (const inf of infsSorted) {
+            const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
+            const trimIdx = getInfTrimestreIdx(inf);
+            const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
+            for (const month of months) {
+              const existing = monthToTrimIdx['__prio__' + month];
+              if (existing === undefined || prio > existing) {
+                monthToTrimIdx[month] = trimIdx;
+                monthToTrimIdx['__prio__' + month] = prio;
+              }
+            }
+          }
+          const trimTotals: Record<number, { ejec: number; nt: number }> = {};
+          for (const [month, data] of Object.entries(monthlyMap)) {
+            const trimIdx = monthToTrimIdx[month] ?? Math.floor((MONTHS_FULL.indexOf(month)) / 3);
+            if (!trimTotals[trimIdx]) trimTotals[trimIdx] = { ejec: 0, nt: 0 };
+            trimTotals[trimIdx].ejec += data.ejecutado;
+            trimTotals[trimIdx].nt += data.nt;
+          }
+          const trimPcts = (Object.entries(trimTotals) as [string, { ejec: number; nt: number }][])
+            .map(([idxStr, totals]) => {
+              const idx = Number(idxStr);
+              const pct = totals.nt > 0 ? (totals.ejec / totals.nt) * 100 : 0;
+              return { label: TRIMESTRES[idx]?.label || `T${idx + 1}`, pct, hasData: true };
+            })
+            .sort((a, b) => a.label.localeCompare(b.label));
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
