@@ -2022,7 +2022,13 @@ export default function CertificadoTrimestral({
           for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
             const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
-            const ntPerMonth = isFinite(inf.ntPeriodo) ? inf.ntPeriodo / tipoN : 0;
+            // Si un informe MENSUAL tiene ntPeriodo ≈ trimestral (>1.8× valorFinal), corregir ÷3
+            const rawNt = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : (isFinite(inf.valorFinal) ? inf.valorFinal : 0);
+            const tipo = (inf.tipoPeriodo || '').toUpperCase();
+            const ntAjustado = (tipo === 'MENSUAL' && isFinite(inf.valorFinal) && inf.valorFinal > 0 && rawNt > inf.valorFinal * 1.8)
+              ? rawNt / 3
+              : rawNt;
+            const ntPerMonth = ntAjustado / tipoN;
             const periodoN = months.length || 1;
             const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
             for (const month of months) {
