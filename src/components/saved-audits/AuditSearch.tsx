@@ -161,6 +161,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isContinuing, setIsContinuing] = useState(false);
+    const [filterPrestador, setFilterPrestador] = useState<string>('');
     const [viewMode, setViewMode] = useState<'agrupada' | 'lista'>('agrupada');
     const { toast } = useToast();
 
@@ -378,10 +379,16 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     // Props comunes para InformeCard
     const cardProps = { editingInforme, notaFin, notaAdi, savingNota, setEditingInforme, setNotaFin, setNotaAdi, handleSaveNotas };
 
-    const selectedAudits = audits.filter(a => selectedIds.includes(a.id));
+    // ── Lista de prestadores únicos para el filtro ───────────────────────────
+    const prestadoresList = [...new Set(audits.map(a => a.prestador))].sort();
+    const auditsFiltrados = filterPrestador
+        ? audits.filter(a => a.prestador === filterPrestador)
+        : audits;
+
+    const selectedAudits = auditsFiltrados.filter(a => selectedIds.includes(a.id));
 
     // ── Vista agrupada: agrupa auditorías por prestador ──────────────────────
-    const auditsByPrestador = audits.reduce<Record<string, AuditRecord[]>>((acc, a) => {
+    const auditsByPrestador = auditsFiltrados.reduce<Record<string, AuditRecord[]>>((acc, a) => {
         const key = a.prestador;
         if (!acc[key]) acc[key] = [];
         acc[key].push(a);
@@ -413,12 +420,33 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                 </div>
             ) : (
                 <>
+                    {/* Filtro por prestador */}
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-muted-foreground whitespace-nowrap font-medium">Prestador:</label>
+                        <select
+                            value={filterPrestador}
+                            onChange={e => { setFilterPrestador(e.target.value); setSelectedIds([]); }}
+                            className="flex-1 text-xs rounded-md border border-border bg-background px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                            <option value="">— Todos los prestadores ({prestadoresList.length}) —</option>
+                            {prestadoresList.map(p => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                        {filterPrestador && (
+                            <button
+                                onClick={() => { setFilterPrestador(''); setSelectedIds([]); }}
+                                className="text-xs text-muted-foreground hover:text-foreground px-1.5 py-1 rounded border border-border hover:bg-muted/40 whitespace-nowrap"
+                            >✕ Limpiar</button>
+                        )}
+                    </div>
+
                     {/* Toggle vista */}
                     <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
                             {viewMode === 'lista'
                                 ? <>Selecciona hasta <strong>3 auditorías del mismo prestador</strong> para combinarlas.</>
-                                : <><strong>{Object.keys(auditsByPrestador).length}</strong> prestadores · <strong>{audits.length}</strong> auditorías</>}
+                                : <><strong>{Object.keys(auditsByPrestador).length}</strong> prestadores · <strong>{auditsFiltrados.length}</strong> auditorías</>}
                         </p>
                         <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-muted/40">
                             <button
@@ -537,9 +565,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {audits.map((a) => {
+                                {auditsFiltrados.map((a) => {
                                     const checked = selectedIds.includes(a.id);
-                                    const firstPrestador = selectedIds.length > 0 ? audits.find(x => x.id === selectedIds[0])?.prestador : null;
+                                    const firstPrestador = selectedIds.length > 0 ? auditsFiltrados.find(x => x.id === selectedIds[0])?.prestador : null;
                                     const disabled = !checked && selectedIds.length >= 3;
                                     const differentPrestador = !checked && firstPrestador && firstPrestador.toLowerCase() !== a.prestador.toLowerCase();
                                     const isExpanded = expandedIds.has(a.id);
