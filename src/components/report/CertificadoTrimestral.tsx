@@ -236,8 +236,8 @@ function drawStackedBarChart(
     const total = base[i] + extraPerBar;
     const v = isCurrency
       ? (total >= 1_000_000 ? `$${(total / 1_000_000).toFixed(2)}M`
-        : total >= 1_000 ? `$${(total / 1_000).toFixed(0)}k` : String(Math.round(total)))
-      : (total >= 1_000 ? `${(total / 1_000).toFixed(1)}k` : String(Math.round(total)));
+        : new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Math.round(total)))
+      : new Intl.NumberFormat('es-CO').format(Math.round(total));
     ctx.fillStyle = '#111827'; ctx.font = 'bold 7.5px Arial'; ctx.textAlign = 'center';
     ctx.fillText(v, x + bW / 2, extraY - 5);
 
