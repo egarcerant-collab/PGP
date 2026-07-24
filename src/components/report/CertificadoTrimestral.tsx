@@ -1986,14 +1986,38 @@ export default function CertificadoTrimestral({
             return nums.length ? Math.min(...nums) : 0;
           };
           const getAutoTrimestreIdx = (periodo: string) => Math.floor((getEarliestMonthNum(periodo) - 1) / 3);
-          const getInfTrimestreIdx = (inf: any) =>
-            modalTrimOverrides[inf.numero] !== undefined
-              ? modalTrimOverrides[inf.numero]
-              : getAutoTrimestreIdx(inf.periodo);
-          const cycleInfTrimestre = (inf: any) => {
+          // Prioridad: override en memoria > pdfData guardado > automático
+          const getInfTrimestreIdx = (inf: any) => {
+            if (modalTrimOverrides[inf.numero] !== undefined) return modalTrimOverrides[inf.numero];
+            if (inf.pdfData?.trimOverride !== undefined) return inf.pdfData.trimOverride as number;
+            return getAutoTrimestreIdx(inf.periodo);
+          };
+          const cycleInfTrimestre = async (inf: any) => {
             const cur = getInfTrimestreIdx(inf);
             const next = (cur + 1) % 4;
+            // Actualizar UI inmediatamente
             setModalTrimOverrides(prev => ({ ...prev, [inf.numero]: next }));
+            // Persistir en Drive para todos los usuarios
+            try {
+              await fetch('/api/informes', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  numero: inf.numero,
+                  updateFields: true,
+                  pdfDataOverride: { trimOverride: next },
+                }),
+              });
+              // Actualizar el informe en el grupo seleccionado para reflejar el cambio
+              setSelectedPrestadorGroup(prev => prev ? {
+                ...prev,
+                infs: prev.infs.map((i: any) =>
+                  i.numero === inf.numero
+                    ? { ...i, pdfData: { ...(i.pdfData || {}), trimOverride: next } }
+                    : i
+                ),
+              } : null);
+            } catch { /* error silencioso; el override en memoria queda activo */ }
           };
           const TRIM_LABELS = ['T1','T2','T3','T4'];
           const TRIM_COLORS = [
