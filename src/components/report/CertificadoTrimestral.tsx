@@ -2071,9 +2071,7 @@ export default function CertificadoTrimestral({
             .filter(m => monthlyMap[m])
             .map(m => ({ mes: m.substring(0,3), full: m, nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
           const fmtMillones = (v: number) => `$${(v / 1_000_000).toFixed(1)}M`;
-          // Colores por trimestre para las barras
           const TRIM_BAR_COLORS = ['#3b82f6','#f97316','#10b981','#a855f7']; // T1=azul T2=naranja T3=verde T4=púrpura
-          const barColors = chartData.map(d => TRIM_BAR_COLORS[monthToTrimIdx[d.full] ?? 0] || '#3b82f6');
 
           // ── Porcentajes por mes y por trimestre ──────────────────────────────
           const pctColor = (p: number) =>
@@ -2097,6 +2095,7 @@ export default function CertificadoTrimestral({
               }
             }
           }
+          const barColors = chartData.map(d => TRIM_BAR_COLORS[monthToTrimIdx[d.full] ?? 0] || '#3b82f6');
           const trimTotals: Record<number, { ejec: number; nt: number }> = {};
           for (const [month, data] of Object.entries(monthlyMap)) {
             const trimIdx = monthToTrimIdx[month] ?? Math.floor((MONTHS_FULL.indexOf(month)) / 3);
