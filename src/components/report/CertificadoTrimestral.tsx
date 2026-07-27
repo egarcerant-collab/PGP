@@ -15,7 +15,7 @@ import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer,
+  ResponsiveContainer, Cell,
 } from 'recharts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2071,6 +2071,9 @@ export default function CertificadoTrimestral({
             .filter(m => monthlyMap[m])
             .map(m => ({ mes: m.substring(0,3), full: m, nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
           const fmtMillones = (v: number) => `$${(v / 1_000_000).toFixed(1)}M`;
+          // Colores por trimestre para las barras
+          const TRIM_BAR_COLORS = ['#3b82f6','#f97316','#10b981','#a855f7']; // T1=azul T2=naranja T3=verde T4=púrpura
+          const barColors = chartData.map(d => TRIM_BAR_COLORS[monthToTrimIdx[d.full] ?? 0] || '#3b82f6');
 
           // ── Porcentajes por mes y por trimestre ──────────────────────────────
           const pctColor = (p: number) =>
@@ -2151,7 +2154,7 @@ export default function CertificadoTrimestral({
                           labelFormatter={(label: string) => `Mes: ${label}`}
                         />
                         <Legend formatter={(value: string) => value === 'nt' ? 'NT Esperado' : 'Valor Ejecutado'} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="ejecutado" fill="#3b82f6" radius={[3,3,0,0]} maxBarSize={40}
+                        <Bar dataKey="ejecutado" radius={[3,3,0,0]} maxBarSize={40}
                           label={(props: any) => {
                             const { x, y, width, index } = props;
                             const d = chartData[index];
@@ -2164,7 +2167,11 @@ export default function CertificadoTrimestral({
                               </text>
                             );
                           }}
-                        />
+                        >
+                          {chartData.map((_: any, i: number) => (
+                            <Cell key={i} fill={barColors[i]} />
+                          ))}
+                        </Bar>
                         <Line dataKey="nt" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: '#f97316' }} strokeDasharray="5 4" type="monotone" />
                       </ComposedChart>
                     </ResponsiveContainer>
