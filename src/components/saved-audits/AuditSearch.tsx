@@ -379,17 +379,22 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     // Props comunes para InformeCard
     const cardProps = { editingInforme, notaFin, notaAdi, savingNota, setEditingInforme, setNotaFin, setNotaAdi, handleSaveNotas };
 
-    // ── Lista de prestadores únicos para el filtro ───────────────────────────
-    const prestadoresList = [...new Set(audits.map(a => a.prestador))].sort();
+    // ── Lista de prestadores únicos para el filtro (normalizado para deduplicar) ──
+    const prestadoresNorm = new Map<string, string>(); // key normalizada → nombre display
+    audits.forEach(a => {
+        const norm = (a.prestador || '').trim().toUpperCase();
+        if (!prestadoresNorm.has(norm)) prestadoresNorm.set(norm, (a.prestador || '').trim());
+    });
+    const prestadoresList = [...prestadoresNorm.values()].sort();
     const auditsFiltrados = filterPrestador
-        ? audits.filter(a => a.prestador === filterPrestador)
+        ? audits.filter(a => (a.prestador || '').trim().toUpperCase() === filterPrestador.trim().toUpperCase())
         : audits;
 
     const selectedAudits = auditsFiltrados.filter(a => selectedIds.includes(a.id));
 
-    // ── Vista agrupada: agrupa auditorías por prestador ──────────────────────
+    // ── Vista agrupada: agrupa auditorías por prestador (normalizado) ─────────
     const auditsByPrestador = auditsFiltrados.reduce<Record<string, AuditRecord[]>>((acc, a) => {
-        const key = a.prestador;
+        const key = (a.prestador || '').trim().toUpperCase();
         if (!acc[key]) acc[key] = [];
         acc[key].push(a);
         return acc;
@@ -492,7 +497,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                         return (
                                             <tr key={prestador} className="border-t border-border hover:bg-muted/30 transition-colors">
                                                 <td className="px-4 py-3">
-                                                    <span className="font-semibold text-sm">{prestador}</span>
+                                                    <span className="font-semibold text-sm">{(group[0]?.prestador || prestador).trim()}</span>
                                                     <div className="text-xs text-muted-foreground">{group[0]?.nit}</div>
                                                 </td>
                                                 <td className="px-4 py-3">
