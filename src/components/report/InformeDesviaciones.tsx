@@ -412,6 +412,15 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [descontarFaltantes, setDescontarFaltantes] = useState(false);
     const [showNtModal, setShowNtModal] = useState(false);
     const [cupsSearch, setCupsSearch] = useState('');
+    const [highlightedCup, setHighlightedCup] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!modalContent || !highlightedCup) return;
+        const timer = setTimeout(() => {
+            document.getElementById('highlighted-cup-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [modalContent, highlightedCup]);
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
@@ -646,8 +655,10 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                 <TableBody>
                     {items.map((item: DeviatedCupInfo) => {
                         const valorSugerido = item.totalValue - item.deviationValue;
+                        const isHighlighted = highlightedCup === item.cup;
                         return (
-                            <TableRow key={item.cup}>
+                            <TableRow key={item.cup} id={isHighlighted ? 'highlighted-cup-row' : undefined}
+                                className={isHighlighted ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : undefined}>
                                 <TableCell>
                                     <Button variant="link" className="p-0 h-auto font-mono text-sm" onClick={() => handleCupClick(item)}>
                                         {item.cup}
@@ -693,13 +704,17 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {data.map((item: any) => (
-                                    <TableRow key={item.cup}>
+                                {data.map((item: any) => {
+                                    const isHl = highlightedCup === item.cup;
+                                    return (
+                                    <TableRow key={item.cup} id={isHl ? 'highlighted-cup-row' : undefined}
+                                        className={isHl ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : undefined}>
                                         <TableCell className="font-mono text-sm">{item.cup}</TableCell>
                                         <TableCell className="text-sm">{item.description || 'N/A'}</TableCell>
                                         <TableCell className="text-center text-sm">{item.expectedFrequency}</TableCell>
                                     </TableRow>
-                                ))}
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </ScrollArea>
@@ -718,8 +733,11 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {data.map((item: UnexpectedCupInfo) => (
-                                    <TableRow key={item.cup}>
+                                {data.map((item: UnexpectedCupInfo) => {
+                                    const isHl = highlightedCup === item.cup;
+                                    return (
+                                    <TableRow key={item.cup} id={isHl ? 'highlighted-cup-row' : undefined}
+                                        className={isHl ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : undefined}>
                                         <TableCell className="font-mono text-sm">{item.cup}</TableCell>
                                         <TableCell className="text-sm">{item.description || 'N/A'}</TableCell>
                                         <TableCell className="text-center text-sm">{item.realFrequency}</TableCell>
@@ -730,7 +748,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                             </Button>
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </ScrollArea>
@@ -754,17 +773,21 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                     {(() => {
                         const q = cupsSearch.trim().toUpperCase();
                         const CATS = [
-                            { label: 'Sobreejecutado', color: 'bg-red-100 text-red-700 border-red-300', items: comparisonSummary.overExecutedCups },
-                            { label: 'En rango', color: 'bg-green-100 text-green-700 border-green-300', items: comparisonSummary.normalExecutionCups },
-                            { label: 'Sub-ejecutado', color: 'bg-blue-100 text-blue-700 border-blue-300', items: comparisonSummary.underExecutedCups },
-                            { label: 'No ejecutado', color: 'bg-slate-100 text-slate-700 border-slate-300', items: comparisonSummary.missingCups },
-                            { label: 'Inesperado', color: 'bg-purple-100 text-purple-700 border-purple-300', items: comparisonSummary.unexpectedCups },
+                            { label: 'Sobreejecutado', color: 'bg-red-100 text-red-700 border-red-300', items: comparisonSummary.overExecutedCups,     type: 'over-executed',     title: 'CUPS Sobreejecutados (>111%)',          totals: overExecutionTotals },
+                            { label: 'En rango',        color: 'bg-green-100 text-green-700 border-green-300', items: comparisonSummary.normalExecutionCups, type: 'normal-execution',  title: 'Ejecución dentro del rango (90-111%)',  totals: normalExecutionTotals },
+                            { label: 'Sub-ejecutado',   color: 'bg-blue-100 text-blue-700 border-blue-300',  items: comparisonSummary.underExecutedCups,   type: 'under-executed',    title: 'CUPS / Tecnologías Sub-ejecutadas',     totals: underExecutionTotals },
+                            { label: 'No ejecutado',    color: 'bg-slate-100 text-slate-700 border-slate-300', items: comparisonSummary.missingCups,         type: 'missing',           title: 'CUPS / Tecnologías No Ejecutadas',      totals: { ejecutado: 0, desviacion: 0 } },
+                            { label: 'Inesperado',      color: 'bg-purple-100 text-purple-700 border-purple-300', items: comparisonSummary.unexpectedCups, type: 'unexpected',        title: 'CUPS / Tecnologías Inesperadas',        totals: { ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue } },
                         ];
                         const results = q.length >= 3 ? CATS.flatMap(cat =>
                             (cat.items || [])
                                 .filter((i: any) => String(i.cup || '').toUpperCase().includes(q) || String(i.description || '').toUpperCase().includes(q))
-                                .map((i: any) => ({ ...i, _cat: cat.label, _color: cat.color }))
+                                .map((i: any) => ({ ...i, _cat: cat.label, _color: cat.color, _type: cat.type, _title: cat.title, _totals: cat.totals, _allItems: cat.items }))
                         ) : [];
+                        const openModal = (r: any) => {
+                            setHighlightedCup(r.cup);
+                            handleDoubleClick(r._type, r._title, r._allItems, r._totals);
+                        };
                         return (
                             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-2">
                                 <div className="flex items-center gap-2">
@@ -785,14 +808,16 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     results.length === 0 ? (
                                         <p className="text-xs text-muted-foreground pl-6">No se encontró "{cupsSearch.trim()}" en ninguna categoría.</p>
                                     ) : (
-                                        <div className="space-y-1 pl-2">
+                                        <div className="space-y-0.5 pl-2">
+                                            <p className="text-[10px] text-muted-foreground pb-1">Clic en un resultado para abrirlo en su categoría</p>
                                             {results.map((r: any, i: number) => (
-                                                <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
+                                                <button key={i} onClick={() => openModal(r)}
+                                                    className="w-full flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent border border-transparent hover:border-border text-left transition-colors">
                                                     <span className="font-mono font-bold w-20 shrink-0">{r.cup}</span>
                                                     <span className="flex-1 text-muted-foreground truncate">{r.description || '—'}</span>
-                                                    <span className="shrink-0 text-right font-medium">{r.realFrequency ?? r.expectedFrequency ?? '—'} uds</span>
+                                                    <span className="shrink-0 text-right font-medium tabular-nums">{r.realFrequency ?? r.expectedFrequency ?? '—'} uds</span>
                                                     <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${r._color}`}>{r._cat}</span>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     )
@@ -1197,7 +1222,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
             {modalContent && (
                 <TableModal
                     open={!!modalContent}
-                    onOpenChange={() => setModalContent(null)}
+                    onOpenChange={() => { setModalContent(null); setHighlightedCup(null); }}
                     title={modalContent.title}
                     content={renderModalContent()}
                     data={modalContent.data}
