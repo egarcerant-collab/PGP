@@ -411,6 +411,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [descontarNoEjecutadas, setDescontarNoEjecutadas] = useState(false);
     const [descontarFaltantes, setDescontarFaltantes] = useState(false);
     const [showNtModal, setShowNtModal] = useState(false);
+    const [cupsSearch, setCupsSearch] = useState('');
     const [ntSending, setNtSending] = useState(false);
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
@@ -749,6 +750,56 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {/* ── Buscador rápido de CUPS ── */}
+                    {(() => {
+                        const q = cupsSearch.trim().toUpperCase();
+                        const CATS = [
+                            { label: 'Sobreejecutado', color: 'bg-red-100 text-red-700 border-red-300', items: comparisonSummary.overExecutedCups },
+                            { label: 'En rango', color: 'bg-green-100 text-green-700 border-green-300', items: comparisonSummary.normalExecutionCups },
+                            { label: 'Sub-ejecutado', color: 'bg-blue-100 text-blue-700 border-blue-300', items: comparisonSummary.underExecutedCups },
+                            { label: 'No ejecutado', color: 'bg-slate-100 text-slate-700 border-slate-300', items: comparisonSummary.missingCups },
+                            { label: 'Inesperado', color: 'bg-purple-100 text-purple-700 border-purple-300', items: comparisonSummary.unexpectedCups },
+                        ];
+                        const results = q.length >= 3 ? CATS.flatMap(cat =>
+                            (cat.items || [])
+                                .filter((i: any) => String(i.cup || '').toUpperCase().includes(q) || String(i.description || '').toUpperCase().includes(q))
+                                .map((i: any) => ({ ...i, _cat: cat.label, _color: cat.color }))
+                        ) : [];
+                        return (
+                            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <Input
+                                        placeholder="Buscar CUPS por código o descripción (mín. 3 caracteres)…"
+                                        value={cupsSearch}
+                                        onChange={e => setCupsSearch(e.target.value)}
+                                        className="h-8 text-sm border-0 bg-transparent focus-visible:ring-0 px-0"
+                                    />
+                                    {cupsSearch && (
+                                        <button onClick={() => setCupsSearch('')} className="text-muted-foreground hover:text-foreground">
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                {q.length >= 3 && (
+                                    results.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground pl-6">No se encontró "{cupsSearch.trim()}" en ninguna categoría.</p>
+                                    ) : (
+                                        <div className="space-y-1 pl-2">
+                                            {results.map((r: any, i: number) => (
+                                                <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
+                                                    <span className="font-mono font-bold w-20 shrink-0">{r.cup}</span>
+                                                    <span className="flex-1 text-muted-foreground truncate">{r.description || '—'}</span>
+                                                    <span className="shrink-0 text-right font-medium">{r.realFrequency ?? r.expectedFrequency ?? '—'} uds</span>
+                                                    <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${r._color}`}>{r._cat}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        );
+                    })()}
                      <DeviatedCupsCard
                         title="CUPS Sobreejecutados (>111%)"
                         icon={TrendingUp}
