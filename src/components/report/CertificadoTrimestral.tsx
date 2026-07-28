@@ -1899,10 +1899,10 @@ export default function CertificadoTrimestral({
             {historial.length > 0 && (() => {
               const fmtCOP = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
               // Agrupar por prestador
-              const grupos = historial.reduce((acc: Record<string, any[]>, inf: any) => {
-                const key = inf.prestador || '—';
-                if (!acc[key]) acc[key] = [];
-                acc[key].push(inf);
+              const grupos = historial.reduce((acc: Record<string, { displayName: string; infs: any[] }>, inf: any) => {
+                const key = (inf.prestador || '—').trim().toUpperCase();
+                if (!acc[key]) acc[key] = { displayName: (inf.prestador || '—').trim(), infs: [] };
+                acc[key].infs.push(inf);
                 return acc;
               }, {});
 
@@ -1919,16 +1919,17 @@ export default function CertificadoTrimestral({
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(grupos).map(([prestador, infs]: [string, any[]]) => {
+                      {Object.entries(grupos).map(([key, grupo]: [string, any]) => {
+                        const { displayName, infs } = grupo;
                         const auditores = [...new Set(infs.map((i: any) => i.responsable).filter(Boolean))].join(', ');
                         return (
                           <tr
-                            key={`g-${prestador}`}
+                            key={`g-${key}`}
                             className="border-t border-border bg-blue-50/60 hover:bg-blue-100/80 cursor-pointer select-none"
-                            onClick={() => setSelectedPrestadorGroup({ name: prestador, infs: infs as any[] })}
+                            onClick={() => setSelectedPrestadorGroup({ name: displayName, infs: infs as any[] })}
                           >
                             <td className="px-3 py-2 text-center text-blue-400 font-bold">↗</td>
-                            <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={prestador}>{prestador}</td>
+                            <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={displayName}>{displayName}</td>
                             <td className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
                                 {infs.map((i: any) => {
