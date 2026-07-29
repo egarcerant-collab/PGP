@@ -1356,18 +1356,42 @@ export default function CertificadoTrimestral({
     const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
 
     const cantInespNum = parseInt(cantCupsIn) || 0;
-    const labels = (md as any[]).map((m: any) => m.name);
 
-    const chart1 = valCupsIn > 0
-      ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.value), valCupsIn)
-      : drawBarChart(labels, (md as any[]).map((m: any) => m.value), '#1d4ed8');
+    // Corregir valores por mes usando totalEjecutado de informes MENSUALES del grupo
+    // totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
+    const MONTHS_FULL_PDF = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const TIPO_PRIO_PDF: Record<string, number> = { TRIMESTRAL: 0, BIMESTRAL: 1, MENSUAL: 2 };
+    const corrValMap: Record<string, number> = {};
+    for (const gi of (selectedPrestadorGroup?.infs || [])) {
+      const gMonths = (gi.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL_PDF.includes(m));
+      const gPrio = TIPO_PRIO_PDF[(gi.tipoPeriodo || '').toUpperCase()] ?? 0;
+      const gN = gMonths.length || 1;
+      for (const gm of gMonths) {
+        const curP = corrValMap['__p__' + gm];
+        if (curP !== undefined && curP > gPrio) continue;
+        if (gi.totalEjecutado > 0) { corrValMap[gm] = gi.totalEjecutado / gN; corrValMap['__p__' + gm] = gPrio; }
+      }
+    }
+    const hasCorrected = Object.keys(corrValMap).some(k => !k.startsWith('__'));
+    const mdCorrected = (md as any[]).map((m: any) => ({
+      ...m,
+      value: corrValMap[m.name?.toUpperCase()] ?? m.value,
+    }));
+    // valCupsIn ya está incluido en totalEjecutado cuando hay corrección mensual
+    const valCupsInFinal = hasCorrected ? 0 : valCupsIn;
+
+    const labels = mdCorrected.map((m: any) => m.name);
+
+    const chart1 = valCupsInFinal > 0
+      ? drawStackedBarChart(labels, mdCorrected.map((m: any) => m.value), valCupsInFinal)
+      : drawBarChart(labels, mdCorrected.map((m: any) => m.value), '#1d4ed8');
     const chart2 = cantInespNum > 0
       ? drawStackedBarChart(labels, (md as any[]).map((m: any) => m.cups), cantInespNum, 490, 95, false, '#15803d')
       : drawBarChart(labels, (md as any[]).map((m: any) => m.cups), '#15803d');
 
-    const detalleValor = (md as any[]).map((m: any, i: number) => {
+    const detalleValor = mdCorrected.map((m: any, i: number) => {
       if (i === 0) return `En el mes de ${m.name}, se registró un total de ${fmtNL(m.cups)} actividades asociadas a CUPS (Códigos Únicos en Salud), con un consolidado en costos equivalente a ${fmtL(m.value)}.`;
-      if (i === (md as any[]).length - 1) return `Finalmente, en el mes de ${m.name}, la ejecución alcanzó ${fmtNL(m.cups)} actividades, reflejando un costo acumulado de ${fmtL(m.value)}.`;
+      if (i === mdCorrected.length - 1) return `Finalmente, en el mes de ${m.name}, la ejecución alcanzó ${fmtNL(m.cups)} actividades, reflejando un costo acumulado de ${fmtL(m.value)}.`;
       return `Durante el mes de ${m.name}, el comportamiento presentó una variación correspondiente a ${fmtNL(m.cups)} actividades, para un total consolidado de ${fmtL(m.value)}.`;
     }).join(' ');
 
@@ -1468,9 +1492,9 @@ export default function CertificadoTrimestral({
                 { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                 { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
               ],
-              ...(md as any[]).map((m: any, i: number) => {
-                const isLast = i === (md as any[]).length - 1;
-                const valMes = isLast ? m.value + valCupsIn : m.value;
+              ...mdCorrected.map((m: any, i: number) => {
+                const isLast = i === mdCorrected.length - 1;
+                const valMes = isLast ? m.value + valCupsInFinal : m.value;
                 const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                 const ok = pct >= 90 && pct <= 110;
                 const high = pct > 110;
@@ -1485,12 +1509,12 @@ export default function CertificadoTrimestral({
               }),
               [
                 { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
-                { text: fmtL(monthlyNT * (md as any[]).length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                { text: fmtL(monthlyNT * mdCorrected.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                 { text: fmtL(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                 {
-                  text: `${(monthlyNT * (md as any[]).length > 0 ? (totalEjecutadoFinal / (monthlyNT * (md as any[]).length)) * 100 : 0).toFixed(1)}%`,
+                  text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
                   bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
-                  color: (() => { const p = monthlyNT * (md as any[]).length > 0 ? (totalEjecutadoFinal / (monthlyNT * (md as any[]).length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                  color: (() => { const p = monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
                 },
               ],
             ],
@@ -1578,7 +1602,7 @@ export default function CertificadoTrimestral({
         // ══════════════════════ PÁGINA 3 ══════════════════════
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
         { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
-        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${(md as any[]).map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsIn > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsIn)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
+        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
         { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(lastMonthPay > 0 ? lastMonthPay : 0)}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, se considera un valor a ${descontar > 0 ? `descontar de ${fmtL(descontar)} por ejecución inferior al 90%` : 'descontar de $0,00'} y un valor a ${reconocer > 0 ? `reconocer de ${fmtL(reconocer)} por ejecución superior al 110%` : 'reconocer de $0,00'}, resultando en un valor estimado final del ${periodoLabel.toLowerCase()} de ${fmtL(valorFinal)}.`, style: 'p' },
 
         // Tabla resumen final
@@ -1605,7 +1629,7 @@ export default function CertificadoTrimestral({
     };
 
     pdfMake.createPdf(docDef).download(`Certificado_${inf.numero}_${empresa.replace(/\s+/g, '_')}.pdf`);
-  }, []);
+  }, [selectedPrestadorGroup]);
 
   const hasData = !!comparisonSummary && !!pgpData && months.length > 0;
 
