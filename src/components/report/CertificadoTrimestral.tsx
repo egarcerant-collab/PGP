@@ -2062,9 +2062,14 @@ export default function CertificadoTrimestral({
               const mesEntry = Array.isArray(inf.pdfData?.mesData)
                 ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
                 : null;
-              const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+              const baseVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
                 : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / periodoN : 0);
+              // Sumar CUPS inesperados prorrateados por número de meses del período
+              const inesperadosTotal = isFinite(inf.pdfData?.valorCupsInesperadas) && (inf.pdfData?.valorCupsInesperadas || 0) > 0
+                ? (inf.pdfData.valorCupsInesperadas / periodoN)
+                : 0;
+              const mesVal = baseVal + inesperadosTotal;
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
@@ -2205,6 +2210,8 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-left font-semibold max-w-[120px]">Período</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Tipo</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Ejecutado</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
@@ -2218,6 +2225,17 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 font-medium max-w-[120px] truncate" title={inf.periodo}>{inf.periodo}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-blue-700">{fmtCOP2(inf.totalEjecutado)}</td>
+                              <td className="px-3 py-1.5 text-right text-purple-700">
+                                {inf.pdfData?.valorCupsInesperadas > 0 ? (
+                                  <span className="font-semibold">{fmtCOP2(inf.pdfData.valorCupsInesperadas)}</span>
+                                ) : <span className="text-muted-foreground text-[10px]">—</span>}
+                                {inf.pdfData?.cantidadCupsInesperadas > 0 && (
+                                  <span className="block text-[10px] text-purple-500">{inf.pdfData.cantidadCupsInesperadas} CUPS</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
+                                {fmtCOP2((inf.totalEjecutado || 0) + (inf.pdfData?.valorCupsInesperadas || 0))}
+                              </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
