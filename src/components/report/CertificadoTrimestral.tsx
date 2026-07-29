@@ -2062,14 +2062,13 @@ export default function CertificadoTrimestral({
               const mesEntry = Array.isArray(inf.pdfData?.mesData)
                 ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
                 : null;
-              const baseVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+              // totalEjecutado ya contiene el valor final (RIPS + inesperadas si las hubo)
+              // mesData.value solo tiene RIPS → NO usarlo como base para evitar omitir inesperadas
+              const mesVal = (isFinite(inf.totalEjecutado) && inf.totalEjecutado > 0)
+                ? inf.totalEjecutado / periodoN
+                : (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
-                : (isFinite(inf.totalEjecutado) ? inf.totalEjecutado / periodoN : 0);
-              // Sumar CUPS inesperados prorrateados por número de meses del período
-              const inesperadosTotal = isFinite(inf.pdfData?.valorCupsInesperadas) && (inf.pdfData?.valorCupsInesperadas || 0) > 0
-                ? (inf.pdfData.valorCupsInesperadas / periodoN)
                 : 0;
-              const mesVal = baseVal + inesperadosTotal;
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
