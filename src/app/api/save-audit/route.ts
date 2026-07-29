@@ -21,8 +21,8 @@ export async function GET(request: Request) {
     const index       = await loadIndex(drive);
 
     const entry = index.find(r =>
-      r.prestador?.toLowerCase() === prestador.toLowerCase() &&
-      r.mes?.toLowerCase() === month.toLowerCase()
+      r.prestador?.trim().toLowerCase() === prestador.trim().toLowerCase() &&
+      r.mes?.trim().toLowerCase() === month.trim().toLowerCase()
     );
     if (!entry) return NextResponse.json({ exists: false });
 
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
 
     const index  = await loadIndex(drive);
     const dupIdx = index.findIndex(r =>
-      r.prestador?.toLowerCase() === prestadorName.toLowerCase() &&
-      r.mes?.toLowerCase() === month.toLowerCase()
+      r.prestador?.trim().toLowerCase() === prestadorName.trim().toLowerCase() &&
+      r.mes?.trim().toLowerCase() === month.trim().toLowerCase()
     );
 
     if (dupIdx !== -1) {
@@ -115,9 +115,9 @@ export async function POST(request: Request) {
 
     const newEntry = {
       id, numero,
-      prestador:      prestadorName,
+      prestador:      prestadorName.trim(),
       nit,
-      mes:            month,
+      mes:            month.trim(),
       auditor_id:     currentUser?.id     || null,
       auditor_nombre: currentUser?.nombre || '',
       created_at,
