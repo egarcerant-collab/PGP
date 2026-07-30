@@ -1369,14 +1369,23 @@ export default function CertificadoTrimestral({
       for (const gm of gMonths) {
         const curP = corrValMap['__p__' + gm];
         if (curP !== undefined && curP > gPrio) continue;
-        if (gi.totalEjecutado > 0) { corrValMap[gm] = gi.totalEjecutado / gN; corrValMap['__p__' + gm] = gPrio; }
+        if (gi.totalEjecutado > 0) {
+          corrValMap[gm] = gi.totalEjecutado / gN;
+          corrValMap['__p__' + gm] = gPrio;
+          // Inesperadas por mes: valorCupsInesperadas del informe individual (NO cantidadCupsInesperadas)
+          corrValMap['__inesp__' + gm] = ((gi.pdfData?.valorCupsInesperadas || 0) > 0)
+            ? gi.pdfData.valorCupsInesperadas / gN
+            : 0;
+        }
       }
     }
     const hasCorrected = Object.keys(corrValMap).some(k => !k.startsWith('__'));
     const mdCorrected = (md as any[]).map((m: any) => ({
       ...m,
       value: corrValMap[m.name?.toUpperCase()] ?? m.value,
+      inesperados: corrValMap['__inesp__' + m.name?.toUpperCase()] ?? 0,
     }));
+    const hasMonthlyInesp = mdCorrected.some((m: any) => m.inesperados > 0);
     // valCupsIn ya está incluido en totalEjecutado cuando hay corrección mensual
     const valCupsInFinal = hasCorrected ? 0 : valCupsIn;
 
@@ -1484,12 +1493,13 @@ export default function CertificadoTrimestral({
         { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
         {
           table: {
-            widths: ['*', 110, 110, 60],
+            widths: hasMonthlyInesp ? ['*', 95, 95, 95, 55] : ['*', 110, 110, 60],
             body: [
               [
                 { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                 { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                 { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                ...(hasMonthlyInesp ? [{ text: 'CUPS INESPERADOS', bold: true, fontSize: 7, fillColor: '#fde8ff', alignment: 'right' }] : []),
                 { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
               ],
               ...mdCorrected.map((m: any, i: number) => {
@@ -1504,6 +1514,7 @@ export default function CertificadoTrimestral({
                   { text: m.name, fontSize: 7, fillColor: rowFill },
                   { text: fmtL(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
                   { text: fmtL(valMes), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                  ...(hasMonthlyInesp ? [{ text: m.inesperados > 0 ? fmtL(m.inesperados) : '—', fontSize: 7, alignment: 'right', fillColor: m.inesperados > 0 ? '#fdf4ff' : rowFill, color: m.inesperados > 0 ? '#7c3aed' : '#9ca3af', bold: m.inesperados > 0 }] : []),
                   { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
                 ];
               }),
@@ -1511,6 +1522,10 @@ export default function CertificadoTrimestral({
                 { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
                 { text: fmtL(monthlyNT * mdCorrected.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                 { text: fmtL(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                ...(hasMonthlyInesp ? [{
+                  text: fmtL(mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0)),
+                  bold: true, fontSize: 7, alignment: 'right', fillColor: '#fdf4ff', color: '#7c3aed',
+                }] : []),
                 {
                   text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
                   bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
@@ -2247,7 +2262,9 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
                               <td className="px-3 py-1.5 font-medium max-w-[120px] truncate" title={inf.periodo}>{inf.periodo}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-blue-700">{fmtCOP2(inf.totalEjecutado)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-blue-700">
+                                {fmtCOP2((inf.totalEjecutado || 0) - (inf.pdfData?.valorCupsInesperadas || 0))}
+                              </td>
                               <td className="px-3 py-1.5 text-right text-purple-700">
                                 {inf.pdfData?.valorCupsInesperadas > 0 ? (
                                   <span className="font-semibold">{fmtCOP2(inf.pdfData.valorCupsInesperadas)}</span>
@@ -2257,7 +2274,7 @@ export default function CertificadoTrimestral({
                                 )}
                               </td>
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
-                                {fmtCOP2((inf.totalEjecutado || 0) + (inf.pdfData?.valorCupsInesperadas || 0))}
+                                {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
