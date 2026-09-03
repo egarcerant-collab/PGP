@@ -1149,7 +1149,25 @@ export default function CertificadoTrimestral({
           {
             text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${mesData.map(m => `En el mes de ${m.name} se documentaron ${fmtN(m.cups)} CUPS con un consolidado financiero de ${fmt(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtN(totalCups)} actividades en salud y ${fmt(totalEjecutadoFinal)} en valores ejecutados${valorCupsInesperadas > 0 ? ` (de los cuales ${fmt(valorCupsInesperadas)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`,
             style: 'p',
-            margin: [0, 0, 0, 0],
+            margin: [0, 0, 0, 8],
+          },
+
+          // ══ NOTA ACLARATORIA ══
+          {
+            table: {
+              widths: ['*'],
+              body: [[{
+                stack: [
+                  { text: 'NOTA ACLARATORIA — PAGOS ANTICIPADOS', bold: true, fontSize: 7, color: '#1e40af', margin: [0, 0, 0, 3] },
+                  { text: 'Los valores registrados en el presente cuadro corresponden a valores brutos proyectados conforme al modelo de pago del contrato, antes de deducciones. El valor neto efectivamente girado difiere del valor bruto aquí consignado por efecto de las retenciones tributarias aplicables (retención en la fuente, ICA y demás tributos según corresponda). La conciliación de esta diferencia se realizará con base en el certificado de giros expedido por la Tesorería de DUSAKAWI EPSI.', fontSize: 6.5, color: '#374151', margin: [0, 0, 0, 4] },
+                  { text: `El presente informe evalúa exclusivamente la ejecución técnico-financiera del contrato ${contratoNum} correspondiente a la vigencia ${new Date().getFullYear()}, período ${periodo.toLowerCase()}. Los saldos y carteras de vigencias anteriores no son objeto de esta evaluación; su depuración corresponde al proceso de liquidación del respectivo contrato y se formaliza mediante las actas de cierre de la vigencia a la que pertenecen. En consecuencia, el presente cuadro no constituye certificación de pagos efectuados, conciliación de cartera ni paz y salvo entre las partes.`, fontSize: 6.5, color: '#374151' },
+                ],
+                fillColor: '#eff6ff',
+                margin: [6, 6, 6, 6],
+              }]],
+            },
+            layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' },
+            margin: [0, 4, 0, 0],
           },
         ],
       };
@@ -1639,7 +1657,25 @@ export default function CertificadoTrimestral({
         { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 3] },
 
         // Narrativa CUPS
-        { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 0] },
+        { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
+
+        // ══ NOTA ACLARATORIA ══
+        {
+          table: {
+            widths: ['*'],
+            body: [[{
+              stack: [
+                { text: 'NOTA ACLARATORIA — PAGOS ANTICIPADOS', bold: true, fontSize: 7, color: '#1e40af', margin: [0, 0, 0, 3] },
+                { text: 'Los valores registrados en el presente cuadro corresponden a valores brutos proyectados conforme al modelo de pago del contrato, antes de deducciones. El valor neto efectivamente girado difiere del valor bruto aquí consignado por efecto de las retenciones tributarias aplicables (retención en la fuente, ICA y demás tributos según corresponda). La conciliación de esta diferencia se realizará con base en el certificado de giros expedido por la Tesorería de DUSAKAWI EPSI.', fontSize: 6.5, color: '#374151', margin: [0, 0, 0, 4] },
+                { text: `El presente informe evalúa exclusivamente la ejecución técnico-financiera del contrato ${contratoNum} correspondiente a la vigencia ${new Date().getFullYear()}, período ${periodo.toLowerCase()}. Los saldos y carteras de vigencias anteriores no son objeto de esta evaluación; su depuración corresponde al proceso de liquidación del respectivo contrato y se formaliza mediante las actas de cierre de la vigencia a la que pertenecen. En consecuencia, el presente cuadro no constituye certificación de pagos efectuados, conciliación de cartera ni paz y salvo entre las partes.`, fontSize: 6.5, color: '#374151' },
+              ],
+              fillColor: '#eff6ff',
+              margin: [6, 6, 6, 6],
+            }]],
+          },
+          layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' },
+          margin: [0, 4, 0, 0],
+        },
       ],
     };
 
