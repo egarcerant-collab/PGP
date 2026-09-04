@@ -657,6 +657,8 @@ export default function CertificadoTrimestral({
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
       const contratoNum = contrato || selectedPrestador.CONTRATO || 'N/A';
       const periodo = selectedGroup.label;
+      const MESES_AGO_PLUS = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      const showNotaAclaratoria = periodo.split('-').map(m => m.trim().toUpperCase()).some(m => MESES_AGO_PLUS.includes(m));
 
       // ── Gráficas ──
       const labels = mesData.map(m => m.name);
@@ -1152,8 +1154,8 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 8],
           },
 
-          // ══ NOTA ACLARATORIA ══
-          {
+          // ══ NOTA ACLARATORIA — solo desde agosto en adelante ══
+          ...(showNotaAclaratoria ? [{
             table: {
               widths: ['*'],
               body: [[{
@@ -1176,7 +1178,7 @@ export default function CertificadoTrimestral({
               paddingBottom: () => 8,
             },
             margin: [0, 10, 0, 0],
-          },
+          }] : []),
         ],
       };
 
@@ -1360,6 +1362,9 @@ export default function CertificadoTrimestral({
       municipio, depto, contratoNum, periodo, n, expectedMonths,
       totalEjecutadoFinal, totalCups,
     } = pd;
+
+    const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
     // Recalcular descontar/reconocer/valorFinal con lógica correcta:
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
@@ -1667,8 +1672,8 @@ export default function CertificadoTrimestral({
         // Narrativa CUPS
         { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
 
-        // ══ NOTA ACLARATORIA ══
-        {
+        // ══ NOTA ACLARATORIA — solo desde agosto en adelante ══
+        ...(showNotaAclaratoria ? [{
           table: {
             widths: ['*'],
             body: [[{
@@ -1691,7 +1696,7 @@ export default function CertificadoTrimestral({
             paddingBottom: () => 8,
           },
           margin: [0, 10, 0, 0],
-        },
+        }] : []),
       ],
     };
 
