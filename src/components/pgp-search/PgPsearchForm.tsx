@@ -584,6 +584,24 @@ const PgPsearchForm = forwardRef<
       });
     });
 
+    // Fila de totales al pie
+    const totalCant = exportRows.reduce((s: number, r: any) => s + (Number(r.Cantidad_Ejecutada) || 0), 0);
+    const totalServicio = exportRows.reduce((s: number, r: any) => s + (Number(r.Valor_Servicio_JSON) || 0), 0);
+    const totalNT = exportRows.reduce((s: number, r: any) => s + (Number(r.Valor_Ejecutado_NT) || 0), 0);
+    exportRows.push({
+      Mes: 'TOTAL',
+      ID_Usuario: '',
+      Tipo_Servicio: '',
+      CUPS: '',
+      Descripcion_CUPS: `${exportRows.length} registros`,
+      Fecha_Atencion: '',
+      Diagnostico_Principal: '',
+      Valor_Servicio_JSON: totalServicio,
+      Cantidad_Ejecutada: totalCant,
+      Valor_Unitario_NT: '',
+      Valor_Ejecutado_NT: totalNT,
+    });
+
     const csv = Papa.unparse(exportRows, { delimiter: ";" });
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
