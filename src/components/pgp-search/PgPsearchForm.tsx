@@ -363,6 +363,7 @@ const PgPsearchForm = forwardRef<
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
+  const [savedInformeNumero, setSavedInformeNumero] = useState<string | null>(null);
   const [selectedPrestador, setSelectedPrestador] = useState<Prestador | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
   const [globalSummary, setGlobalSummary] = useState<SummaryData | null>(null);
@@ -712,7 +713,7 @@ const PgPsearchForm = forwardRef<
         const rawText = await response.text();
         let data: any = {};
         try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 200) }; }
-        if (response.ok) return { numero: data.numero };
+        if (response.ok) { setSavedInformeNumero(data.numero); return { numero: data.numero }; }
         return { error: data.message || `Error ${response.status}` };
       } catch (e: any) {
         return { error: `Error de red: ${e?.message || e}` };
@@ -967,7 +968,7 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-4">
         {analysisHeader}
-        <InformeDesviaciones comparisonSummary={comparisonSummary!} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} />
+        <InformeDesviaciones comparisonSummary={comparisonSummary!} pgpData={pgpData} executionDataByMonth={executionDataByMonth} selectedPrestador={selectedPrestador} numero={savedInformeNumero || undefined} />
       </div>
     );
   }
@@ -1090,6 +1091,7 @@ const PgPsearchForm = forwardRef<
                   let data: any = {};
                   try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
                   if (response.ok) {
+                    setSavedInformeNumero(data.numero);
                     alert(`✅ Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} exitosamente.`);
                   } else {
                     alert(`❌ Error al guardar (${response.status}): ${data.message || 'Error desconocido'}`);
