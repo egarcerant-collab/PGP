@@ -317,6 +317,10 @@ export default function CertificadoTrimestral({
   const [viewUnlocked, setViewUnlocked] = useState(false);
   const [viewEditing, setViewEditing] = useState(false);
   const [viewEditData, setViewEditData] = useState<any>({});
+  const [trimLocked, setTrimLocked] = useState(true);
+  const [trimPwOpen, setTrimPwOpen] = useState(false);
+  const [trimPwInput, setTrimPwInput] = useState('');
+  const [trimPwError, setTrimPwError] = useState(false);
   const [viewSaving, setViewSaving] = useState(false);
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
@@ -2193,18 +2197,52 @@ export default function CertificadoTrimestral({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Período</Label>
-                        <Input value={viewEditData.periodo || ''} onChange={e => setViewEditData((p: any) => ({ ...p, periodo: e.target.value }))} className="text-sm" />
+                        <div className="flex items-center justify-between mb-1">
+                          <Label className="text-xs text-muted-foreground">Período</Label>
+                          {trimLocked
+                            ? <button type="button" onClick={() => { setTrimPwOpen(true); setTrimPwInput(''); setTrimPwError(false); }} className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold flex items-center gap-0.5">🔒 Bloqueado</button>
+                            : <span className="text-[10px] text-green-600 font-semibold">🔓 Desbloqueado</span>
+                          }
+                        </div>
+                        <Input value={viewEditData.periodo || ''} onChange={e => setViewEditData((p: any) => ({ ...p, periodo: e.target.value }))} className={`text-sm ${trimLocked ? 'bg-muted/60 text-muted-foreground cursor-not-allowed' : ''}`} readOnly={trimLocked} />
                       </div>
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
-                        <select value={viewEditData.tipoPeriodo || ''} onChange={e => setViewEditData((p: any) => ({ ...p, tipoPeriodo: e.target.value }))} className="w-full border rounded-md px-2 py-1.5 text-sm">
+                        <select value={viewEditData.tipoPeriodo || ''} onChange={e => !trimLocked && setViewEditData((p: any) => ({ ...p, tipoPeriodo: e.target.value }))} disabled={trimLocked} className={`w-full border rounded-md px-2 py-1.5 text-sm ${trimLocked ? 'bg-muted/60 text-muted-foreground cursor-not-allowed opacity-60' : ''}`}>
                           <option value="TRIMESTRAL">TRIMESTRAL</option>
                           <option value="BIMENSUAL">BIMENSUAL</option>
                           <option value="MENSUAL">MENSUAL</option>
                         </select>
                       </div>
                     </div>
+                    {/* Diálogo contraseña para cambiar trimestre */}
+                    {trimPwOpen && (
+                      <div className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 space-y-2">
+                        <p className="text-xs font-semibold text-amber-800">🔒 Ingrese la contraseña para modificar el período / trimestre:</p>
+                        <div className="flex gap-2">
+                          <Input
+                            type="password"
+                            value={trimPwInput}
+                            onChange={e => { setTrimPwInput(e.target.value); setTrimPwError(false); }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                if (trimPwInput === '123456') { setTrimLocked(false); setTrimPwOpen(false); }
+                                else setTrimPwError(true);
+                              }
+                            }}
+                            placeholder="Contraseña..."
+                            className="text-sm h-8 flex-1"
+                            autoFocus
+                          />
+                          <Button size="sm" className="h-8 bg-amber-600 hover:bg-amber-700 text-white" onClick={() => {
+                            if (trimPwInput === '123456') { setTrimLocked(false); setTrimPwOpen(false); }
+                            else setTrimPwError(true);
+                          }}>Confirmar</Button>
+                          <Button size="sm" variant="ghost" className="h-8" onClick={() => setTrimPwOpen(false)}>Cancelar</Button>
+                        </div>
+                        {trimPwError && <p className="text-xs text-red-600 font-medium">Contraseña incorrecta.</p>}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Valor Ejecutado (NT)</Label>
@@ -2324,6 +2362,10 @@ export default function CertificadoTrimestral({
                     <Button size="sm" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50"
                       onClick={() => {
                         setViewEditData({ prestador: viewingInf.prestador, periodo: viewingInf.periodo, tipoPeriodo: viewingInf.tipoPeriodo, valorFinal: viewingInf.valorFinal, nit: viewingInf.nit || '', contrato: viewingInf.contrato || '', responsable: viewingInf.responsable || '', fecha: viewingInf.fecha || '', supervisorName: viewingInf.pdfData?.supervisorName || '', showSupervisor: viewingInf.pdfData?.showSupervisor !== false });
+                        setTrimLocked(true);
+                        setTrimPwOpen(false);
+                        setTrimPwInput('');
+                        setTrimPwError(false);
                         setViewEditing(true);
                       }}>
                       ✏️ Editar
