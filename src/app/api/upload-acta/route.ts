@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     const file      = form.get('file') as File | null;
     const numero    = (form.get('numero') as string | null)?.trim();
     const prestador = (form.get('prestador') as string | null)?.trim() || 'IPS';
+    const tipo      = (form.get('tipo') as string | null)?.trim() || 'inesperadas'; // 'inesperadas' | 'firmada'
 
     if (!file || !numero) {
       return NextResponse.json({ message: 'Faltan campos: file y numero.' }, { status: 400 });
@@ -23,19 +24,25 @@ export async function POST(request: Request) {
     const buffer   = Buffer.from(await file.arrayBuffer());
     const drive    = getDrive();
     const actaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'actas');
-    const fileName = `Acta_Inesp_${numero}_${prestador.replace(/\s+/g, '_').substring(0, 40)}.pdf`;
+    const isFirmada = tipo === 'firmada';
+    const prefix  = isFirmada ? 'Acta_Firmada' : 'Acta_Inesp';
+    const fileName = `${prefix}_${numero}_${prestador.replace(/\s+/g, '_').substring(0, 40)}.pdf`;
 
     const { id: fileId, webViewLink } = await uploadFile(drive, actaFolder, fileName, 'application/pdf', buffer);
 
-    // Actualizar el registro en informes.json con la referencia al acta
+    // Actualizar el registro en informes.json con la referencia al acta correspondiente
     const informes: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
     const idx = informes.findIndex(r => String(r.numero) === String(numero));
     if (idx !== -1) {
-      informes[idx] = { ...informes[idx], acta_drive_id: fileId, acta_url: webViewLink };
+      if (isFirmada) {
+        informes[idx] = { ...informes[idx], acta_firmada_drive_id: fileId, acta_firmada_url: webViewLink };
+      } else {
+        informes[idx] = { ...informes[idx], acta_drive_id: fileId, acta_url: webViewLink };
+      }
       await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
     }
 
-    return NextResponse.json({ success: true, fileId, webViewLink });
+    return NextResponse.json({ success: true, fileId, webViewLink, tipo });
   } catch (e: any) {
     return NextResponse.json({ message: e.message || 'Error al subir acta.' }, { status: 500 });
   }
