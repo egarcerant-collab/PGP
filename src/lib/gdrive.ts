@@ -105,3 +105,28 @@ export async function listFiles(drive: DriveClient, folderId: string): Promise<A
   });
   return res.data.files?.map(f => ({ id: f.id!, name: f.name! })) ?? [];
 }
+
+export async function uploadFile(
+  drive: DriveClient,
+  folderId: string,
+  name: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<{ id: string; webViewLink: string }> {
+  const body = Readable.from([buffer]);
+  const existing = await findId(drive, folderId, name);
+  if (existing) {
+    await drive.files.update({ fileId: existing, media: { mimeType, body } });
+    await drive.permissions.create({ fileId: existing, requestBody: { role: 'reader', type: 'anyone' } }).catch(() => {});
+    const f = await drive.files.get({ fileId: existing, fields: 'webViewLink' });
+    return { id: existing, webViewLink: f.data.webViewLink || `https://drive.google.com/file/d/${existing}/view` };
+  }
+  const res = await drive.files.create({
+    requestBody: { name, parents: [folderId], mimeType },
+    media: { mimeType, body },
+    fields: 'id,webViewLink',
+  });
+  const fileId = res.data.id!;
+  await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } }).catch(() => {});
+  return { id: fileId, webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view` };
+}

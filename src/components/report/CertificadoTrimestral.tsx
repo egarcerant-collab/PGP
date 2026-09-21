@@ -2014,6 +2014,42 @@ export default function CertificadoTrimestral({
                                   <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); setViewEditing(false); setViewEditData({}); }} className="text-blue-400 hover:text-blue-600" title="Ver / Editar">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
                                   <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
+                                  {/* Subir / Ver Acta PDF en Drive */}
+                                  {inf.actaUrl ? (
+                                    <a href={inf.actaUrl} target="_blank" rel="noreferrer" title="Ver Acta en Drive" className="text-emerald-500 hover:text-emerald-700">📎</a>
+                                  ) : (
+                                    <button
+                                      title="Subir Acta PDF a Drive"
+                                      className="text-gray-400 hover:text-emerald-600"
+                                      onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'application/pdf';
+                                        input.onchange = async () => {
+                                          const file = input.files?.[0];
+                                          if (!file) return;
+                                          const fd = new FormData();
+                                          fd.append('file', file);
+                                          fd.append('numero', inf.numero);
+                                          fd.append('prestador', inf.prestador || 'IPS');
+                                          toast({ title: 'Subiendo acta...', description: file.name });
+                                          try {
+                                            const res = await fetch('/api/upload-acta', { method: 'POST', body: fd });
+                                            const d = await res.json();
+                                            if (d.success) {
+                                              toast({ title: '✓ Acta subida a Drive', description: 'Haz clic en 📎 para abrirla.' });
+                                              loadHistorial();
+                                            } else {
+                                              toast({ title: 'Error', description: d.message, variant: 'destructive' });
+                                            }
+                                          } catch {
+                                            toast({ title: 'Error de red al subir el acta', variant: 'destructive' });
+                                          }
+                                        };
+                                        input.click();
+                                      }}
+                                    >📎</button>
+                                  )}
                                   <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
                                 </div>
                               </td>
