@@ -1402,8 +1402,10 @@ export default function CertificadoTrimestral({
     const corrValMap: Record<string, number> = {};
     for (const gi of (selectedPrestadorGroup?.infs || [])) {
       const gMonths = (gi.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL_PDF.includes(m));
-      const gPrio = TIPO_PRIO_PDF[(gi.tipoPeriodo || '').toUpperCase()] ?? 0;
       const gN = gMonths.length || 1;
+      // Informes de un solo mes tienen prioridad más alta que informes multi-mes
+      // (evita que un trimestral que cubre varios meses sobreescriba con el promedio)
+      const gPrio = (gN === 1 ? 10 : 0) + (TIPO_PRIO_PDF[(gi.tipoPeriodo || '').toUpperCase()] ?? 0);
       for (const gm of gMonths) {
         const curP = corrValMap['__p__' + gm];
         if (curP !== undefined && curP > gPrio) continue;
