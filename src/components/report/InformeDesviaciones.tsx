@@ -6,11 +6,7 @@ import Papa from 'papaparse';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign, Send, CheckCircle2, ShieldCheck, Save, BookmarkCheck, FileText } from "lucide-react";
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if ((pdfFonts as any).pdfMake && pdfMake.vfs) { pdfMake.vfs = (pdfFonts as any).pdfMake.vfs; }
+import { TrendingUp, TrendingDown, AlertTriangle, Search, Target, Download, Loader2, X, Users, Repeat, AlertCircle, DollarSign, Send, CheckCircle2, ShieldCheck, Save, BookmarkCheck, Upload } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -398,10 +394,11 @@ interface InformeDesviacionesProps {
     pgpData: any[];
     executionDataByMonth: ExecutionDataByMonth;
     selectedPrestador?: { WEB?: string; PRESTADOR?: string; NIT?: string; CONTRATO?: string; CIUDAD?: string; DEPARTAMENTO?: string } | null;
+    numero?: string;
 }
 
 
-export default function InformeDesviaciones({ comparisonSummary, pgpData, executionDataByMonth, selectedPrestador }: InformeDesviacionesProps) {
+export default function InformeDesviaciones({ comparisonSummary, pgpData, executionDataByMonth, selectedPrestador, numero }: InformeDesviacionesProps) {
     const [selectedCup, setSelectedCup] = useState<DeviatedCupInfo | null>(null);
     const [isCupModalOpen, setIsCupModalOpen] = useState(false);
     const [lookedUpCupInfo, setLookedUpCupInfo] = useState<CupDescription | null>(null);
@@ -419,154 +416,38 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [ntSentOk, setNtSentOk] = useState(false);
     const { toast } = useToast();
 
-    // ── Generador de ACTA de CUPS Inesperadas ────────────────────────────────
-    const handleGenerarActa = useCallback(async () => {
-        const cups = comparisonSummary?.unexpectedCups || [];
-        if (!cups.length) return;
-
-        const fmtC = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
-        const fmtN = (v: number) => new Intl.NumberFormat('es-CO').format(Math.round(v));
-        const today = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
-        const year  = new Date().getFullYear();
-
-        const MONTH_MAP_A: Record<string, string> = {
-            'Enero':'ENERO','Febrero':'FEBRERO','Marzo':'MARZO','Abril':'ABRIL','Mayo':'MAYO','Junio':'JUNIO',
-            'Julio':'JULIO','Agosto':'AGOSTO','Septiembre':'SEPTIEMBRE','Octubre':'OCTUBRE','Noviembre':'NOVIEMBRE','Diciembre':'DICIEMBRE',
-            'January':'ENERO','February':'FEBRERO','March':'MARZO','April':'ABRIL','May':'MAYO','June':'JUNIO',
-            'July':'JULIO','August':'AGOSTO','September':'SEPTIEMBRE','October':'OCTUBRE','November':'NOVIEMBRE','December':'DICIEMBRE',
+    // ── Subir ACTA de CUPS Inesperadas a Google Drive ───────────────────────
+    const handleSubirActa = useCallback(() => {
+        if (!numero) {
+            toast({ title: 'Sin informe guardado', description: 'Guarde primero el informe para poder adjuntar el acta.', variant: 'destructive' });
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/pdf';
+        input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            const prestador = selectedPrestador?.PRESTADOR || 'IPS';
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('numero', numero);
+            fd.append('prestador', prestador);
+            toast({ title: 'Subiendo acta...', description: file.name });
+            try {
+                const res = await fetch('/api/upload-acta', { method: 'POST', body: fd });
+                const d = await res.json();
+                if (d.success) {
+                    toast({ title: '✓ Acta subida a Drive', description: `Vinculada al informe N° ${numero}` });
+                } else {
+                    toast({ title: 'Error al subir', description: d.message, variant: 'destructive' });
+                }
+            } catch {
+                toast({ title: 'Error de red', description: 'No se pudo subir el acta.', variant: 'destructive' });
+            }
         };
-        const periodoLabel = (comparisonSummary?.monthlyFinancials || []).map(m => MONTH_MAP_A[m.month] || m.month.toUpperCase()).join(' - ');
-        const totalVal  = cups.reduce((s, c) => s + c.totalValue, 0);
-        const totalCant = cups.reduce((s, c) => s + c.realFrequency, 0);
-
-        const logoBase64: string = await new Promise(resolve => {
-            const img = new Image();
-            img.onload = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) { resolve(''); return; }
-                    ctx.drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/png'));
-                } catch { resolve(''); }
-            };
-            img.onerror = () => resolve('');
-            img.src = '/imagenes pdf/logo-dusakawi.png';
-        });
-
-        const HS  = { bold: true, fontSize: 7, fillColor: '#dbeafe' as string };
-        const CS  = { fontSize: 7 };
-        const TS  = { bold: true, fontSize: 7, fillColor: '#bfdbfe' as string };
-
-        const tableBody: any[] = [
-            [
-                { text: 'N°',          ...HS, alignment: 'center' },
-                { text: 'CUPS / CUM',  ...HS },
-                { text: 'DESCRIPCIÓN', ...HS },
-                { text: 'TIPO',        ...HS, alignment: 'center' },
-                { text: 'CANTIDAD',    ...HS, alignment: 'right' },
-                { text: 'VALOR EJECUTADO', ...HS, alignment: 'right' },
-            ],
-            ...cups.map((c, i) => [
-                { text: String(i + 1), ...CS, alignment: 'center' },
-                { text: c.cup,         ...CS, font: 'Roboto' },
-                { text: c.description || 'N/A', ...CS },
-                { text: c.serviceType || 'N/A', ...CS, alignment: 'center' },
-                { text: fmtN(c.realFrequency), ...CS, alignment: 'right' },
-                { text: fmtC(c.totalValue),    ...CS, alignment: 'right', color: '#7c3aed' },
-            ]),
-            [
-                { text: 'TOTAL', ...TS, colSpan: 4, alignment: 'right' }, {}, {}, {},
-                { text: fmtN(totalCant), ...TS, alignment: 'right' },
-                { text: fmtC(totalVal),  ...TS, alignment: 'right', color: '#5b21b6' },
-            ],
-        ];
-
-        const docDef: any = {
-            pageSize: 'A4',
-            pageMargins: [35, 48, 35, 30],
-            defaultStyle: { font: 'Roboto', fontSize: 7.5, lineHeight: 1.2 },
-            ...(logoBase64 ? { header: () => ({ image: logoBase64, width: 80, margin: [38, 7, 0, 0] }) } : {}),
-            content: [
-                // Encabezado institucional
-                {
-                    table: { widths: ['*', 'auto', 'auto', 'auto', 'auto'],
-                        body: [[
-                            { text: 'PROCESO: DIRECCIÓN DEL RIESGO NACIONAL EN SALUD', bold: true, fontSize: 6.5, fillColor: '#dbeafe' },
-                            { text: 'Código: DI-MT-SD-F-15', fontSize: 6.5, alignment: 'center' },
-                            { text: 'Versión: 01', fontSize: 6.5, alignment: 'center' },
-                            { text: `Emisión: ${today}`, fontSize: 6.5, alignment: 'center' },
-                            { text: `Vigencia: ${year}`, fontSize: 6.5, alignment: 'center' },
-                        ]]
-                    },
-                    layout: 'noBorders', margin: [0, 0, 0, 4],
-                },
-                { text: 'ACTA DE EVIDENCIA — CUPS / TECNOLOGÍAS INESPERADAS', fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
-                { text: 'Dirección del Riesgo Nacional en Salud — DUSAKAWI EPSI', fontSize: 7.5, alignment: 'center', color: '#4b5563', margin: [0, 0, 0, 8] },
-
-                // Datos de identificación
-                {
-                    table: { widths: ['auto', '*', 'auto', '*'],
-                        body: [
-                            [{ text: 'FECHA DE ELABORACIÓN', ...HS }, { text: today, ...CS },
-                             { text: 'AÑO VIGENCIA', ...HS }, { text: String(year), ...CS }],
-                            [{ text: 'IPS PRESTADORA', ...HS }, { text: selectedPrestador?.PRESTADOR || 'N/A', ...CS },
-                             { text: 'NIT', ...HS }, { text: selectedPrestador?.NIT || '________________', ...CS }],
-                            [{ text: 'N° CONTRATO', ...HS }, { text: selectedPrestador?.CONTRATO || '________________', ...CS },
-                             { text: 'MUNICIPIO', ...HS }, { text: selectedPrestador?.CIUDAD || '________________', ...CS }],
-                            [{ text: 'PERÍODO EVALUADO', ...HS }, { text: periodoLabel, ...CS },
-                             { text: 'TOTAL CUPS INESP.', ...HS }, { text: String(cups.length) + ' códigos', ...CS }],
-                        ]
-                    },
-                    margin: [0, 0, 0, 8],
-                },
-
-                // Texto del hallazgo
-                { text: 'I. DESCRIPCIÓN DEL HALLAZGO', bold: true, fontSize: 8, margin: [0, 0, 0, 3], color: '#1e3a8a' },
-                {
-                    text: `En revisión de los Registros Individuales de Prestación de Servicios de Salud (RIPS) correspondientes al período ${periodoLabel} de la vigencia ${year}, se identificaron ${cups.length} código(s) CUPS y/o Tecnologías de Salud cuya ejecución no se encuentra contemplada en la Nota Técnica vigente del contrato suscrito con ${selectedPrestador?.PRESTADOR || 'la IPS'}. Dichos códigos registran un total de ${fmtN(totalCant)} actividades en salud, con un valor ejecutado consolidado de ${fmtC(totalVal)}.`,
-                    fontSize: 7.5, margin: [0, 0, 0, 8], alignment: 'justify',
-                },
-
-                // Tabla de CUPS inesperadas
-                { text: 'II. DETALLE DE CUPS / TECNOLOGÍAS INESPERADAS', bold: true, fontSize: 8, margin: [0, 0, 0, 4], color: '#1e3a8a' },
-                {
-                    table: { widths: [18, 42, '*', 55, 45, 65], body: tableBody },
-                    layout: { hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 1 : 0.3, vLineWidth: () => 0, hLineColor: () => '#93c5fd', fillColor: (row: number) => row % 2 === 0 && row > 0 && row < tableBody.length - 1 ? '#f5f3ff' : null },
-                    margin: [0, 0, 0, 8],
-                },
-
-                // Implicaciones
-                { text: 'III. IMPLICACIONES Y ACCIONES', bold: true, fontSize: 8, margin: [0, 0, 0, 3], color: '#1e3a8a' },
-                {
-                    text: `Los CUPS / Tecnologías Inesperadas identificados representan servicios de salud prestados a la población afiliada de DUSAKAWI EPSI que no fueron proyectados en la Nota Técnica del contrato ${selectedPrestador?.CONTRATO || '________________'}. El valor total de ${fmtC(totalVal)} deberá ser objeto de análisis por parte de la Dirección del Riesgo Nacional en Salud para determinar su incorporación en la Nota Técnica mediante el procedimiento de actualización establecido. Esta acta sirve como soporte técnico para la gestión contractual y la toma de decisiones financieras correspondiente.`,
-                    fontSize: 7.5, margin: [0, 0, 0, 12], alignment: 'justify',
-                },
-
-                // Firmas
-                {
-                    columns: [
-                        { stack: [
-                            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 180, y2: 0, lineWidth: 0.8, lineColor: '#374151' }] },
-                            { text: 'DIRECTOR(A) RIESGO NACIONAL EN SALUD', fontSize: 6.5, bold: true, margin: [0, 2, 0, 0] },
-                            { text: 'DUSAKAWI EPSI', fontSize: 6.5, color: '#6b7280' },
-                        ], width: '*' },
-                        { width: 20, text: '' },
-                        { stack: [
-                            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 180, y2: 0, lineWidth: 0.8, lineColor: '#374151' }] },
-                            { text: 'REPRESENTANTE LEGAL / DELEGADO', fontSize: 6.5, bold: true, margin: [0, 2, 0, 0] },
-                            { text: selectedPrestador?.PRESTADOR || 'IPS PRESTADORA', fontSize: 6.5, color: '#6b7280' },
-                        ], width: '*' },
-                    ],
-                    margin: [0, 0, 0, 0],
-                },
-            ],
-        };
-
-        pdfMake.createPdf(docDef).download(`Acta_CUPS_Inesperadas_${(selectedPrestador?.PRESTADOR || 'IPS').replace(/\s+/g, '_')}_${periodoLabel.replace(/\s*-\s*/g, '-')}.pdf`);
-        toast({ title: 'Acta generada', description: `${cups.length} CUPS inesperadas · ${fmtC(totalVal)}` });
-    }, [comparisonSummary, selectedPrestador, toast]);
+        input.click();
+    }, [numero, selectedPrestador, toast]);
 
     // Claves de localStorage basadas en prestador + período cargado
     // El período se deriva de los meses en comparisonSummary para que coincida
@@ -981,10 +862,10 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     size="sm"
                                     variant="outline"
                                     className="border-purple-300 text-purple-700 hover:bg-purple-50 shrink-0"
-                                    onClick={handleGenerarActa}
+                                    onClick={handleSubirActa}
                                 >
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    Generar Acta PDF
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Subir Acta PDF
                                 </Button>
                                 <Button
                                     size="sm"
