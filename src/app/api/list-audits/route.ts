@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getDrive, readJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, readJson, writeJson, deleteJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
 import { getCurrentUser } from '@/lib/get-current-user';
+
+const DELETE_PASSWORD = 'Wanoseshas2015.';
 
 export async function GET(request: Request) {
   const currentUser = await getCurrentUser(request);
@@ -36,5 +38,32 @@ export async function GET(request: Request) {
   } catch (e) {
     console.warn('Drive list-audits error:', e);
     return NextResponse.json([]);
+  }
+}
+
+// DELETE /api/list-audits?id=UUID&password=X
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id       = searchParams.get('id')?.trim();
+    const password = searchParams.get('password')?.trim();
+
+    if (!id)                          return NextResponse.json({ message: 'Falta id.' }, { status: 400 });
+    if (password !== DELETE_PASSWORD) return NextResponse.json({ message: 'Contraseña incorrecta.' }, { status: 403 });
+
+    const drive = getDrive();
+    const index: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json')) ?? [];
+    const newIndex = index.filter(r => r.id !== id);
+    if (newIndex.length === index.length) return NextResponse.json({ message: 'Auditoría no encontrada.' }, { status: 404 });
+
+    const auditoriaFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'auditorias');
+    await Promise.all([
+      writeJson(drive, ROOT_FOLDER_ID, 'auditorias_index.json', newIndex),
+      deleteJson(drive, auditoriaFolder, `${id}.json`),
+    ]);
+
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ message: e.message }, { status: 500 });
   }
 }
