@@ -46,6 +46,8 @@ export async function GET(request: Request) {
       totalAnticipos: r.total_anticipos,
       responsable: r.responsable,
       pdfData: r.pdf_data || null,
+      actaUrl: r.acta_url || null,
+      actaDriveId: r.acta_drive_id || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });
