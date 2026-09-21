@@ -327,6 +327,9 @@ export default function CertificadoTrimestral({
   const [trimPwOpen, setTrimPwOpen] = useState(false);
   const [trimPwInput, setTrimPwInput] = useState('');
   const [trimPwError, setTrimPwError] = useState(false);
+  const [pendingTrimInf, setPendingTrimInf] = useState<any | null>(null);
+  const [trimMovePw, setTrimMovePw] = useState('');
+  const [trimMovePwError, setTrimMovePwError] = useState(false);
   const [viewSaving, setViewSaving] = useState(false);
   const [notaAdicional, setNotaAdicional] = useState('');
   const [notaEjecucionFinanciera, setNotaEjecucionFinanciera] = useState('');
@@ -2218,7 +2221,7 @@ export default function CertificadoTrimestral({
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-[96vw] max-h-[92vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
                   <div>
@@ -2314,6 +2317,8 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
+                            <th className="px-3 py-1.5 text-center font-semibold text-emerald-700">Acta Inesp.</th>
+                            <th className="px-3 py-1.5 text-center font-semibold text-blue-700">Acta Firmada</th>
                             <th className="px-3 py-1.5 sticky right-0 bg-white"></th>
                           </tr>
                         </thead>
@@ -2340,52 +2345,67 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
+                              {/* Acta Inesperados */}
+                              <td className="px-3 py-1.5 text-center">
+                                {inf.actaUrl ? (
+                                  <a href={inf.actaUrl} target="_blank" rel="noreferrer" title="Ver Acta Inesperados en Drive" className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">📎 Ver</a>
+                                ) : (
+                                  <button title="Subir Acta de Inesperados" className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-emerald-600 border border-dashed border-gray-300 hover:border-emerald-400 rounded px-1.5 py-0.5"
+                                    onClick={() => {
+                                      const input = document.createElement('input');
+                                      input.type = 'file'; input.accept = 'application/pdf';
+                                      input.onchange = async () => {
+                                        const file = input.files?.[0]; if (!file) return;
+                                        const fd = new FormData();
+                                        fd.append('file', file); fd.append('numero', inf.numero); fd.append('prestador', inf.prestador || 'IPS'); fd.append('tipo', 'inesperadas');
+                                        toast({ title: 'Subiendo Acta Inesperados...', description: file.name });
+                                        try {
+                                          const res = await fetch('/api/upload-acta', { method: 'POST', body: fd });
+                                          const d = await res.json();
+                                          if (d.success) { toast({ title: '✓ Acta Inesperados subida' }); loadHistorial(); }
+                                          else toast({ title: 'Error', description: d.message, variant: 'destructive' });
+                                        } catch { toast({ title: 'Error de red', variant: 'destructive' }); }
+                                      };
+                                      input.click();
+                                    }}>📎 Subir</button>
+                                )}
+                              </td>
+                              {/* Acta Firmada */}
+                              <td className="px-3 py-1.5 text-center">
+                                {inf.actaFirmadaUrl ? (
+                                  <a href={inf.actaFirmadaUrl} target="_blank" rel="noreferrer" title="Ver Acta Firmada en Drive" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">📝 Ver</a>
+                                ) : (
+                                  <button title="Subir Acta Firmada" className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-600 border border-dashed border-gray-300 hover:border-blue-400 rounded px-1.5 py-0.5"
+                                    onClick={() => {
+                                      const input = document.createElement('input');
+                                      input.type = 'file'; input.accept = 'application/pdf';
+                                      input.onchange = async () => {
+                                        const file = input.files?.[0]; if (!file) return;
+                                        const fd = new FormData();
+                                        fd.append('file', file); fd.append('numero', inf.numero); fd.append('prestador', inf.prestador || 'IPS'); fd.append('tipo', 'firmada');
+                                        toast({ title: 'Subiendo Acta Firmada...', description: file.name });
+                                        try {
+                                          const res = await fetch('/api/upload-acta', { method: 'POST', body: fd });
+                                          const d = await res.json();
+                                          if (d.success) { toast({ title: '✓ Acta Firmada subida' }); loadHistorial(); }
+                                          else toast({ title: 'Error', description: d.message, variant: 'destructive' });
+                                        } catch { toast({ title: 'Error de red', variant: 'destructive' }); }
+                                      };
+                                      input.click();
+                                    }}>📝 Subir</button>
+                                )}
+                              </td>
                               <td className="px-3 py-1.5 sticky right-0 bg-white shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.04)]">
                                 <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                  {/* T2 badge — requiere contraseña para mover */}
                                   <button
-                                    onClick={() => cycleInfTrimestre(inf)}
+                                    onClick={() => { setPendingTrimInf(inf); setTrimMovePw(''); setTrimMovePwError(false); }}
                                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded border cursor-pointer ${TRIM_COLORS[getInfTrimestreIdx(inf)]}`}
-                                    title="Clic para mover al siguiente trimestre"
+                                    title="Clic para mover al siguiente trimestre (requiere contraseña)"
                                   >{TRIM_LABELS[getInfTrimestreIdx(inf)]}</button>
                                   <button onClick={() => { setViewingInf(inf); setViewPwInput(''); setViewPwError(false); setViewUnlocked(false); setViewEditing(false); setViewEditData({}); }} className="text-blue-400 hover:text-blue-600" title="Ver / Editar">👁️</button>
                                   <button onClick={() => handleGenerateFromRecord(inf)} className="text-purple-400 hover:text-purple-600" title="PDF">📄</button>
                                   <button onClick={() => { setReopenInf(inf); setReopenPwInput(''); setReopenPwError(false); setReopenUnlocked(false); setReopenNotaEF(inf.pdfData?.notaEjecucionFinanciera || ''); setReopenNotaAd(inf.pdfData?.notaAdicional || ''); }} className="text-amber-400 hover:text-amber-600" title="Reabrir notas">🔓</button>
-                                  {/* Subir / Ver Acta PDF en Drive */}
-                                  {inf.actaUrl ? (
-                                    <a href={inf.actaUrl} target="_blank" rel="noreferrer" title="Ver Acta en Drive" className="text-emerald-500 hover:text-emerald-700">📎</a>
-                                  ) : (
-                                    <button
-                                      title="Subir Acta PDF a Drive"
-                                      className="text-gray-400 hover:text-emerald-600"
-                                      onClick={() => {
-                                        const input = document.createElement('input');
-                                        input.type = 'file';
-                                        input.accept = 'application/pdf';
-                                        input.onchange = async () => {
-                                          const file = input.files?.[0];
-                                          if (!file) return;
-                                          const fd = new FormData();
-                                          fd.append('file', file);
-                                          fd.append('numero', inf.numero);
-                                          fd.append('prestador', inf.prestador || 'IPS');
-                                          toast({ title: 'Subiendo acta...', description: file.name });
-                                          try {
-                                            const res = await fetch('/api/upload-acta', { method: 'POST', body: fd });
-                                            const d = await res.json();
-                                            if (d.success) {
-                                              toast({ title: '✓ Acta subida a Drive', description: 'Haz clic en 📎 para abrirla.' });
-                                              loadHistorial();
-                                            } else {
-                                              toast({ title: 'Error', description: d.message, variant: 'destructive' });
-                                            }
-                                          } catch {
-                                            toast({ title: 'Error de red al subir el acta', variant: 'destructive' });
-                                          }
-                                        };
-                                        input.click();
-                                      }}
-                                    >📎</button>
-                                  )}
                                   <button onClick={() => { setSelectedPrestadorGroup(null); setDeletingNum(inf.numero); setPwInput(''); setPwError(false); }} className="text-red-400 hover:text-red-600" title="Eliminar">🗑️</button>
                                 </div>
                               </td>
@@ -2401,6 +2421,42 @@ export default function CertificadoTrimestral({
             </div>
           );
         })()}
+
+        {/* Diálogo contraseña para mover trimestre */}
+        {pendingTrimInf && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <h3 className="font-bold text-sm text-slate-800">🔒 Mover informe de trimestre</h3>
+              <p className="text-xs text-muted-foreground">Informe <strong>N° {pendingTrimInf.numero}</strong> · {pendingTrimInf.periodo}<br/>Ingrese la contraseña para moverlo al siguiente trimestre.</p>
+              <input
+                type="password"
+                value={trimMovePw}
+                onChange={e => { setTrimMovePw(e.target.value); setTrimMovePwError(false); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
+                    else setTrimMovePwError(true);
+                  }
+                  if (e.key === 'Escape') setPendingTrimInf(null);
+                }}
+                placeholder="Contraseña..."
+                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                autoFocus
+              />
+              {trimMovePwError && <p className="text-xs text-red-600 font-medium">Contraseña incorrecta.</p>}
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setPendingTrimInf(null)} className="text-xs px-3 py-1.5 rounded border text-muted-foreground hover:bg-muted">Cancelar</button>
+                <button
+                  onClick={() => {
+                    if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
+                    else setTrimMovePwError(true);
+                  }}
+                  className="text-xs px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+                >Confirmar</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal Reabrir notas de informe */}
         {reopenInf && (

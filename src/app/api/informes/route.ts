@@ -48,6 +48,8 @@ export async function GET(request: Request) {
       pdfData: r.pdf_data || null,
       actaUrl: r.acta_url || null,
       actaDriveId: r.acta_drive_id || null,
+      actaFirmadaUrl: r.acta_firmada_url || null,
+      actaFirmadaDriveId: r.acta_firmada_drive_id || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });
