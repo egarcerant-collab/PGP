@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Loader2, Play, RefreshCw, FolderOpen, ChevronDown, ChevronUp, FileText, Save, X, LayoutList, LayoutGrid } from "lucide-react";
+import { Loader2, Play, RefreshCw, FolderOpen, ChevronDown, ChevronUp, FileText, Save, X, LayoutList, LayoutGrid, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedAuditData } from '../app/JsonAnalyzerPage';
 
@@ -176,6 +176,11 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     const [notaAdi, setNotaAdi] = useState('');
     const [savingNota, setSavingNota] = useState(false);
 
+    const [deleteTarget, setDeleteTarget] = useState<AuditRecord | null>(null);
+    const [deletePw, setDeletePw] = useState('');
+    const [deletePwError, setDeletePwError] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const fetchAudits = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -190,6 +195,29 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
     }, [toast]);
 
     useEffect(() => { fetchAudits(); }, [fetchAudits]);
+
+    const handleDeleteAudit = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        setDeletePwError('');
+        try {
+            const res = await fetch(`/api/list-audits?id=${encodeURIComponent(String(deleteTarget.id))}&password=${encodeURIComponent(deletePw)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) {
+                setDeletePwError(data.message || 'Error al eliminar.');
+                return;
+            }
+            toast({ title: `Auditoría N° ${deleteTarget.numero} eliminada.` });
+            setDeleteTarget(null);
+            setDeletePw('');
+            setAudits(prev => prev.filter(a => a.id !== deleteTarget.id));
+            setSelectedIds(prev => prev.filter(id => id !== deleteTarget.id));
+        } catch {
+            setDeletePwError('Error de red.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     useEffect(() => {
         setShowCombinedPanel(false);
@@ -567,6 +595,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                     <th className="px-4 py-2 text-left font-semibold">Mes</th>
                                     <th className="px-4 py-2 text-left font-semibold">Fecha</th>
                                     <th className="px-4 py-2 text-center font-semibold">Informe</th>
+                                    <th className="px-4 py-2 text-center font-semibold w-10"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -620,11 +649,20 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                                                         {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                                     </button>
                                                 </td>
+                                                <td className="px-2 py-2 text-center">
+                                                    <button
+                                                        onClick={() => { setDeleteTarget(a); setDeletePw(''); setDeletePwError(''); }}
+                                                        title="Eliminar auditoría"
+                                                        className="inline-flex items-center justify-center h-6 w-6 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </td>
                                             </tr>
 
                                             {isExpanded && (
                                                 <tr className="border-t border-blue-100 bg-blue-50/30">
-                                                    <td colSpan={7} className="px-4 py-3">
+                                                    <td colSpan={8} className="px-4 py-3">
                                                         {loadingInf ? (
                                                             <div className="flex items-center gap-2 text-xs text-slate-500 py-2">
                                                                 <Loader2 className="h-3 w-3 animate-spin" /> Buscando informe relacionado…
@@ -757,6 +795,51 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ── Diálogo eliminar auditoría ── */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+                        <h3 className="text-base font-bold text-red-700 flex items-center gap-2">
+                            <Trash2 className="h-5 w-5" /> Eliminar auditoría
+                        </h3>
+                        <p className="text-sm text-slate-600">
+                            ¿Eliminar <strong>N° {deleteTarget.numero}</strong> — {deleteTarget.prestador?.toUpperCase()} ({deleteTarget.month})?
+                            <br /><span className="text-red-500 text-xs font-semibold">Esta acción no se puede deshacer.</span>
+                        </p>
+                        <div>
+                            <label className="text-xs font-medium text-slate-500 block mb-1">Contraseña de administrador</label>
+                            <input
+                                type="password"
+                                value={deletePw}
+                                onChange={e => { setDeletePw(e.target.value); setDeletePwError(''); }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') handleDeleteAudit();
+                                    if (e.key === 'Escape') { setDeleteTarget(null); setDeletePw(''); setDeletePwError(''); }
+                                }}
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                placeholder="Contraseña"
+                                autoFocus
+                            />
+                            {deletePwError && <p className="text-xs text-red-600 mt-1">{deletePwError}</p>}
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => { setDeleteTarget(null); setDeletePw(''); setDeletePwError(''); }}
+                                className="px-4 py-1.5 text-sm rounded-lg border hover:bg-slate-50 transition-colors"
+                            >Cancelar</button>
+                            <button
+                                onClick={handleDeleteAudit}
+                                disabled={isDeleting || !deletePw}
+                                className="px-4 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                            >
+                                {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
