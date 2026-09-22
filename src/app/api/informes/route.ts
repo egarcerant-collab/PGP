@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       municipio: r.municipio,
       departamento: r.departamento,
       periodo: r.periodo,
-      tipoPeriodo: r.tipo_periodo,
+      tipoPeriodo: inferTipoPeriodo(r.periodo || ''),
       fecha: r.fecha,
       ntPeriodo: r.nt_periodo,
       totalEjecutado: r.total_ejecutado,
