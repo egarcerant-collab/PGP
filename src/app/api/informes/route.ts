@@ -16,13 +16,29 @@ async function loadInformes(drive: any): Promise<Informe[]> {
   return (await readJson<Informe[]>(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
 }
 
+/** Migración silenciosa: corrige tipo_periodo incorrecto en Drive en background */
+async function fixTiposIfNeeded(drive: any, allData: Informe[]): Promise<void> {
+  const needsFix = allData.some(r => {
+    const correct = inferTipoPeriodo(r.periodo || '');
+    return (r.tipo_periodo || '').toUpperCase() !== correct;
+  });
+  if (!needsFix) return;
+  const fixed = allData.map(r => ({ ...r, tipo_periodo: inferTipoPeriodo(r.periodo || '') }));
+  await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', fixed).catch(() => {});
+}
+
 // GET /api/informes
 export async function GET(request: Request) {
   try {
     const drive = getDrive();
     const currentUser = await getCurrentUser(request);
     const isAdmin = currentUser?.rol === 'superadmin' || currentUser?.rol === 'admin';
-    let data = await loadInformes(drive);
+    const allData = await loadInformes(drive);
+
+    // Migración silenciosa en background — no bloquea la respuesta
+    fixTiposIfNeeded(drive, allData).catch(() => {});
+
+    let data = allData;
 
     if (!isAdmin) {
       if (currentUser?.rol === 'prestador') {
