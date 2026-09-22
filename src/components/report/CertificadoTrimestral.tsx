@@ -2221,7 +2221,7 @@ export default function CertificadoTrimestral({
             })
             .sort((a, b) => a.label.localeCompare(b.label));
 
-          return (
+          return (<>
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-[96vw] max-h-[92vh] flex flex-col">
                 {/* Header */}
@@ -2423,44 +2423,43 @@ export default function CertificadoTrimestral({
                 </div>
               </div>
             </div>
-          );
-        })()}
-
-        {/* Diálogo contraseña para mover trimestre */}
-        {pendingTrimInf && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-              <h3 className="font-bold text-sm text-slate-800">🔒 Mover informe de trimestre</h3>
-              <p className="text-xs text-muted-foreground">Informe <strong>N° {pendingTrimInf.numero}</strong> · {pendingTrimInf.periodo}<br/>Ingrese la contraseña para moverlo al siguiente trimestre.</p>
-              <input
-                type="password"
-                value={trimMovePw}
-                onChange={e => { setTrimMovePw(e.target.value); setTrimMovePwError(false); }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
-                    else setTrimMovePwError(true);
-                  }
-                  if (e.key === 'Escape') setPendingTrimInf(null);
-                }}
-                placeholder="Contraseña..."
-                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                autoFocus
-              />
-              {trimMovePwError && <p className="text-xs text-red-600 font-medium">Contraseña incorrecta.</p>}
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setPendingTrimInf(null)} className="text-xs px-3 py-1.5 rounded border text-muted-foreground hover:bg-muted">Cancelar</button>
-                <button
-                  onClick={() => {
-                    if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
-                    else setTrimMovePwError(true);
-                  }}
-                  className="text-xs px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-semibold"
-                >Confirmar</button>
+            {/* Diálogo contraseña para mover trimestre — DENTRO del IIFE para acceder a cycleInfTrimestre */}
+            {pendingTrimInf && (
+              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+                  <h3 className="font-bold text-sm text-slate-800">🔒 Mover informe de trimestre</h3>
+                  <p className="text-xs text-muted-foreground">Informe <strong>N° {pendingTrimInf.numero}</strong> · {pendingTrimInf.periodo}<br/>Ingrese la contraseña para moverlo al siguiente trimestre.</p>
+                  <input
+                    type="password"
+                    value={trimMovePw}
+                    onChange={e => { setTrimMovePw(e.target.value); setTrimMovePwError(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
+                        else setTrimMovePwError(true);
+                      }
+                      if (e.key === 'Escape') setPendingTrimInf(null);
+                    }}
+                    placeholder="Contraseña..."
+                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    autoFocus
+                  />
+                  {trimMovePwError && <p className="text-xs text-red-600 font-medium">Contraseña incorrecta.</p>}
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setPendingTrimInf(null)} className="text-xs px-3 py-1.5 rounded border text-muted-foreground hover:bg-muted">Cancelar</button>
+                    <button
+                      onClick={() => {
+                        if (trimMovePw === '123456') { cycleInfTrimestre(pendingTrimInf); setPendingTrimInf(null); }
+                        else setTrimMovePwError(true);
+                      }}
+                      className="text-xs px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+                    >Confirmar</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
+          </>);
+        })()}
 
         {/* Modal Reabrir notas de informe */}
         {reopenInf && (
