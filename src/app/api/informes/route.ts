@@ -4,6 +4,14 @@ import { getCurrentUser } from '@/lib/get-current-user';
 
 type Informe = Record<string, any>;
 
+/** Deriva el tipo de período a partir del campo período (contando meses separados por guion) */
+function inferTipoPeriodo(periodo: string): string {
+  const dashes = (periodo.match(/-/g) || []).length;
+  if (dashes >= 2) return 'TRIMESTRAL';
+  if (dashes === 1) return 'BIMENSUAL';
+  return 'MENSUAL';
+}
+
 async function loadInformes(drive: any): Promise<Informe[]> {
   return (await readJson<Informe[]>(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
 }
@@ -83,7 +91,7 @@ export async function POST(request: Request) {
       municipio:      body.municipio    || '',
       departamento:   body.departamento || '',
       periodo,
-      tipo_periodo:   body.tipoPeriodo  || '',
+      tipo_periodo:   inferTipoPeriodo(periodo),
       nt_periodo:     body.ntPeriodo    || 0,
       total_ejecutado: body.totalEjecutado || 0,
       descontar:      body.descontar    || 0,
@@ -143,8 +151,13 @@ export async function PATCH(request: Request) {
     if (updateFields) {
       const f: Record<string, any> = {};
       if (body.prestador      !== undefined) f.prestador       = body.prestador;
-      if (body.periodo        !== undefined) f.periodo         = body.periodo;
-      if (body.tipoPeriodo    !== undefined) f.tipo_periodo    = body.tipoPeriodo;
+      if (body.periodo        !== undefined) {
+        f.periodo     = body.periodo;
+        f.tipo_periodo = inferTipoPeriodo(body.periodo);
+      } else if (body.tipoPeriodo !== undefined) {
+        // solo si no vino periodo (para no sobrescribir la inferencia)
+        f.tipo_periodo = body.tipoPeriodo;
+      }
       if (body.totalEjecutado !== undefined) f.total_ejecutado = body.totalEjecutado;
       if (body.valorFinal     !== undefined) f.valor_final     = body.valorFinal;
       if (body.descontar      !== undefined) f.descontar       = body.descontar;
