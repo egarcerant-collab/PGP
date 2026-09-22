@@ -17,7 +17,10 @@ export async function GET(request: Request) {
     let data = await loadInformes(drive);
 
     if (!isAdmin) {
-      if (currentUser?.nombre) {
+      if (currentUser?.rol === 'prestador') {
+        // Prestadores ven solo sus propios informes, filtrados por NIT (id = NIT del prestador)
+        data = data.filter(r => r.nit && r.nit.replace(/\D/g, '') === currentUser.id.replace(/\D/g, ''));
+      } else if (currentUser?.nombre) {
         const me = currentUser.nombre.trim().toLowerCase();
         data = data.filter(r => r.responsable?.toLowerCase().includes(me));
       } else {

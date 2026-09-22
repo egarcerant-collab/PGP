@@ -1,13 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, ShieldCheck, Eye, EyeOff, UserPlus, LogIn, KeyRound, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, Eye, EyeOff, UserPlus, LogIn, KeyRound, ArrowLeft, CheckCircle, Building2 } from 'lucide-react';
 
 const GREEN = '#4CAF50';
 const GREEN_DARK = '#2E7D32';
 const GREEN_LIGHT = '#E8F5E9';
 
-type Mode = 'login' | 'register' | 'reset' | 'new-password';
+type Mode = 'login' | 'register' | 'reset' | 'new-password' | 'prestador';
+
+const PRESTADORES_LIST = [
+  { nit: '901226064', nombre: 'IPS VITAL SALUD GUAJIRA S.A.S' },
+  { nit: '901182049', nombre: 'GRUPO IMB IPS SAS-RIOHACHA' },
+  { nit: '901182049', nombre: 'GRUPO IMB IPS SAS-URIBIA' },
+  { nit: '800194798', nombre: 'ORGANIZACION CLINICA BONNADONA PREVENIR SAS' },
+  { nit: '900986941', nombre: 'UNIPSSAM SAS' },
+  { nit: '900030445', nombre: 'UROMIL' },
+  { nit: '900745500', nombre: 'FESALUD DEL CESAR' },
+  { nit: '825002902', nombre: 'PROBIENESTAR' },
+  { nit: '900563455', nombre: 'INSTITUTO OFTANMOLOGICO DEL CESAR DR HECTOR MARQUEZ' },
+];
 
 const inputCls = 'w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all';
 
@@ -23,6 +35,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  // Prestador fields
+  const [prestadorNit, setPrestadorNit] = useState('');
+  const [prestadorPassword, setPrestadorPassword] = useState('');
+  const [showPrestadorPassword, setShowPrestadorPassword] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -128,6 +144,31 @@ export default function LoginPage() {
     }
   };
 
+  const handlePrestadorLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!prestadorNit) { setError('Selecciona tu institución.'); return; }
+    if (!prestadorPassword) { setError('Ingresa la contraseña.'); return; }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login-prestador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nit: prestadorNit, password: prestadorPassword }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        setError(data.message || 'NIT o contraseña incorrectos.');
+      } else {
+        window.location.href = '/prestador';
+      }
+    } catch {
+      setLoading(false);
+      setError('Error de conexión. Intenta de nuevo.');
+    }
+  };
+
   const switchMode = (m: Mode) => { setMode(m); setError(''); setSuccess(''); };
 
   const btnGreen = (
@@ -173,21 +214,28 @@ export default function LoginPage() {
             </div>
 
             {/* Tabs */}
-            {(mode === 'login' || mode === 'register') && (
+            {(mode === 'login' || mode === 'register' || mode === 'prestador') && (
               <div className="flex border-b border-gray-200">
                 <button onClick={() => switchMode('login')}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-medium transition-colors"
                   style={mode === 'login'
                     ? { color: GREEN_DARK, borderBottom: `2px solid ${GREEN}`, backgroundColor: GREEN_LIGHT }
                     : { color: '#64748b' }}>
                   <LogIn className="h-4 w-4" /> Iniciar Sesión
                 </button>
                 <button onClick={() => switchMode('register')}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-medium transition-colors"
                   style={mode === 'register'
                     ? { color: GREEN_DARK, borderBottom: `2px solid ${GREEN}`, backgroundColor: GREEN_LIGHT }
                     : { color: '#64748b' }}>
                   <UserPlus className="h-4 w-4" /> Registrarse
+                </button>
+                <button onClick={() => switchMode('prestador')}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-medium transition-colors"
+                  style={mode === 'prestador'
+                    ? { color: GREEN_DARK, borderBottom: `2px solid ${GREEN}`, backgroundColor: GREEN_LIGHT }
+                    : { color: '#64748b' }}>
+                  <Building2 className="h-4 w-4" /> Prestadores
                 </button>
               </div>
             )}
@@ -297,6 +345,42 @@ export default function LoginPage() {
                   <button type="button" onClick={() => switchMode('login')}
                     className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 text-sm py-2 transition-colors">
                     <ArrowLeft className="h-4 w-4" /> Volver al inicio de sesión
+                  </button>
+                </form>
+              )}
+
+              {mode === 'prestador' && (
+                <form onSubmit={handlePrestadorLogin} className="space-y-4">
+                  <div className="rounded-lg px-4 py-3 border text-xs" style={{ backgroundColor: GREEN_LIGHT, borderColor: GREEN, color: GREEN_DARK }}>
+                    Selecciona tu institución e ingresa tu NIT como contraseña.
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">Institución Prestadora</label>
+                    <select required value={prestadorNit} onChange={e => setPrestadorNit(e.target.value)} className={inputCls}>
+                      <option value="">— Selecciona tu institución —</option>
+                      {PRESTADORES_LIST.map(p => (
+                        <option key={`${p.nit}-${p.nombre}`} value={p.nit}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">Contraseña (NIT)</label>
+                    <div className="relative">
+                      <input type={showPrestadorPassword ? 'text' : 'password'} required
+                        value={prestadorPassword} onChange={e => setPrestadorPassword(e.target.value)}
+                        placeholder="Ingresa el NIT de tu institución"
+                        className={inputCls + ' pr-11'} />
+                      <button type="button" onClick={() => setShowPrestadorPassword(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" tabIndex={-1}>
+                        {showPrestadorPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3"><p className="text-red-700 text-sm">{error}</p></div>}
+                  <button type="submit" disabled={loading}
+                    className="w-full flex items-center justify-center gap-2 text-white font-semibold py-2.5 rounded-lg transition-opacity text-sm mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: GREEN }}>
+                    {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Verificando...</> : <><Building2 className="h-4 w-4" />Ingresar como Prestador</>}
                   </button>
                 </form>
               )}
