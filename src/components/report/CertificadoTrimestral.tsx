@@ -2372,11 +2372,11 @@ export default function CertificadoTrimestral({
                                     }}>📎 Subir</button>
                                 )}
                               </td>
-                              {/* Acta Firmada */}
+                              {/* Acta Firmada — solo para períodos combinados (trimestral/bimensual) */}
                               <td className="px-3 py-1.5 text-center">
                                 {inf.actaFirmadaUrl ? (
                                   <a href={inf.actaFirmadaUrl} target="_blank" rel="noreferrer" title="Ver Acta Firmada en Drive" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">📝 Ver</a>
-                                ) : (
+                                ) : (inf.tipoPeriodo || '').toUpperCase() !== 'MENSUAL' ? (
                                   <button title="Subir Acta Firmada" className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-600 border border-dashed border-gray-300 hover:border-blue-400 rounded px-1.5 py-0.5"
                                     onClick={() => {
                                       const input = document.createElement('input');
@@ -2395,6 +2395,8 @@ export default function CertificadoTrimestral({
                                       };
                                       input.click();
                                     }}>📝 Subir</button>
+                                ) : (
+                                  <span className="text-[10px] text-gray-300">—</span>
                                 )}
                               </td>
                               <td className="px-3 py-1.5 sticky right-0 bg-white shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.04)]">
