@@ -36,6 +36,7 @@ export type CupCountInfo = {
 export type CupCountsMap = Map<string, CupCountInfo>;
 export type ExecutionDataByMonth = Map<string, MonthlyExecutionData>;
 export type ModuleId = "datos" | "inicio" | "financiero" | "cups" | "ajustes" | "informes" | "historial" | "validador";
+// "inicio" está unificado con "financiero" — el sidebar solo muestra "financiero"
 
 interface NavItem {
   id: ModuleId;
@@ -50,8 +51,7 @@ const NAV: NavItem[] = [
   { id: "validador",  label: "Validador NT",             icon: ShieldCheck,     group: "general" },
   { id: "historial",  label: "Historial",                icon: Archive,         group: "general" },
   { id: "informes",   label: "Informes y Certificados",  icon: FileText,        group: "general" },
-  { id: "inicio",     label: "Dashboard",                icon: LayoutDashboard, group: "analisis", requiresData: true },
-  { id: "financiero", label: "Análisis Financiero",      icon: TrendingUp,      group: "analisis", requiresData: true },
+  { id: "financiero", label: "Dashboard & Análisis",     icon: LayoutDashboard, group: "analisis", requiresData: true },
   { id: "cups",       label: "CUPS / Tecnologías",       icon: Activity,        group: "analisis", requiresData: true },
   { id: "ajustes",    label: "Descuentos y Ajustes",     icon: Sliders,         group: "analisis", requiresData: true },
 ];
@@ -204,7 +204,7 @@ export default function Home() {
     if (auditPackage.jsonPrestadorCode) setJsonPrestadorCode(auditPackage.jsonPrestadorCode);
     if (auditPackage.uniqueUserCount) setUniqueUserCount(auditPackage.uniqueUserCount);
     setSelectedPrestadorName(prestadorName);
-    setActiveModule("inicio");
+    setActiveModule("financiero");
   }, []);
 
   const monthName = (key: string) => {
@@ -238,7 +238,7 @@ export default function Home() {
 
   const handlePrestadorLoaded = useCallback((name: string) => {
     setSelectedPrestadorName(name);
-    setActiveModule("inicio");
+    setActiveModule("financiero");
   }, []);
 
   const current = NAV.find(n => n.id === activeModule);

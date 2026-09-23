@@ -843,7 +843,7 @@ const PgPsearchForm = forwardRef<
     </div>
   );
 
-  // ── inicio (dashboard) ──
+  // ── inicio (dashboard) — mantenido para compatibilidad ──
   if (activeModule === "inicio") {
     const totalJsonExec = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
     const totalNTExec = comparisonSummary!.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0);
@@ -851,7 +851,6 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-6">
         {analysisHeader}
-        {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard accent="blue" title="Cobertura Poblacional" value={`${pctCoverage}%`} icon={Users}
             footer={`${uniqueUserCount.toLocaleString('es-CO')} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
@@ -864,14 +863,12 @@ const PgPsearchForm = forwardRef<
               footer={`Banda: ${formatCurrency(globalSummary.costoMinimoPeriodo)} – ${formatCurrency(globalSummary.costoMaximoPeriodo)}`} />
           )}
         </div>
-        {/* CUPS status cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard accent="red" title="CUPS Sobre-ejecutados" value={comparisonSummary!.overExecutedCups.length} icon={TrendingUp} footer="Frecuencia >110% de lo esperado" />
           <StatCard accent="amber" title="CUPS Sub-ejecutados" value={comparisonSummary!.underExecutedCups.length} icon={TrendingDown} footer="Frecuencia <90% de lo esperado" />
           <StatCard accent="default" title="Tecnologías no ejecutadas" value={comparisonSummary!.missingCups.length} icon={AlertTriangle} footer="CUPS en NT sin ejecución" />
           <StatCard accent="default" title="CUPS / Tec. Inesperadas" value={comparisonSummary!.unexpectedCups.length} icon={Search} footer="No estaban en la NT" />
         </div>
-        {/* Mini financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
           <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
@@ -880,10 +877,11 @@ const PgPsearchForm = forwardRef<
     );
   }
 
-  // ── financiero ──
+  // ── financiero (unificado con dashboard) ──
   if (activeModule === "financiero") {
     const totalJsonExec = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
     const totalNTExec = comparisonSummary!.monthlyFinancials.reduce((acc, m) => acc + m.totalValorEjecutado, 0);
+    const pctCoverage = ((uniqueUserCount / (selectedPrestador?.POBLACION || 1)) * 100).toFixed(1);
     const subUsers = regimenTotals?.subsidiadoUsers || 0;
     const conUsers = regimenTotals?.contributivoUsers || 0;
     const totalUsers = subUsers + conUsers;
@@ -897,6 +895,28 @@ const PgPsearchForm = forwardRef<
     return (
       <div className="space-y-6">
         {analysisHeader}
+
+        {/* ── Sección Dashboard: KPIs de cobertura y CUPS ── */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard accent="blue" title="Cobertura Poblacional" value={`${pctCoverage}%`} icon={Users}
+            footer={`${uniqueUserCount.toLocaleString('es-CO')} de ${selectedPrestador?.POBLACION?.toLocaleString() || 'N/A'}`} />
+          <StatCard accent="green" title="Ejecución Real (JSON)" value={formatCurrency(totalJsonExec)} icon={Wallet}
+            footer="Costo total en archivos JSON" />
+          <StatCard accent="purple" title="Ejecución NT" value={formatCurrency(totalNTExec)} icon={FileText}
+            footer="Doble clic → Detalle por usuario (.xls)" onDoubleClick={handleDownloadExecutionDetail} />
+          {globalSummary && (
+            <StatCard accent="amber" title="Valor NT (período)" value={formatCurrency(globalSummary.totalPeriodo)} icon={Landmark}
+              footer={`Banda: ${formatCurrency(globalSummary.costoMinimoPeriodo)} – ${formatCurrency(globalSummary.costoMaximoPeriodo)}`} />
+          )}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard accent="red" title="CUPS Sobre-ejecutados" value={comparisonSummary!.overExecutedCups.length} icon={TrendingUp} footer="Frecuencia >110% de lo esperado" />
+          <StatCard accent="amber" title="CUPS Sub-ejecutados" value={comparisonSummary!.underExecutedCups.length} icon={TrendingDown} footer="Frecuencia <90% de lo esperado" />
+          <StatCard accent="default" title="Tecnologías no ejecutadas" value={comparisonSummary!.missingCups.length} icon={AlertTriangle} footer="CUPS en NT sin ejecución" />
+          <StatCard accent="default" title="CUPS / Tec. Inesperadas" value={comparisonSummary!.unexpectedCups.length} icon={Search} footer="No estaban en la NT" />
+        </div>
+
+        {/* ── Sección Análisis Financiero detallado ── */}
         {/* NT band cards */}
         {globalSummary && (
           <div className="grid gap-4 sm:grid-cols-3">
