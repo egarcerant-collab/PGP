@@ -367,6 +367,12 @@ export default function Home() {
                   <span className="truncate">{item.label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Financiero</p>
+            <div className="space-y-0.5">
               <button
                 onClick={() => router.push('/excel-export')}
                 className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
