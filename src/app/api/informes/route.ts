@@ -61,6 +61,9 @@ export async function GET(request: Request) {
       actaDriveId: r.acta_drive_id || null,
       actaFirmadaUrl: r.acta_firmada_url || null,
       actaFirmadaDriveId: r.acta_firmada_drive_id || null,
+      notaPrestador: r.nota_prestador || null,
+      estadoPrestador: r.estado_prestador || null,
+      notaPrestadorFecha: r.nota_prestador_fecha || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });

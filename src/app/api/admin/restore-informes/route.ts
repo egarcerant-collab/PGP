@@ -27,13 +27,22 @@ export async function GET(request: Request) {
     const fileId = await findInformesFileId(drive);
     if (!fileId) return NextResponse.json({ message: 'informes.json no encontrado.' }, { status: 404 });
 
-    const res = await drive.revisions.list({
-      fileId,
-      fields: 'revisions(id,modifiedTime,lastModifyingUser)',
-      pageSize: 20,
-    });
+    // Paginar para obtener TODAS las revisiones y tomar las 30 más recientes
+    let allRevisions: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res: any = await drive.revisions.list({
+        fileId,
+        fields: 'nextPageToken,revisions(id,modifiedTime,lastModifyingUser)',
+        pageSize: 100,
+        ...(pageToken ? { pageToken } : {}),
+      });
+      allRevisions = [...allRevisions, ...(res.data.revisions ?? [])];
+      pageToken = res.data.nextPageToken;
+    } while (pageToken);
 
-    const versions = (res.data.revisions ?? []).reverse().map((v: any) => ({
+    // Las más recientes primero
+    const versions = allRevisions.slice(-30).reverse().map((v: any) => ({
       id: v.id,
       fecha: v.modifiedTime,
       usuario: v.lastModifyingUser?.displayName ?? '—',
