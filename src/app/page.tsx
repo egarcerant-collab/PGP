@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
   Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
-  Users, LogOut, ClipboardCheck, FileSpreadsheet,
+  Users, LogOut, ClipboardCheck, FileSpreadsheet, Bell, XCircle, X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,45 @@ export default function Home() {
     subsidiado: 0, contributivo: 0, byMonth: {}, subsidiadoUsers: 0, contributivoUsers: 0,
   });
   const [selectedPrestadorName, setSelectedPrestadorName] = useState<string | null>(null);
+
+  // Notificaciones de conformidad de prestadores
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [sinLeer, setSinLeer] = useState(0);
+  const [showNotifs, setShowNotifs] = useState(false);
+
+  useEffect(() => {
+    const fetchNotifs = () => {
+      fetch('/api/admin/notificaciones')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) { setNotifs(d.notificaciones ?? []); setSinLeer(d.sinLeer ?? 0); } })
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const marcarLeida = async (id: string) => {
+    await fetch('/api/admin/notificaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] }),
+    }).catch(() => {});
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
+    setSinLeer(prev => Math.max(0, prev - 1));
+  };
+
+  const marcarTodasLeidas = async () => {
+    const ids = notifs.filter(n => !n.leida).map(n => n.id);
+    if (!ids.length) return;
+    await fetch('/api/admin/notificaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    }).catch(() => {});
+    setNotifs(prev => prev.map(n => ({ ...n, leida: true })));
+    setSinLeer(0);
+  };
 
   const pgpSearchRef = useRef<{ handleSelectPrestador: (p: { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> } | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -213,14 +252,101 @@ export default function Home() {
         style={{ width: `${sidebarWidth}px` }}
       >
 
-        {/* Logo */}
+        {/* Logo + Campana */}
         <div className="h-14 px-4 flex items-center gap-3 border-b border-border shrink-0">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
             <BarChart3 className="h-4 w-4 text-primary-foreground" />
           </div>
-          <div className="leading-tight min-w-0">
+          <div className="leading-tight min-w-0 flex-1">
             <p className="font-bold text-sm text-foreground">Auditoría PGP</p>
             <p className="text-[10px] text-muted-foreground truncate">Dusakawi EPSI · DNR</p>
+          </div>
+          {/* Campana de notificaciones */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowNotifs(v => !v)}
+              className="relative h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+              title="Notificaciones de prestadores"
+            >
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              {sinLeer > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                  {sinLeer > 9 ? '9+' : sinLeer}
+                </span>
+              )}
+            </button>
+
+            {/* Panel de notificaciones */}
+            {showNotifs && (
+              <div className="absolute top-10 left-0 z-50 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/40">
+                  <p className="text-xs font-semibold text-foreground">Notas de prestadores</p>
+                  <div className="flex items-center gap-2">
+                    {sinLeer > 0 && (
+                      <button onClick={marcarTodasLeidas} className="text-[10px] text-primary hover:underline">
+                        Marcar todas leídas
+                      </button>
+                    )}
+                    <button onClick={() => setShowNotifs(false)}>
+                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto divide-y divide-border">
+                  {notifs.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <Bell className="h-6 w-6 mx-auto mb-2 text-muted-foreground/30" />
+                      <p className="text-xs text-muted-foreground">Sin notificaciones</p>
+                    </div>
+                  ) : notifs.map(n => (
+                    <div
+                      key={n.id}
+                      className={cn(
+                        "px-4 py-3 text-xs transition-colors",
+                        n.leida ? "bg-card" : "bg-blue-50/60 dark:bg-blue-950/20"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {n.estado === 'no_conforme' ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-700 bg-red-100 rounded px-1 py-0.5">
+                                <XCircle className="h-3 w-3" /> No conforme
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-green-700 bg-green-100 rounded px-1 py-0.5">
+                                <CheckCircle2 className="h-3 w-3" /> Conforme
+                              </span>
+                            )}
+                            <span className="font-semibold text-foreground truncate">
+                              N° {n.numero} · {n.periodo}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground mt-0.5 truncate">{n.prestador}</p>
+                          {n.nota && (
+                            <p className="mt-1 text-foreground/80 bg-muted/60 rounded px-2 py-1 text-[11px] line-clamp-2">
+                              "{n.nota}"
+                            </p>
+                          )}
+                          <p className="text-muted-foreground/60 mt-1 text-[10px]">
+                            {new Date(n.fecha).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        {!n.leida && (
+                          <button
+                            onClick={() => marcarLeida(n.id)}
+                            className="shrink-0 text-[10px] text-primary hover:underline mt-0.5"
+                          >
+                            Leída
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
