@@ -281,14 +281,12 @@ export default function PrestadorPage() {
                           <td className="px-4 py-2 text-right font-mono text-gray-700">{fmt(inf.totalEjecutado)}</td>
                           <td className="px-4 py-2 text-right font-mono font-semibold" style={{ color: GREEN_DARK }}>{fmt(inf.valorFinal)}</td>
 
-                          {/* Informe PDF */}
+                          {/* Informe PDF — siempre disponible */}
                           <td className="px-4 py-2 text-center">
-                            {inf.actaUrl ? (
-                              <a href={inf.actaUrl} target="_blank" rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 transition-colors hover:bg-blue-100">
-                                <Download className="h-3 w-3" /> Descargar
-                              </a>
-                            ) : <span className="text-gray-300">—</span>}
+                            <a href={`/prestador/pdf/${inf.numero}`} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 transition-colors hover:bg-blue-100">
+                              <Download className="h-3 w-3" /> Descargar
+                            </a>
                           </td>
 
                           {/* Acta firmada */}
