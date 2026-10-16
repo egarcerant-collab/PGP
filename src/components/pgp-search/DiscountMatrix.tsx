@@ -209,6 +209,32 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
             if (response.ok) {
                 toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
+
+                // Calcular descuento total directamente desde filteredData (en scope)
+                let glosaTotal = 0;
+                let reconocerTotal = 0;
+                for (const row of filteredData) {
+                    const vq = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
+                    const reconocido = vq * row.Valor_Unitario;
+                    const descuento = row.Valor_Ejecutado - reconocido;
+                    glosaTotal    += descuento > 0 ? descuento : 0;
+                    reconocerTotal += descuento > 0 ? reconocido : row.Valor_Ejecutado;
+                }
+
+                if (glosaTotal > 0) {
+                    try {
+                        const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
+                        const infData = await infRes.json();
+                        const informe = infData.informes?.[0];
+                        if (informe?.numero) {
+                            await fetch('/api/informes', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ numero: informe.numero, descontar: glosaTotal, updateFields: true }),
+                            });
+                        }
+                    } catch { /* silencioso: no bloquear el flujo */ }
+                }
             } else {
                 toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
             }
