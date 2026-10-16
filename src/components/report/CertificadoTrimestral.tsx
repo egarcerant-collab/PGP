@@ -693,9 +693,11 @@ export default function CertificadoTrimestral({
 
       // ── Cálculo DESCONTAR / RECONOCER ──
       // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
-      // Si RIPS + inesperadas >= 90% → sin descuento.
-      // Ej: 1,072M(RIPS) + 80M(inesp) = 1,153M / 1,277M(NT) = 90.2% → sin descuento.
-      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
+      // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
+      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const descontar = descontarEjecucion + descontarGlosa;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
@@ -1238,8 +1240,10 @@ export default function CertificadoTrimestral({
       const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
-      // Comparación: RIPS + inesperadas vs bandas (90-110%)
-      const descontar = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
+      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const descontar           = descontarEjecucionR + descontarGlosaR;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
@@ -1375,8 +1379,10 @@ export default function CertificadoTrimestral({
 
     // Recalcular descontar/reconocer/valorFinal con lógica correcta:
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
-    // Comparación: RIPS + inesperadas vs bandas (90-110%)
-    const descontarR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+    // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
+    const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+    const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const reconocerR = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
     // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
