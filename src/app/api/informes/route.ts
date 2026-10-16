@@ -26,8 +26,15 @@ export async function GET(request: Request) {
 
     if (!isAdmin) {
       if (currentUser?.rol === 'prestador') {
-        // Prestadores ven solo sus propios informes, filtrados por NIT (id = NIT del prestador)
-        data = data.filter(r => r.nit && r.nit.replace(/\D/g, '') === currentUser.id.replace(/\D/g, ''));
+        // Filtrar por NIT y por nombre exacto del prestador para separar sedes con mismo NIT
+        const nitUser = currentUser.id.replace(/\D/g, '');
+        const nombreUser = currentUser.nombre?.trim().toLowerCase() ?? '';
+        data = data.filter(r => {
+          if (!r.nit || r.nit.replace(/\D/g, '') !== nitUser) return false;
+          if (!nombreUser) return true;
+          const nombreInforme = (r.prestador ?? '').trim().toLowerCase();
+          return nombreInforme === nombreUser || nombreInforme.includes(nombreUser) || nombreUser.includes(nombreInforme);
+        });
       } else if (currentUser?.nombre) {
         const me = currentUser.nombre.trim().toLowerCase();
         data = data.filter(r => r.responsable?.toLowerCase().includes(me));
