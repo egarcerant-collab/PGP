@@ -232,10 +232,14 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         }));
         const csv = Papa.unparse(csvRows, { delimiter: ";" });
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.setAttribute("href", URL.createObjectURL(blob));
+        link.setAttribute("href", url);
         link.setAttribute("download", `matriz_descuentos_${activeFilter}.xls`);
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
     };
 
     const totals = useMemo(() => {
@@ -581,10 +585,14 @@ const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMon
             'Valor': r.valor,
         })), { delimiter: ';' });
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `detalle_${row.CUPS}.csv`;
+        link.setAttribute('href', url);
+        link.setAttribute('download', `detalle_${row.CUPS}.csv`);
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
     };
 
     const stat = (label: string, value: string | number, color?: string) => (
