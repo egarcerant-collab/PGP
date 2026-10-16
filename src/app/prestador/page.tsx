@@ -238,6 +238,7 @@ export default function PrestadorPage() {
                   <tr className="border-b border-gray-100 text-left" style={{ backgroundColor: GREEN_LIGHT }}>
                     <th className="px-4 py-2.5 font-semibold text-gray-600">N°</th>
                     <th className="px-4 py-2.5 font-semibold text-gray-600">Período</th>
+                    <th className="px-4 py-2.5 font-semibold text-gray-600">Contrato</th>
                     <th className="px-4 py-2.5 font-semibold text-gray-600">Tipo</th>
                     <th className="px-4 py-2.5 font-semibold text-gray-600 text-right">Total Ejecutado</th>
                     <th className="px-4 py-2.5 font-semibold text-gray-600 text-right">Valor Final</th>
@@ -263,6 +264,7 @@ export default function PrestadorPage() {
                         >
                           <td className="px-4 py-2 font-bold text-gray-700">{inf.numero}</td>
                           <td className="px-4 py-2 text-gray-600">{inf.periodo}</td>
+                          <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{inf.contrato ?? '—'}</td>
                           <td className="px-4 py-2">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
                               style={{
