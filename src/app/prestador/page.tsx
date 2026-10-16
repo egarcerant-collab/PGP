@@ -264,7 +264,10 @@ export default function PrestadorPage() {
                         >
                           <td className="px-4 py-2 font-bold text-gray-700">{inf.numero}</td>
                           <td className="px-4 py-2 text-gray-600">{inf.periodo}</td>
-                          <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{inf.contrato ?? '—'}</td>
+                          <td className="px-4 py-2 text-[10px] text-gray-500">
+                            <div className="font-mono">{inf.contrato ?? '—'}</div>
+                            {inf.municipio && <div className="text-gray-400 capitalize">{inf.municipio}</div>}
+                          </td>
                           <td className="px-4 py-2">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
                               style={{
