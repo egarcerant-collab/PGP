@@ -522,7 +522,8 @@ const PgPsearchForm = forwardRef<
         Cantidad_Esperada: 0, Cantidad_Ejecutada: c.realFrequency,
         Diferencia: c.realFrequency, percentage_ejecucion: 9999,
         '%_Ejecucion': 'N/A', Clasificacion: 'Inesperado',
-        Valor_Unitario: 0, Valor_Esperado: 0,
+        Valor_Unitario: c.realFrequency > 0 ? Math.round(c.totalValue / c.realFrequency) : 0,
+        Valor_Esperado: 0,
         Valor_Ejecutado: c.totalValue, Valor_a_Reconocer: 0,
       } as ConsolidatedRow)),
     ];
