@@ -102,6 +102,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
     const [detailRow, setDetailRow] = useState<DiscountMatrixRow | null>(null);
     const [cupsExcepciones, setCupsExcepciones] = useState<any[]>([]);
+    const [isSavingGlosa, setIsSavingGlosa] = useState(false);
     const { toast } = useToast();
 
     const fetchExcepciones = () => {
@@ -297,6 +298,41 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         }
     };
 
+    const handleSaveGlosa = async () => {
+        if (totals.glosa <= 0) {
+            toast({ title: "Sin glosa", description: "No hay descuentos aplicados para guardar.", variant: "destructive" });
+            return;
+        }
+        setIsSavingGlosa(true);
+        try {
+            const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
+            const date = new Date(2024, parseInt(monthKey) - 1, 1);
+            const monthName = date.toLocaleString('es-CO', { month: 'long' });
+
+            const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
+            const infData = await infRes.json();
+            const informe = infData.informes?.[0];
+            if (!informe?.numero) {
+                toast({ title: "Sin informe vinculado", description: `No se encontró informe para ${monthName}.`, variant: "destructive" });
+                return;
+            }
+            const patchRes = await fetch('/api/informes', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, updateFields: true }),
+            });
+            if (patchRes.ok) {
+                toast({ title: "Valor glosado guardado", description: `Se guardó $${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
+            } else {
+                toast({ title: "Error al guardar", description: "No se pudo actualizar el informe.", variant: "destructive" });
+            }
+        } catch (e: any) {
+            toast({ title: "Error", description: e?.message || "Error de red.", variant: "destructive" });
+        } finally {
+            setIsSavingGlosa(false);
+        }
+    };
+
     const filterOptions: { label: string; value: ServiceType; icon: any }[] = [
         { label: "Todos", value: "Todos", icon: Filter },
         { label: "Consultas", value: "Consulta", icon: Stethoscope },
@@ -334,6 +370,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         <Button onClick={handleSaveState} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                             Guardar Auditoría
+                        </Button>
+                        <Button onClick={handleSaveGlosa} variant="default" size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={isSavingGlosa || totals.glosa <= 0}>
+                            {isSavingGlosa ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrendingDown className="mr-2 h-4 w-4" />}
+                            Guardar Valor Glosado
                         </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
