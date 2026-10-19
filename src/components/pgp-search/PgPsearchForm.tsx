@@ -572,7 +572,8 @@ const PgPsearchForm = forwardRef<
             const code = normalizeString(s[codeField]);
             const pgp = pgpCupsMap.get(code);
             const qty = qtyF ? getNumericValue(s[qtyF]) : 1;
-            const valJson = (unitValField && qtyF) ? getNumericValue(s[unitValField]) * qty : getNumericValue(s[valueField]);
+            const unitVal = unitValField ? (getNumericValue(s[unitValField]) || getNumericValue(s['vrUnitMedicamento'])) : 0;
+            const valJson = (unitValField && qtyF) ? unitVal * qty : getNumericValue(s[valueField]);
             const descripcion = pgp?.description || s.nomTecnologiaSalud || 'N/A';
             exportRows.push({ Mes: monthName, ID_Usuario: userId, Tipo_Servicio: serviceType, CUPS: code, Descripcion_CUPS: descripcion, Fecha_Atencion: s.fechaInicioAtencion || 'N/A', Diagnostico_Principal: s.codDiagnosticoPrincipal || 'N/A', Valor_Servicio_JSON: valJson, Cantidad_Ejecutada: qty, Valor_Unitario_NT: pgp?.unitValue || 0, Valor_Ejecutado_NT: qty * (pgp?.unitValue || 0) });
           });
