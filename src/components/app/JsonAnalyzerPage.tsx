@@ -288,7 +288,7 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
     jsonData.usuarios.forEach((user: any) => {
         const services = [...(user.servicios?.consultas || []), ...(user.servicios?.procedimientos || []), ...(user.servicios?.medicamentos || []), ...(user.servicios?.otrosServicios || [])];
         services.forEach((s: any) => {
-            const dateStr = s.fechaInicioAtencion || s.fechaAtencion || s.fechaFactura;
+            const dateStr = s.fechaInicioAtencion || s.fechaAtencion || s.fechaFactura || s.fechaDispensAdmon || s.fechaDispensamiento;
             if (dateStr) {
                 let month: number | null = null;
                 if (dateStr.includes('-')) {
