@@ -240,7 +240,9 @@ export const calculateCupCounts = (jsonData: any, allowDuplicates = false): CupC
                 }
                 const valueQuantity = qtyField ? getNumericValue(service[qtyField]) : 1;
                 if (unitValueField) {
-                    value = valueQuantity * getNumericValue(service[unitValueField]);
+                    // vrUnitarioMedicamento (RIPS nuevo) o vrUnitMedicamento (variante antigua)
+                    const unitVal = getNumericValue(service[unitValueField]) || getNumericValue(service['vrUnitMedicamento']);
+                    value = valueQuantity * unitVal;
                 } else {
                     value = getNumericValue(service[valueField]);
                 }

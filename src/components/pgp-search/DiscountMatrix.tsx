@@ -632,7 +632,7 @@ const CupDetailModal: React.FC<CupDetailModalProps> = ({ row, executionDataByMon
             // Medicamentos
             (servicios.medicamentos || []).forEach((s: any) => {
                 if (String(s.codTecnologiaSalud || '').trim().toUpperCase() !== row.CUPS) return;
-                records.push({ tipo: 'Medicamento', userId, fecha: s.fechaInicioAtencion || s.fechaDispensamiento || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrUnitarioMedicamento || s.vrServicio || 0) });
+                records.push({ tipo: 'Medicamento', userId, fecha: s.fechaInicioAtencion || s.fechaDispensamiento || '—', diagnostico: s.codDiagnosticoPrincipal || '—', valor: Number(s.vrUnitarioMedicamento || s.vrUnitMedicamento || s.vrServicio || 0) });
             });
             // Otros servicios
             (servicios.otrosServicios || []).forEach((s: any) => {
