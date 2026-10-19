@@ -1834,6 +1834,26 @@ export default function CertificadoTrimestral({
           )}
         </div>
 
+        {/* Valor Glosado (desde DiscountMatrix) */}
+        <div className="rounded-xl border border-red-200 bg-red-50/60 p-3 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-red-600 font-semibold text-xs uppercase tracking-wide">✂ Valor Glosado</span>
+            <span className="font-normal text-red-500 text-xs">(calculado en Matriz de Descuentos · se aplica al Acta)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`font-mono text-lg font-bold ${(pgpData?.notaTecnica?.descuentoAplicado ?? 0) > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+              {(pgpData?.notaTecnica?.descuentoAplicado ?? 0) > 0
+                ? `$${new Intl.NumberFormat('es-CO').format(pgpData!.notaTecnica.descuentoAplicado)}`
+                : '$0 — Sin glosas aplicadas'}
+            </span>
+          </div>
+          {(pgpData?.notaTecnica?.descuentoAplicado ?? 0) > 0 && (
+            <p className="text-[10px] text-red-600 font-medium">
+              ✓ Este valor se sumará al campo "A Descontar" del Acta.
+            </p>
+          )}
+        </div>
+
         {/* Nota de ejecución financiera */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
