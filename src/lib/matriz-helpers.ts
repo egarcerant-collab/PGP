@@ -86,7 +86,7 @@ export function buildMatrizEjecucion({ executionDataByMonth, pgpData }: BuildMat
 
   const pgpCupsMap = new Map<string, PgpRow>();
   pgpData.forEach((row, i) => {
-      const cup = findColumnValue(row, ['cups', 'cup/cum', 'id resolucion 3100', 'código', 'cup', 'codigo']);
+      const cup = findColumnValue(row, ['cups', 'cup/cum', 'cum', 'id resolucion 3100', 'código', 'cup', 'codigo']);
       if(cup) pgpCupsMap.set(String(cup).trim().toUpperCase(), row);
       if (i === 0) {
         console.log('[NT columnas]', Object.keys(row));
