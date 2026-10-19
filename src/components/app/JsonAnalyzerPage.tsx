@@ -209,8 +209,17 @@ const getCodPrestadorFromJson = (jsonData: any): string | null => {
      prestadorCodeRaw = jsonData.usuarios[0]?.servicios?.procedimientos?.[0]?.codPrestador;
      if (prestadorCodeRaw) return normalizeDigits(prestadorCodeRaw);
   } catch (e) {}
+  // Para archivos FVC (solo medicamentos), codPrestador está en medicamentos[0]
+  try {
+    prestadorCodeRaw = jsonData.usuarios[0]?.servicios?.medicamentos?.[0]?.codPrestador;
+    if (prestadorCodeRaw) return normalizeDigits(prestadorCodeRaw);
+  } catch (e) {}
+  // Fallback: búsqueda profunda en todo el JSON
   prestadorCodeRaw = findValueByKeyCaseInsensitive(jsonData, 'codPrestador');
-  return prestadorCodeRaw ? normalizeDigits(prestadorCodeRaw) : null;
+  if (prestadorCodeRaw) return normalizeDigits(prestadorCodeRaw);
+  // Último recurso: numDocumentoIdObligado es el NIT de la IPS en archivos FVC
+  if (jsonData.numDocumentoIdObligado) return normalizeDigits(String(jsonData.numDocumentoIdObligado));
+  return null;
 };
 
 export const calculateCupCounts = (jsonData: any, allowDuplicates = false): CupCountsMap => {
