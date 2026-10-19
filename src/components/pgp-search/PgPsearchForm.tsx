@@ -744,10 +744,12 @@ const PgPsearchForm = forwardRef<
       // Guard anti-loop: si ya lanzamos el fetch para este código, no repetir
       if (autoFetchedCode.current === codeToUse) return;
 
-      // Preferir siempre el prestador fresco de la lista (WEB URL actualizado);
-      // si no se encuentra, usar el guardado en historial como fallback
+      // Preferir siempre el prestador fresco de la lista (WEB URL actualizado).
+      // Intentar match por ID DE ZONA (código habilitación) y por NIT (para archivos FVC).
       const target = prestadores.find(p => p['ID DE ZONA'] === codeToUse)
-        ?? (selectedPrestador?.['ID DE ZONA'] === codeToUse ? selectedPrestador : null);
+        || prestadores.find(p => normalizeDigits(p.NIT || '') === codeToUse)
+        || prestadores.find(p => normalizeDigits(p['ID DE ZONA'] || '').startsWith(codeToUse) || codeToUse.startsWith(normalizeDigits(p['ID DE ZONA'] || '')))
+        || (selectedPrestador?.['ID DE ZONA'] === codeToUse ? selectedPrestador : null);
       if (target) {
         // Solo mostrar toast si el prestador aún no está seleccionado
         if (!selectedPrestador || selectedPrestador['ID DE ZONA'] !== codeToUse) {
