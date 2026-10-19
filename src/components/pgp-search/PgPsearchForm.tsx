@@ -440,7 +440,11 @@ const PgPsearchForm = forwardRef<
       return acc;
     }, 0);
 
-    const sumaMensual = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
+    // Para archivos de medicamentos PGP los precios en RIPS son siempre $0.
+    // En ese caso se usa el valor calculado por la NT (cantidad × precio_NT).
+    const sumaJson = Array.from(executionDataByMonth.values()).reduce((acc, d) => acc + d.totalRealValue, 0);
+    const sumaNT   = comparisonSummary?.monthlyFinancials.reduce((acc, m) => acc + m.executed, 0) ?? 0;
+    const sumaMensual = sumaJson > 0 ? sumaJson : sumaNT;
 
     return {
       header: {
