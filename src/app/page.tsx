@@ -64,6 +64,7 @@ export default function Home() {
   const [activeModule, setActiveModule] = useState<ModuleId>("datos");
   const [executionData, setExecutionData] = useState<ExecutionDataByMonth>(new Map());
   const [jsonPrestadorCode, setJsonPrestadorCode] = useState<string | null>(null);
+  const [jsonNitCode, setJsonNitCode] = useState<string | null>(null);
   const [uniqueUserCount, setUniqueUserCount] = useState<number>(0);
   const [savedAuditData, setSavedAuditData] = useState<SavedAuditData | null>(null);
   const [regimenTotals, setRegimenTotals] = useState<RegimenTotals>({
@@ -529,6 +530,7 @@ export default function Home() {
               <JsonAnalyzerPage
                 setExecutionData={setExecutionData}
                 setJsonPrestadorCode={setJsonPrestadorCode}
+                setJsonNitCode={setJsonNitCode}
                 setUniqueUserCount={setUniqueUserCount}
                 setRegimenTotals={setRegimenTotals}
                 userRole={currentUser?.rol}
@@ -544,6 +546,7 @@ export default function Home() {
               ref={pgpSearchRef}
               executionDataByMonth={executionData}
               jsonPrestadorCode={jsonPrestadorCode}
+              jsonNitCode={jsonNitCode}
               uniqueUserCount={uniqueUserCount}
               initialAuditData={savedAuditData}
               regimenTotals={regimenTotals}
