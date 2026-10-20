@@ -117,6 +117,7 @@ export interface ReportData {
 interface PgPsearchFormProps {
   executionDataByMonth: ExecutionDataByMonth;
   jsonPrestadorCode: string | null;
+  jsonNitCode?: string | null;
   uniqueUserCount: number;
   initialAuditData: SavedAuditData | null;
   regimenTotals?: RegimenTotals;
@@ -359,7 +360,7 @@ const calculateSummaryData = (data: PgpRow[], numMeses = 12): SummaryData | null
 const PgPsearchForm = forwardRef<
   { handleSelectPrestador: (prestador: Prestador | { PRESTADOR: string; WEB: string }) => void; triggerSave: (password: string, months: string[]) => Promise<{ numero: string } | { error: string }> },
   PgPsearchFormProps
->(({ executionDataByMonth, jsonPrestadorCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded, userName, userRole }, ref) => {
+>(({ executionDataByMonth, jsonPrestadorCode, jsonNitCode, uniqueUserCount, initialAuditData, regimenTotals, activeModule, onPrestadorLoaded, userName, userRole }, ref) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [pgpData, setPgpData] = useState<PgpRow[]>([]);
   const [prestadores, setPrestadores] = useState<Prestador[]>([]);
@@ -744,10 +745,14 @@ const PgPsearchForm = forwardRef<
       // Guard anti-loop: si ya lanzamos el fetch para este código, no repetir
       if (autoFetchedCode.current === codeToUse) return;
 
-      // Preferir siempre el prestador fresco de la lista (WEB URL actualizado).
-      // Intentar match por ID DE ZONA (código habilitación) y por NIT (para archivos FVC).
+      // Intentar match por ID DE ZONA (código habilitación) y por NIT.
+      // Para archivos FVC el codPrestador es el código de habilitación (12 dígitos)
+      // pero el sheet puede tener el NIT en la columna NIT → intentar ambos.
+      const nitToTry = jsonNitCode || null;
       const target = prestadores.find(p => p['ID DE ZONA'] === codeToUse)
         || prestadores.find(p => normalizeDigits(p.NIT || '') === codeToUse)
+        || (nitToTry ? prestadores.find(p => normalizeDigits(p.NIT || '') === nitToTry) : undefined)
+        || (nitToTry ? prestadores.find(p => p['ID DE ZONA'] === nitToTry) : undefined)
         || prestadores.find(p => normalizeDigits(p['ID DE ZONA'] || '').startsWith(codeToUse) || codeToUse.startsWith(normalizeDigits(p['ID DE ZONA'] || '')))
         || (selectedPrestador?.['ID DE ZONA'] === codeToUse ? selectedPrestador : null);
       if (target) {
@@ -759,7 +764,7 @@ const PgPsearchForm = forwardRef<
         handleSelectPrestador(target);
       }
     }
-  }, [jsonPrestadorCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
+  }, [jsonPrestadorCode, jsonNitCode, prestadores, selectedPrestador, handleSelectPrestador, toast, loading, isDataLoaded]);
 
   // ── The selector dropdown (reused in multiple places) ──
   const selectorEl = (

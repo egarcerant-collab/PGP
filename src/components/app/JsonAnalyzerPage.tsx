@@ -122,6 +122,7 @@ export interface RegimenTotals {
 interface JsonAnalyzerPageProps {
   setExecutionData: (data: ExecutionDataByMonth) => void;
   setJsonPrestadorCode: (code: string | null) => void;
+  setJsonNitCode?: (nit: string | null) => void;
   setUniqueUserCount: (count: number) => void;
   setRegimenTotals?: (totals: RegimenTotals) => void;
   userRole?: string;
@@ -324,7 +325,7 @@ const extractMostFrequentMonth = (jsonData: any): string | null => {
     return suggestedMonth;
 };
 
-export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCode, setUniqueUserCount, setRegimenTotals, userRole, userName }: JsonAnalyzerPageProps) {
+export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCode, setJsonNitCode, setUniqueUserCount, setRegimenTotals, userRole, userName }: JsonAnalyzerPageProps) {
   const [files, setFiles] = useState<FileState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<Map<string, PrestadorInfo> | null>(null);
@@ -440,7 +441,13 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
         dataByMonth.set(month, { cupCounts: monthCupCounts, summary: combinedSummary, totalRealValue: monthTotalRealValue, rawJsonData: combinedJsonDataForMonth });
     });
     setExecutionData(dataByMonth);
-    setJsonPrestadorCode(files.length > 0 ? getCodPrestadorFromJson(files[0].jsonData) : null);
+    const firstJsonData = files.length > 0 ? files[0].jsonData : null;
+    setJsonPrestadorCode(firstJsonData ? getCodPrestadorFromJson(firstJsonData) : null);
+    // Exponer también el NIT raíz (numDocumentoIdObligado) para match en sheet de prestadores (archivos FVC)
+    const rootNit = firstJsonData?.numDocumentoIdObligado
+      ? normalizeDigits(String(firstJsonData.numDocumentoIdObligado))
+      : null;
+    setJsonNitCode?.(rootNit);
 
     // Calcula totales por régimen: usa proporción de usuarios para dividir totalRealValue del mes
     let sub = 0, con = 0, subUsers = 0, conUsers = 0;
@@ -483,6 +490,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
     setFiles([]);
     setExecutionData(new Map());
     setJsonPrestadorCode(null);
+    setJsonNitCode?.(null);
     setUniqueUserCount(0);
   };
 
