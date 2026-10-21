@@ -545,25 +545,31 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
             if (cup) pgpCupsMap.set(cup, row);
         });
         const getCumBase = (c: string) => String(c).trim().toUpperCase().replace(/-\w+$/, '').replace(/\D/g, '');
+        const NT_DESC_COLS = ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad', 'concepto'];
+        const NT_PRICE_COLS = ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo'];
         const findNtPrice = (cup: string, desc?: string): number => {
             const base = getCumBase(cup);
             // MATCH_BASE: mismo número base CUM, distinto sufijo
             for (const [ntCup, row] of pgpCupsMap) {
                 if (base && getCumBase(ntCup) === base) {
-                    const price = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                    const price = getNumericValue(findColumnValue(row, NT_PRICE_COLS));
                     if (price > 0) return price;
                 }
             }
-            // MATCH_PRINCIPIO: coincidencia por descripción
+            // MATCH_PRINCIPIO: búsqueda amplia por descripción
             if (desc) {
-                const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+                const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
                 let best = { score: 0, price: 0 };
                 for (const [, row] of pgpCupsMap) {
-                    const ntDesc = String(findColumnValue(row, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad']) || '').toLowerCase();
-                    const score = words.filter(w => ntDesc.includes(w)).length;
-                    if (score >= 2 && score > best.score) {
-                        const price = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
-                        if (price > 0) { best = { score, price }; }
+                    const ntDesc = String(findColumnValue(row, NT_DESC_COLS) || '').toLowerCase();
+                    if (!ntDesc) continue;
+                    const matchedWords = words.filter(w => ntDesc.includes(w));
+                    const score = matchedWords.length;
+                    // 1 palabra basta si tiene ≥8 chars (nombre INN específico)
+                    const qualifies = score >= 2 || (score === 1 && matchedWords[0]?.length >= 8);
+                    if (qualifies && score > best.score) {
+                        const price = getNumericValue(findColumnValue(row, NT_PRICE_COLS));
+                        if (price > 0) best = { score, price };
                     }
                 }
                 if (best.price > 0) return best.price;
@@ -805,22 +811,27 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 if (c) pgpMapLocal.set(c, row);
                             });
                             const getBase = (c: string) => String(c).trim().toUpperCase().replace(/-\w+$/, '').replace(/\D/g, '');
+                            const NT_PRICE_COLS2 = ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo'];
+                            const NT_DESC_COLS2 = ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad', 'concepto'];
                             const getNtPrice = (cup: string, desc?: string): number => {
                                 const base = getBase(cup);
                                 for (const [ntCup, row] of pgpMapLocal) {
                                     if (base && getBase(ntCup) === base) {
-                                        const p = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                                        const p = getNumericValue(findColumnValue(row, NT_PRICE_COLS2));
                                         if (p > 0) return p;
                                     }
                                 }
                                 if (desc) {
-                                    const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+                                    const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
                                     let best = { score: 0, price: 0 };
                                     for (const [, row] of pgpMapLocal) {
-                                        const ntDesc = String(findColumnValue(row, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad']) || '').toLowerCase();
-                                        const score = words.filter(w => ntDesc.includes(w)).length;
-                                        if (score >= 2 && score > best.score) {
-                                            const p = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                                        const ntDesc = String(findColumnValue(row, NT_DESC_COLS2) || '').toLowerCase();
+                                        if (!ntDesc) continue;
+                                        const matchedWords = words.filter(w => ntDesc.includes(w));
+                                        const score = matchedWords.length;
+                                        const qualifies = score >= 2 || (score === 1 && matchedWords[0]?.length >= 8);
+                                        if (qualifies && score > best.score) {
+                                            const p = getNumericValue(findColumnValue(row, NT_PRICE_COLS2));
                                             if (p > 0) best = { score, price: p };
                                         }
                                     }
