@@ -539,6 +539,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     // Valor sugerido NT para inesperados: precio NT equivalente × frecuencia real
     const totalNtSugeridoInesperados = useMemo(() => {
         if (!pgpData?.length) return 0;
+        // Normalizar: minúsculas + sin tildes/diacríticos
+        const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
         const pgpCupsMap = new Map<string, any>();
         pgpData.forEach(row => {
             const cup = String(findColumnValue(row, ['cups', 'cup/cum', 'cum', 'id resolucion 3100', 'código', 'cup', 'codigo']) || '').trim().toUpperCase();
@@ -549,23 +551,20 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
         const NT_PRICE_COLS = ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo'];
         const findNtPrice = (cup: string, desc?: string): number => {
             const base = getCumBase(cup);
-            // MATCH_BASE: mismo número base CUM, distinto sufijo
             for (const [ntCup, row] of pgpCupsMap) {
                 if (base && getCumBase(ntCup) === base) {
                     const price = getNumericValue(findColumnValue(row, NT_PRICE_COLS));
                     if (price > 0) return price;
                 }
             }
-            // MATCH_PRINCIPIO: búsqueda amplia por descripción
             if (desc) {
-                const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
+                const words = norm(desc).split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
                 let best = { score: 0, price: 0 };
                 for (const [, row] of pgpCupsMap) {
-                    const ntDesc = String(findColumnValue(row, NT_DESC_COLS) || '').toLowerCase();
+                    const ntDesc = norm(String(findColumnValue(row, NT_DESC_COLS) || ''));
                     if (!ntDesc) continue;
                     const matchedWords = words.filter(w => ntDesc.includes(w));
                     const score = matchedWords.length;
-                    // 1 palabra basta si tiene ≥8 chars (nombre INN específico)
                     const qualifies = score >= 2 || (score === 1 && matchedWords[0]?.length >= 8);
                     if (qualifies && score > best.score) {
                         const price = getNumericValue(findColumnValue(row, NT_PRICE_COLS));
@@ -813,6 +812,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                             const getBase = (c: string) => String(c).trim().toUpperCase().replace(/-\w+$/, '').replace(/\D/g, '');
                             const NT_PRICE_COLS2 = ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo'];
                             const NT_DESC_COLS2 = ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad', 'concepto'];
+                            const norm2 = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
                             const getNtPrice = (cup: string, desc?: string): number => {
                                 const base = getBase(cup);
                                 for (const [ntCup, row] of pgpMapLocal) {
@@ -822,10 +822,10 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     }
                                 }
                                 if (desc) {
-                                    const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
+                                    const words = norm2(desc).split(/\s+/).filter(w => w.length > 4 && !/^\d/.test(w));
                                     let best = { score: 0, price: 0 };
                                     for (const [, row] of pgpMapLocal) {
-                                        const ntDesc = String(findColumnValue(row, NT_DESC_COLS2) || '').toLowerCase();
+                                        const ntDesc = norm2(String(findColumnValue(row, NT_DESC_COLS2) || ''));
                                         if (!ntDesc) continue;
                                         const matchedWords = words.filter(w => ntDesc.includes(w));
                                         const score = matchedWords.length;
