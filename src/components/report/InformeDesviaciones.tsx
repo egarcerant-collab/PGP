@@ -346,20 +346,21 @@ export const LookedUpCupModal = ({ cupInfo, open, onOpenChange, isLoading }: { c
 };
 
 
-const TableModal = ({ open, onOpenChange, title, content, data, downloadFilename, totals }: { 
-    open: boolean; 
-    onOpenChange: (open: boolean) => void; 
-    title: React.ReactNode; 
+const TableModal = ({ open, onOpenChange, title, content, data, downloadFilename, totals }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: React.ReactNode;
     content: React.ReactNode;
     data: any[];
     downloadFilename: string;
     totals?: {
         ejecutado: number;
         desviacion: number;
+        valSugerido?: number;
     }
 }) => {
   if (!totals) return null;
-  const valorSugerido = totals.ejecutado - totals.desviacion;
+  const valorSugerido = totals.valSugerido !== undefined ? totals.valSugerido : (totals.ejecutado - totals.desviacion);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -404,7 +405,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const [lookedUpCupInfo, setLookedUpCupInfo] = useState<CupDescription | null>(null);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [isLookupLoading, setIsLookupLoading] = useState(false);
-    const [modalContent, setModalContent] = useState<{ title: React.ReactNode, data: any[], type: string, totals: {ejecutado: number, desviacion: number} } | null>(null);
+    const [modalContent, setModalContent] = useState<{ title: React.ReactNode, data: any[], type: string, totals: {ejecutado: number, desviacion: number, valSugerido?: number} } | null>(null);
     const [executionDetails, setExecutionDetails] = useState<any[]>([]);
     const [valorConsolidadoManual, setValorConsolidadoManual] = useState<string>('');
     const [valorGuardado, setValorGuardado] = useState(false);
@@ -535,6 +536,46 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
         (comparisonSummary?.unexpectedCups || []).reduce((sum, cup) => sum + cup.totalValue, 0),
     [comparisonSummary]);
 
+    // Valor sugerido NT para inesperados: precio NT equivalente × frecuencia real
+    const totalNtSugeridoInesperados = useMemo(() => {
+        if (!pgpData?.length) return 0;
+        const pgpCupsMap = new Map<string, any>();
+        pgpData.forEach(row => {
+            const cup = String(findColumnValue(row, ['cups', 'cup/cum', 'cum', 'id resolucion 3100', 'código', 'cup', 'codigo']) || '').trim().toUpperCase();
+            if (cup) pgpCupsMap.set(cup, row);
+        });
+        const getCumBase = (c: string) => String(c).trim().toUpperCase().replace(/-\w+$/, '').replace(/\D/g, '');
+        const findNtPrice = (cup: string, desc?: string): number => {
+            const base = getCumBase(cup);
+            // MATCH_BASE: mismo número base CUM, distinto sufijo
+            for (const [ntCup, row] of pgpCupsMap) {
+                if (base && getCumBase(ntCup) === base) {
+                    const price = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                    if (price > 0) return price;
+                }
+            }
+            // MATCH_PRINCIPIO: coincidencia por descripción
+            if (desc) {
+                const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+                let best = { score: 0, price: 0 };
+                for (const [, row] of pgpCupsMap) {
+                    const ntDesc = String(findColumnValue(row, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad']) || '').toLowerCase();
+                    const score = words.filter(w => ntDesc.includes(w)).length;
+                    if (score >= 2 && score > best.score) {
+                        const price = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                        if (price > 0) { best = { score, price }; }
+                    }
+                }
+                if (best.price > 0) return best.price;
+            }
+            return 0;
+        };
+        return (comparisonSummary?.unexpectedCups || []).reduce((sum, cup) => {
+            const price = findNtPrice(cup.cup, cup.description);
+            return sum + price * cup.realFrequency;
+        }, 0);
+    }, [comparisonSummary, pgpData]);
+
     const totalNTEjecutado = useMemo(() =>
         (comparisonSummary?.monthlyFinancials || []).reduce((sum, m) => sum + m.totalValorEjecutado, 0),
     [comparisonSummary]);
@@ -658,7 +699,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
         }
     };
     
-    const handleDoubleClick = (type: string, title: React.ReactNode, data: any[], totals: {ejecutado: number, desviacion: number}) => {
+    const handleDoubleClick = (type: string, title: React.ReactNode, data: any[], totals: {ejecutado: number, desviacion: number, valSugerido?: number}) => {
         setModalContent({ type, title, data, totals });
     }
     
@@ -756,6 +797,38 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
              case 'unexpected':
                  return (
                     <ScrollArea className="h-full">
+                        {(() => {
+                            // Mapa NT para calcular precio sugerido por CUM inesperado
+                            const pgpMapLocal = new Map<string, any>();
+                            pgpData.forEach(row => {
+                                const c = String(findColumnValue(row, ['cups', 'cup/cum', 'cum', 'id resolucion 3100', 'código', 'cup', 'codigo']) || '').trim().toUpperCase();
+                                if (c) pgpMapLocal.set(c, row);
+                            });
+                            const getBase = (c: string) => String(c).trim().toUpperCase().replace(/-\w+$/, '').replace(/\D/g, '');
+                            const getNtPrice = (cup: string, desc?: string): number => {
+                                const base = getBase(cup);
+                                for (const [ntCup, row] of pgpMapLocal) {
+                                    if (base && getBase(ntCup) === base) {
+                                        const p = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                                        if (p > 0) return p;
+                                    }
+                                }
+                                if (desc) {
+                                    const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+                                    let best = { score: 0, price: 0 };
+                                    for (const [, row] of pgpMapLocal) {
+                                        const ntDesc = String(findColumnValue(row, ['descripcion cups', 'descripcion id resolucion', 'descripcion', 'nombre', 'actividad']) || '').toLowerCase();
+                                        const score = words.filter(w => ntDesc.includes(w)).length;
+                                        if (score >= 2 && score > best.score) {
+                                            const p = getNumericValue(findColumnValue(row, ['valor', 'valor unitario', 'vr unitario', 'valor_unitario', 'costo']));
+                                            if (p > 0) best = { score, price: p };
+                                        }
+                                    }
+                                    if (best.price > 0) return best.price;
+                                }
+                                return 0;
+                            };
+                            return (
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -763,12 +836,16 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                     <TableHead className="text-sm">Descripción</TableHead>
                                     <TableHead className="text-center text-sm">Frec. Real</TableHead>
                                     <TableHead className="text-right text-sm">Valor Ejecutado</TableHead>
+                                    <TableHead className="text-right text-sm text-blue-700">Precio NT Ref.</TableHead>
+                                    <TableHead className="text-right text-sm text-blue-700">Valor NT Sugerido</TableHead>
                                     <TableHead className="text-center text-sm">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {data.map((item: UnexpectedCupInfo) => {
                                     const isHl = highlightedCup === item.cup;
+                                    const ntPrice = getNtPrice(item.cup, item.description);
+                                    const ntValor = ntPrice * item.realFrequency;
                                     return (
                                     <TableRow key={item.cup} id={isHl ? 'highlighted-cup-row' : undefined}
                                         className={isHl ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : undefined}>
@@ -776,6 +853,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                         <TableCell className="text-sm">{item.description || 'N/A'}</TableCell>
                                         <TableCell className="text-center text-sm">{item.realFrequency}</TableCell>
                                         <TableCell className="text-right font-bold text-sm">{formatCurrency(item.totalValue)}</TableCell>
+                                        <TableCell className="text-right text-sm text-blue-600">{ntPrice > 0 ? formatCurrency(ntPrice) : <span className="text-muted-foreground text-xs">Sin match</span>}</TableCell>
+                                        <TableCell className="text-right font-bold text-sm text-blue-700">{ntValor > 0 ? formatCurrency(ntValor) : '—'}</TableCell>
                                         <TableCell className="text-center">
                                             <Button variant="outline" size="sm" className="text-sm" onClick={() => handleLookupClick(item.cup)}>
                                                 <Search className="mr-2 h-3 w-3" /> Buscar
@@ -786,6 +865,8 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                                 })}
                             </TableBody>
                         </Table>
+                            );
+                        })()}
                     </ScrollArea>
                  )
             default:
@@ -811,7 +892,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                             { label: 'En rango',        color: 'bg-green-100 text-green-700 border-green-300', items: comparisonSummary.normalExecutionCups, type: 'normal-execution',  title: 'Ejecución dentro del rango (90-111%)',  totals: normalExecutionTotals },
                             { label: 'Sub-ejecutado',   color: 'bg-blue-100 text-blue-700 border-blue-300',  items: comparisonSummary.underExecutedCups,   type: 'under-executed',    title: 'CUPS / Tecnologías Sub-ejecutadas',     totals: underExecutionTotals },
                             { label: 'No ejecutado',    color: 'bg-slate-100 text-slate-700 border-slate-300', items: comparisonSummary.missingCups,         type: 'missing',           title: 'CUPS / Tecnologías No Ejecutadas',      totals: { ejecutado: 0, desviacion: 0 } },
-                            { label: 'Inesperado',      color: 'bg-purple-100 text-purple-700 border-purple-300', items: comparisonSummary.unexpectedCups, type: 'unexpected',        title: 'CUPS / Tecnologías Inesperadas',        totals: { ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue } },
+                            { label: 'Inesperado',      color: 'bg-purple-100 text-purple-700 border-purple-300', items: comparisonSummary.unexpectedCups, type: 'unexpected',        title: 'CUPS / Tecnologías Inesperadas',        totals: { ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue, valSugerido: totalNtSugeridoInesperados } },
                         ];
                         const results = q.length >= 3 ? CATS.flatMap(cat =>
                             (cat.items || [])
@@ -907,7 +988,7 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
                         icon={Search}
                         data={comparisonSummary.unexpectedCups}
                         onDownload={handleDownloadXls}
-                        onDoubleClick={() => handleDoubleClick('unexpected', 'CUPS / Tecnologías Inesperadas', comparisonSummary.unexpectedCups, {ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue})}
+                        onDoubleClick={() => handleDoubleClick('unexpected', 'CUPS / Tecnologías Inesperadas', comparisonSummary.unexpectedCups, {ejecutado: totalUnexpectedValue, desviacion: totalUnexpectedValue, valSugerido: totalNtSugeridoInesperados})}
                         totalValue={totalUnexpectedValue}
                         valueLabel="Valor Ejecutado"
                         color="purple"
