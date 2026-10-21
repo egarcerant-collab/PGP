@@ -408,6 +408,18 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
             if (suggested) {
                 toast({ title: "Mes detectado", description: `${file.name} asignado a ${getMonthName(suggested)}.` });
             }
+            // Detectar archivo FVC (solo medicamentos / otrosServicios)
+            const usuarios = parsedJson?.usuarios || [];
+            const tieneMeds = usuarios.some((u: any) => (u.servicios?.medicamentos?.length || 0) > 0);
+            const tieneConsultasOProc = usuarios.some((u: any) =>
+                (u.servicios?.consultas?.length || 0) > 0 || (u.servicios?.procedimientos?.length || 0) > 0
+            );
+            if (tieneMeds && !tieneConsultasOProc) {
+                toast({
+                    title: "Archivo FVC detectado",
+                    description: `${file.name} es de tipo Medicamento — los CUM sin NT se clasificarán como Inesperados con valor sugerido calculado.`,
+                });
+            }
             resolve({ jsonData: parsedJson, fileName: finalName, prestadorInfo: prestadorInfo, month: targetMonth });
           } catch (err: any) {
             reject(err);
