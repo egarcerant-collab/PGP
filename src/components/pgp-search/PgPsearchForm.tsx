@@ -217,7 +217,10 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     current.activities += row.Cantidad_Ejecutada;
     monthlyFinancialsMap.set(row.Mes, current);
 
-    const valorReconocer = Math.min(row.Valor_Ejecutado, row.Valor_Esperado * 1.11);
+    const _cap110r = row.Valor_Esperado * 1.10;
+    const valorReconocer = row.Valor_Ejecutado <= _cap110r
+      ? row.Valor_Ejecutado
+      : _cap110r + 0.50 * (row.Valor_Ejecutado - _cap110r);
     matrizDescuentos.push({
       cup: row.CUPS, description: row.Descripcion, activityDescription: row.Descripcion,
       expectedFrequency: row.Cantidad_Esperada, realFrequency: row.Cantidad_Ejecutada,
@@ -295,7 +298,7 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
       deviation: data.totalExecuted - data.totalExpected,
       deviationValue: (data.totalExecuted - data.totalExpected) * data.unitValue,
       totalValue: data.totalValue,
-      valorReconocer: Math.min(data.totalValue, data.totalExpected * data.unitValue * 1.11),
+      valorReconocer: (() => { const cap = data.totalExpected * data.unitValue * 1.10; return data.totalValue <= cap ? data.totalValue : cap + 0.50 * (data.totalValue - cap); })(),
       unitValueFromNote: data.unitValue,
     };
 
