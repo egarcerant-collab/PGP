@@ -698,7 +698,7 @@ export default function CertificadoTrimestral({
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
       const descontar = descontarEjecucion + descontarGlosa;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
@@ -1244,7 +1244,7 @@ export default function CertificadoTrimestral({
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
       const descontar           = descontarEjecucionR + descontarGlosaR;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+      const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
@@ -1383,7 +1383,7 @@ export default function CertificadoTrimestral({
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
     const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
-    const reconocerR = totalEjecutadoFinal > maxPeriodo ? totalEjecutadoFinal - maxPeriodo : 0;
+    const reconocerR = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
     // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
     const descontar = descontarR;
