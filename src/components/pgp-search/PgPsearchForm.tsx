@@ -439,10 +439,9 @@ const PgPsearchForm = forwardRef<
   const reportData = useMemo((): ReportData | null => {
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
 
-    const totalDescuentoCalculado = Object.entries(adjustedData.adjustedValues).reduce((acc, [cup, val]) => {
-      if (adjustedData.selectedRows[cup]) return acc + val;
-      return acc;
-    }, 0);
+    // La cantidad validada determina la glosa, igual que en la matriz y al guardar.
+    const totalDescuentoCalculado = Object.values(adjustedData.adjustedValues)
+      .reduce((acc, val) => acc + val, 0);
 
     // Para archivos de medicamentos PGP los precios en RIPS son siempre $0.
     // En ese caso se usa el valor calculado por la NT (cantidad × precio_NT).

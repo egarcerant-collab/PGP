@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, writeJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
 import { getCurrentUser } from '@/lib/get-current-user';
+import { actualizarGlosa } from '@/lib/glosa';
 
 type Informe = Record<string, any>;
 
@@ -151,6 +152,10 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const { numero, notaEjecucionFinanciera, notaAdicional, updateFields } = body;
+    if (body.glosaAuditoria !== undefined &&
+        (typeof body.glosaAuditoria !== 'number' || !Number.isFinite(body.glosaAuditoria) || body.glosaAuditoria < 0)) {
+      return NextResponse.json({ message: 'Glosa inválida' }, { status: 400 });
+    }
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
 
     const drive = getDrive();
@@ -191,6 +196,9 @@ export async function PATCH(request: Request) {
       }
 
       informes[idx] = { ...informes[idx], ...f };
+      if (body.glosaAuditoria !== undefined) {
+        informes[idx] = { ...informes[idx], ...actualizarGlosa(informes[idx], body.glosaAuditoria) };
+      }
     } else {
       informes[idx] = {
         ...informes[idx],

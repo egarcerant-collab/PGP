@@ -143,16 +143,32 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         return data.filter(row => row.Tipo_Servicio === activeFilter);
     }, [data, activeFilter]);
 
+    // Guardar siempre el período completo, aunque haya un filtro de visualización.
+    const glosaCompleta = useMemo(() => data.reduce((sum, row) => sum + Math.max(0,
+        row.Valor_Ejecutado - (adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada) * row.Valor_Unitario
+    ), 0), [data, adjustedQuantities]);
+
+    const buscarInforme = async (monthName: string) => {
+        const res = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
+        if (!res.ok) throw new Error('No se pudo consultar el informe vinculado.');
+        const result = await res.json();
+        const normalizar = (value: unknown) => String(value ?? '').trim().toUpperCase();
+        const matches = (result.informes || []).filter((inf: any) =>
+            normalizar(inf.prestador) === normalizar(selectedPrestador?.PRESTADOR) &&
+            normalizar(inf.periodo) === normalizar(monthName) &&
+            (!selectedPrestador?.CONTRATO || normalizar(inf.contrato) === normalizar(selectedPrestador.CONTRATO))
+        );
+        if (matches.length !== 1) throw new Error('No se encontró un informe único para el prestador, contrato y período. Revise el registro antes de guardar la glosa.');
+        return matches[0];
+    };
+
     const handleSaveState = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
             toast({ title: "No se puede guardar", description: "Faltan datos de ejecución.", variant: "destructive" });
             return;
         }
         setIsSaving(true);
-        
-        const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
-        const date = new Date(2024, parseInt(monthKey) - 1, 1);
-        const monthName = date.toLocaleString('es-CO', { month: 'long' });
+        const monthName = Array.from(executionDataByMonth.keys()).sort((a, b) => Number(a) - Number(b)).map(key => new Date(2024, Number(key) - 1, 1).toLocaleString('es-CO', { month: 'long' })).join('-');
 
         // pgpData y jsonPrestadorCode NO se incluyen: son demasiado grandes (10MB+)
         // jsonPrestadorCode es redundante (= selectedPrestador['ID DE ZONA'])
@@ -211,30 +227,22 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             if (response.ok) {
                 toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
 
-                // Calcular descuento total directamente desde filteredData (en scope)
-                let glosaTotal = 0;
-                let reconocerTotal = 0;
-                for (const row of filteredData) {
-                    const vq = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                    const reconocido = vq * row.Valor_Unitario;
-                    const descuento = row.Valor_Ejecutado - reconocido;
-                    glosaTotal    += descuento > 0 ? descuento : 0;
-                    reconocerTotal += descuento > 0 ? reconocido : row.Valor_Ejecutado;
-                }
+                const glosaTotal = glosaCompleta;
 
-                if (glosaTotal > 0) {
+                {
                     try {
-                        const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
-                        const infData = await infRes.json();
-                        const informe = infData.informes?.[0];
+                        const informe = await buscarInforme(monthName);
                         if (informe?.numero) {
-                            await fetch('/api/informes', {
+                            const syncRes = await fetch('/api/informes', {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ numero: informe.numero, descontar: glosaTotal, updateFields: true }),
+                                body: JSON.stringify({ numero: informe.numero, glosaAuditoria: glosaTotal, updateFields: true }),
                             });
+                            if (!syncRes.ok) throw new Error('No se pudo actualizar la glosa del informe.');
                         }
-                    } catch { /* silencioso: no bloquear el flujo */ }
+                    } catch {
+                        toast({ title: 'Informe sin actualizar', description: 'La auditoría se guardó, pero falló la actualización de la glosa del informe. Reintente guardar.', variant: 'destructive' });
+                    }
                 }
             } else {
                 toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
@@ -299,19 +307,11 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     };
 
     const handleSaveGlosa = async () => {
-        if (totals.glosa <= 0) {
-            toast({ title: "Sin glosa", description: "No hay descuentos aplicados para guardar.", variant: "destructive" });
-            return;
-        }
         setIsSavingGlosa(true);
         try {
-            const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
-            const date = new Date(2024, parseInt(monthKey) - 1, 1);
-            const monthName = date.toLocaleString('es-CO', { month: 'long' });
+            const monthName = Array.from(executionDataByMonth.keys()).sort((a, b) => Number(a) - Number(b)).map(key => new Date(2024, Number(key) - 1, 1).toLocaleString('es-CO', { month: 'long' })).join('-');
 
-            const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
-            const infData = await infRes.json();
-            const informe = infData.informes?.[0];
+            const informe = await buscarInforme(monthName);
             if (!informe?.numero) {
                 toast({ title: "Sin informe vinculado", description: `No se encontró informe para ${monthName}.`, variant: "destructive" });
                 return;
@@ -319,10 +319,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             const patchRes = await fetch('/api/informes', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, updateFields: true }),
+                body: JSON.stringify({ numero: informe.numero, glosaAuditoria: glosaCompleta, updateFields: true }),
             });
             if (patchRes.ok) {
-                toast({ title: "Valor glosado guardado", description: `Se guardó $${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
+                toast({ title: "Valor glosado guardado", description: `Se guardó $${glosaCompleta.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
             } else {
                 toast({ title: "Error al guardar", description: "No se pudo actualizar el informe.", variant: "destructive" });
             }
@@ -371,7 +371,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                             Guardar Auditoría
                         </Button>
-                        <Button onClick={handleSaveGlosa} variant="default" size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={isSavingGlosa || totals.glosa <= 0}>
+                        <Button onClick={handleSaveGlosa} variant="default" size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={isSavingGlosa}>
                             {isSavingGlosa ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrendingDown className="mr-2 h-4 w-4" />}
                             Guardar Valor Glosado
                         </Button>
