@@ -375,6 +375,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                         || (merged.notasGuardadas as any)?.valorCupsInesperadas || 0,
                     cantidadCupsInesperadas: base.informeRelacionado.cantidadCupsInesperadas
                         || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
+                    descontar: base.informeRelacionado.descontar ?? 0,
                 };
             } else if (merged.notasGuardadas) {
                 merged.informeRestored = {

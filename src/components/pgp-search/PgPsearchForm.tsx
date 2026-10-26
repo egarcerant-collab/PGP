@@ -490,7 +490,9 @@ const PgPsearchForm = forwardRef<
         min90: globalSummary.costoMinimoPeriodo, valor3m: globalSummary.totalPeriodo, max110: globalSummary.costoMaximoPeriodo,
         anticipos: 0, totalPagar: sumaMensual,
         totalFinal: sumaMensual - totalDescuentoCalculado,
-        descuentoAplicado: totalDescuentoCalculado
+        descuentoAplicado: totalDescuentoCalculado > 0
+          ? totalDescuentoCalculado
+          : (initialAuditData?.informeRestored?.descontar ?? 0)
       },
       overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,

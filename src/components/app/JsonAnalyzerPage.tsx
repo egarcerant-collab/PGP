@@ -33,6 +33,7 @@ export interface InformeRestored {
   notaAdicional?: string;
   valorCupsInesperadas?: number;
   cantidadCupsInesperadas?: string;
+  descontar?: number;
 }
 
 export interface SavedAuditData {
