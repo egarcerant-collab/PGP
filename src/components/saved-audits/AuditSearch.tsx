@@ -377,6 +377,7 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                         || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
                     descontar: base.informeRelacionado.descontar ?? 0,
                     glosaAuditoria: base.informeRelacionado.glosaAuditoria ?? undefined,
+                    comentariosGlosa: base.informeRelacionado.comentariosGlosa || "",
                 };
             } else if (merged.notasGuardadas) {
                 merged.informeRestored = {

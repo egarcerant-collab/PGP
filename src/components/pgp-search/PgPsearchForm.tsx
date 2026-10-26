@@ -495,7 +495,16 @@ const PgPsearchForm = forwardRef<
         min90: globalSummary.costoMinimoPeriodo, valor3m: globalSummary.totalPeriodo, max110: globalSummary.costoMaximoPeriodo,
         anticipos: 0, totalPagar: sumaMensual,
         totalFinal: sumaMensual - totalDescuentoCalculado,
-        descuentoAplicado: totalDescuentoCalculado
+        descuentoAplicado: totalDescuentoCalculado > 0
+          ? totalDescuentoCalculado
+          : (initialAuditData?.informeRestored?.descontar ?? 0),
+        comentariosGlosa: totalDescuentoCalculado > 0
+          ? Object.entries(adjustedData.comments || {})
+              .filter(([cup]) => adjustedData.selectedRows[cup])
+              .map(([cup, txt]) => `${cup}: ${txt}`)
+              .filter(Boolean)
+              .join(" | ")
+          : (initialAuditData?.informeRestored?.comentariosGlosa || "")
       },
       overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,

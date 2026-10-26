@@ -251,7 +251,38 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
     const handleSaveGlosa = async () => {
         setIsSavingGlosa(true);
-        try { await handleSaveState(); } finally { setIsSavingGlosa(false); }
+        try {
+            const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
+            const date = new Date(2024, parseInt(monthKey) - 1, 1);
+            const monthName = date.toLocaleString('es-CO', { month: 'long' });
+
+            const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
+            const infData = await infRes.json();
+            const informe = infData.informes?.[0];
+            if (!informe?.numero) {
+                toast({ title: 'Sin informe vinculado', description: `No se encontró informe para ${monthName}.`, variant: 'destructive' });
+                return;
+            }
+            const comentariosGlosaTexto = Object.entries(comments)
+                .filter(([cup]) => selectedRows[cup])
+                .map(([cup, txt]) => `${cup}: ${txt}`)
+                .filter(Boolean)
+                .join(' | ');
+            const patchRes = await fetch('/api/informes', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, comentariosGlosa: comentariosGlosaTexto, updateFields: true }),
+            });
+            if (patchRes.ok) {
+                toast({ title: 'Valor glosado guardado', description: `Se guardó ${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
+            } else {
+                toast({ title: 'Error al guardar', description: 'No se pudo actualizar el informe.', variant: 'destructive' });
+            }
+        } catch (e: any) {
+            toast({ title: 'Error', description: e?.message || 'Error de red.', variant: 'destructive' });
+        } finally {
+            setIsSavingGlosa(false);
+        }
     };
 
     const filterOptions: { label: string; value: ServiceType; icon: any }[] = [

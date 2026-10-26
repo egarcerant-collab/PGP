@@ -13,8 +13,6 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
-import { descuentoGuardado, glosaGuardada, contenidoGlosas } from '@/lib/glosa';
-import type { AdjustedData } from '../pgp-search/DiscountMatrix';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell,
@@ -51,7 +49,7 @@ export interface NotasAuditoria {
 
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
-  pgpData: { notaTecnica: { valor3m: number; descuentoAplicado: number }; adjustedData?: AdjustedData } | null;
+  pgpData: { notaTecnica: { valor3m: number } } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
   onSaveAudit?: (notas?: NotasAuditoria) => Promise<void>;
@@ -699,6 +697,7 @@ export default function CertificadoTrimestral({
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const comentariosGlosa: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
@@ -1068,6 +1067,17 @@ export default function CertificadoTrimestral({
             },
           ] : []),
 
+          // ── Fundamento de glosa de auditoría ──
+          ...(descontarGlosa > 0 && comentariosGlosa.trim() ? [
+            { text: 'FUNDAMENTO DE LA GLOSA DE AUDITORÍA:', bold: true, fontSize: 7.5, color: '#b91c1c', margin: [0, 4, 0, 2] },
+            {
+              table: { widths: ['*'], body: comentariosGlosa.trim().split(' | ').map(item => [{ text: item.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 3, 4, 3], color: '#7f1d1d' }]) },
+              layout: { hLineColor: () => '#fca5a5', vLineColor: () => '#fca5a5' },
+              fillColor: '#fff1f2',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
           // ── Notas adicionales ──
           ...(notaAdicional.trim() ? [
             {
@@ -1112,7 +1122,7 @@ export default function CertificadoTrimestral({
               ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' +
                 mesData.slice(0, advanceMonths).map(m => `${m.name} (equivalente a ${fmt(adv80)})`).join(' y ') +
                 `. Para el mes de ${mesData[mesData.length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmt(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmt(totalAdv)}.`
-              : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmt(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmt(maxPeriodo)}), generando una sobrejecución de ${fmt(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmt(reconocer)}, con un valor total a descontar de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(descontar)}. En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmt(valorFinal)}` : descontar > 0 ? `se registra un valor total a descontar de ${fmt(descontar)} por subejecución y/o glosas de auditoría, sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}`}.`,
+              : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmt(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmt(maxPeriodo)}), generando una sobrejecución de ${fmt(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmt(reconocer)}, sin valor a descontar ($0,00). En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmt(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmt(descontar)} por ejecución inferior al mínimo del 90% (${fmt(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}`}.`,
             style: 'p',
           },
 
@@ -1150,8 +1160,6 @@ export default function CertificadoTrimestral({
             layout: 'lightHorizontalLines',
             margin: [0, 4, 0, 8],
           },
-
-          ...contenidoGlosas(descontarGlosa, pgpData?.adjustedData?.comments),
 
           // Párrafo de cierre
           {
@@ -1247,6 +1255,7 @@ export default function CertificadoTrimestral({
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
@@ -1261,8 +1270,6 @@ export default function CertificadoTrimestral({
 
       // Snapshot completo para regenerar el PDF completo desde el Registro
       const pdfData = {
-        glosaAuditoria: descontarGlosaR,
-        ajustesGlosa: pgpData?.adjustedData ?? null,
         mesData,
         monthlyNT,
         fechaInicio,
@@ -1325,9 +1332,6 @@ export default function CertificadoTrimestral({
         setInformeNum(String(parseInt(data.numero) + 1).padStart(3, '0'));
         toast({ title: `✓ Informe N° ${data.numero} guardado`, description: `${selectedPrestador.PRESTADOR} · ${selectedGroup?.label}` });
         loadHistorial();
-        return data.numero as string;
-      } else {
-        throw new Error(data.message || 'No se pudo guardar el informe.');
       }
     } catch (e: any) {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
@@ -1338,18 +1342,6 @@ export default function CertificadoTrimestral({
 
   // Genera PDF completo desde los datos guardados en el Registro (idéntico a handleGenerate)
   const handleGenerateFromRecord = useCallback(async (inf: any) => {
-    // Otro auditor puede haber guardado una glosa después de abrir el registro.
-    try {
-      const response = await fetch('/api/informes', { cache: 'no-store' });
-      if (!response.ok) throw new Error('No se pudo consultar el informe actualizado.');
-      const result = await response.json();
-      const actualizado = result.informes?.find((item: any) => item.numero === inf.numero);
-      if (!actualizado) throw new Error('El informe ya no está disponible.');
-      inf = actualizado;
-    } catch (error: any) {
-      toast({ title: 'No se generó el PDF', description: error.message, variant: 'destructive' });
-      return;
-    }
     const logoBase64 = await loadLogoBase64();
     const pd = inf.pdfData;
 
@@ -1373,7 +1365,6 @@ export default function CertificadoTrimestral({
           { table: { widths: ['auto','*','auto','*'], body: [[{ text: 'INFORME Nº', ...HSB },{ text: inf.numero||'', ...CSB },{ text: 'FECHA', ...HSB },{ text: inf.fecha||'', ...CSB }],[{ text: 'PRESTADOR IPS', ...HSB },{ text: inf.prestador||'', ...CSB },{ text: 'NIT', ...HSB },{ text: inf.nit||'', ...CSB }],[{ text: 'MUNICIPIO', ...HSB },{ text: (inf.municipio||'').toUpperCase(), ...CSB },{ text: 'DEPARTAMENTO', ...HSB },{ text: (inf.departamento||'').toUpperCase(), ...CSB }],[{ text: 'Nº CONTRATO', ...HSB },{ text: inf.contrato||'', ...CSB },{ text: 'VIGENCIA CONTRACTUAL', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'OBJETO DE LA EVALUACIÓN', ...HSB },{ text: 'Ejecución Financiera y Financiación', ...CSB },{ text: 'PERIODO EVALUADO', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'RESPONSABLE', ...HSB },{ text: inf.responsable||'', ...CSB },{ text: 'CORTE DE LA INFORMACIÓN', ...HSB },{ text: inf.periodo||'', ...CSB }]] }, margin: [0,0,0,8] },
           { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0,4,0,2] },
           { table: { widths: ['*',130], body: [[{ text: 'CONCEPTO', ...TS2B, alignment: 'center' },{ text: 'VALOR', ...TS2B, alignment: 'right' }],[{ text: 'VALOR NT DEL PERÍODO', ...CSB, bold: true },{ text: fmtB(inf.ntPeriodo), ...CSB, alignment: 'right' }],[{ text: 'FRANJA INFERIOR (90%)', ...CSB },{ text: fmtB(minPB), ...CSB, alignment: 'right' }],[{ text: 'FRANJA SUPERIOR (110%)', ...CSB },{ text: fmtB(maxPB), ...CSB, alignment: 'right' }],[{ text: 'TOTAL EJECUTADO', ...CSB, bold: true },{ text: fmtB(inf.totalEjecutado), ...CSB, alignment: 'right', bold: true }],[{ text: 'VALOR A DESCONTAR', ...CSB },{ text: fmtB(inf.descontar), ...CSB, alignment: 'right' }],[{ text: 'VALOR A RECONOCER', ...CSB },{ text: fmtB(inf.reconocer), ...CSB, alignment: 'right' }],[{ text: 'TOTAL ANTICIPOS PAGADOS', ...CSB },{ text: fmtB(inf.totalAnticipos), ...CSB, alignment: 'right' }],[{ text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },{ text: fmtB(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' }]] }, layout: 'lightHorizontalLines', margin: [0,0,0,16] },
-          ...contenidoGlosas(glosaGuardada(inf) ?? 0, pd?.ajustesGlosa?.comments),
         ],
       };
       pdfMake.createPdf(docB).download(`Certificado_${inf.numero}_${(inf.prestador||'').replace(/\s+/g,'_')}.pdf`);
@@ -1403,9 +1394,8 @@ export default function CertificadoTrimestral({
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
     // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    // El registro pertenece a su prestador/período, no a la sesión abierta.
-    // descontar ya incluye glosa y subejecución: no sumarlas otra vez.
-    const descontarR = descuentoGuardado(inf, descontarEjecucionFR);
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+    const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const reconocerR = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
     // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
@@ -1674,8 +1664,13 @@ export default function CertificadoTrimestral({
           { table: { widths: ['*'], body: [[{ text: notaEF.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' }, fillColor: '#eff6ff', margin: [0, 0, 0, 6] },
         ] : []),
 
+        // Fundamento de glosa de auditoría
+        ...(descontarR > 0 && comentariosGlosaT.trim() ? [
+          { text: 'FUNDAMENTO DE LA GLOSA DE AUDITORÍA:', bold: true, fontSize: 7.5, color: '#b91c1c', margin: [0, 4, 0, 2] },
+          { table: { widths: ['*'], body: comentariosGlosaT.trim().split(' | ').map(item => [{ text: item.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 3, 4, 3], color: '#7f1d1d' }]) }, layout: { hLineColor: () => '#fca5a5', vLineColor: () => '#fca5a5' }, fillColor: '#fff1f2', margin: [0, 0, 0, 6] },
+        ] : []),
+
         // Notas adicionales
-        ...contenidoGlosas(glosaGuardada(inf) ?? 0, pd.ajustesGlosa?.comments),
         ...(notaAd && notaAd.trim() ? [
           { text: 'OBSERVACIONES ADICIONALES:', bold: true, fontSize: 7.5, margin: [0, 4, 0, 2] },
           { table: { widths: ['*'], body: [[{ text: notaAd.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#d1fae5', vLineColor: () => '#d1fae5' }, fillColor: '#f0fdf4', margin: [0, 0, 0, 6] },
@@ -1688,7 +1683,7 @@ export default function CertificadoTrimestral({
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
         { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
         { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
-        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución de ${fmtL(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}, con un valor total a descontar de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(descontar)}. En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se registra un valor total a descontar de ${fmtL(descontar)} por subejecución y/o glosas de auditoría, sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución de ${fmtL(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}, sin valor a descontar ($0,00). En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
 
         // Tabla resumen final
         {
@@ -2003,12 +1998,26 @@ export default function CertificadoTrimestral({
             <Button variant="outline" onClick={async () => {
               setIsSavingAudit(true);
               try {
-                const numeroGuardado = await handleSave();
-                if (!numeroGuardado) return;
+                // 1. Sincronizar notas con el informe en Supabase (si existe número de informe).
+                //    Así la próxima apertura las encontrará en pdf_data.
+                if (informeNum && (notaEjecucionFinanciera || notaAdicional)) {
+                  try {
+                    await fetch('/api/informes', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        numero: informeNum,
+                        notaEjecucionFinanciera: notaEjecucionFinanciera || '',
+                        notaAdicional: notaAdicional || '',
+                      }),
+                    });
+                  } catch { /* si falla no bloquear la auditoría */ }
+                }
+                // 2. Guardar auditoría pasando las notas como respaldo en datos.
                 await onSaveAudit({
                   notaEjecucionFinanciera: notaEjecucionFinanciera || '',
                   notaAdicional: notaAdicional || '',
-                  informeNum: numeroGuardado,
+                  informeNum: informeNum || '',
                 });
               } finally {
                 setIsSavingAudit(false);
@@ -2353,7 +2362,6 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-red-700">Valor glosado</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
                             <th className="px-3 py-1.5 text-center font-semibold text-emerald-700">Acta Inesp.</th>
@@ -2382,9 +2390,6 @@ export default function CertificadoTrimestral({
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-red-700">
-                                {glosaGuardada(inf) === null ? <span className="text-muted-foreground">Sin dato</span> : fmtCOP2(glosaGuardada(inf)!)}
-                              </td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}

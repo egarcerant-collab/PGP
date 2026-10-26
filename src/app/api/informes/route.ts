@@ -175,7 +175,13 @@ export async function PATCH(request: Request) {
       }
       if (body.totalEjecutado !== undefined) f.total_ejecutado = body.totalEjecutado;
       if (body.valorFinal     !== undefined) f.valor_final     = body.valorFinal;
-      if (body.descontar      !== undefined) f.descontar       = body.descontar;
+      if (body.descontar      !== undefined) {
+        f.descontar = body.descontar;
+        const ntP = informes[idx].nt_periodo ?? 0;
+        const rec = informes[idx].reconocer  ?? 0;
+        f.valor_final = ntP - body.descontar + rec;
+      }
+      if (body.comentariosGlosa !== undefined) f.comentariosGlosa = body.comentariosGlosa;
       if (body.nit            !== undefined) f.nit             = body.nit;
       if (body.contrato       !== undefined) f.contrato        = body.contrato;
       if (body.responsable    !== undefined) f.responsable     = body.responsable;

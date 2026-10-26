@@ -35,6 +35,7 @@ export interface InformeRestored {
   valorCupsInesperadas?: number;
   cantidadCupsInesperadas?: string;
   descontar?: number;
+  comentariosGlosa?: string;
 }
 
 export interface SavedAuditData {

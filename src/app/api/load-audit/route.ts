@@ -71,6 +71,7 @@ export async function GET(request: Request) {
             valorCupsInesperadas,
             cantidadCupsInesperadas,
             totalEjecutadoGuardado: typeof match.total_ejecutado === 'number' ? match.total_ejecutado : 0,
+            comentariosGlosa:       match.comentariosGlosa || '',
           };
 
           // Auto-sync: copiar notas al datos si aún no las tiene (fire-and-forget)
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
                   valorCupsInesperadas,
                   cantidadCupsInesperadas,
                   descontar:              match.descontar ?? 0,
+                  comentariosGlosa:       match.comentariosGlosa || '',
                 },
               } : {}),
             };
