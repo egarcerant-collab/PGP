@@ -2082,7 +2082,7 @@ export default function CertificadoTrimestral({
                             <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={displayName}>{displayName}</td>
                             <td className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
-                                {infs.map((i: any) => {
+                                {[...infs].sort((a: any, b: any) => { const MO: Record<string, number> = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12}; const mA=Math.min(...(a.periodo||"").split("-").filter(Boolean).map((p:string)=>MO[p.toUpperCase()]??99)); const mB=Math.min(...(b.periodo||"").split("-").filter(Boolean).map((p:string)=>MO[p.toUpperCase()]??99)); return mA-mB; }).map((i: any) => {
                                   const MESES: Record<string, number> = { ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12 };
                                   const partes = (i.periodo || '').split('-').filter(Boolean);
                                   const esTrimestre = partes.length >= 3;
@@ -2362,6 +2362,7 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
                             <th className="px-3 py-1.5 text-center font-semibold text-emerald-700">Acta Inesp.</th>
@@ -2390,6 +2391,7 @@ export default function CertificadoTrimestral({
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold">{inf.descontar > 0 ? <span className="text-red-600">{fmtCOP2(inf.descontar)}</span> : <span className="text-muted-foreground text-[10px]">—</span>}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}
