@@ -2363,7 +2363,6 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
                             <th className="px-3 py-1.5 text-center font-semibold text-emerald-700">Acta Inesp.</th>

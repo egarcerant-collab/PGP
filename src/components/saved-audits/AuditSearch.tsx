@@ -349,6 +349,8 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
             );
 
             const base = results[0];
+            const totalDescontar = results.reduce((sum, r) => sum + (r.auditData?.informeRelacionado?.descontar ?? 0), 0);
+            const allComentarios = results.map(r => r.auditData?.informeRelacionado?.comentariosGlosa || '').filter(Boolean).join(' | ');
             const merged: SavedAuditData = { ...base.auditData };
 
             if (results.length > 1) {
@@ -375,9 +377,9 @@ export default function AuditSearch({ onAuditLoad }: AuditSearchProps) {
                         || (merged.notasGuardadas as any)?.valorCupsInesperadas || 0,
                     cantidadCupsInesperadas: base.informeRelacionado.cantidadCupsInesperadas
                         || (merged.notasGuardadas as any)?.cantidadCupsInesperadas || '',
-                    descontar: base.informeRelacionado.descontar ?? 0,
                     glosaAuditoria: base.informeRelacionado.glosaAuditoria ?? undefined,
-                    comentariosGlosa: base.informeRelacionado.comentariosGlosa || "",
+                    descontar: totalDescontar || (base.informeRelacionado.descontar ?? 0),
+                    comentariosGlosa: allComentarios || base.informeRelacionado.comentariosGlosa || "",
                 };
             } else if (merged.notasGuardadas) {
                 merged.informeRestored = {
