@@ -1391,11 +1391,15 @@ export default function CertificadoTrimestral({
     const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
     const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    // Sin pgpData activo (historial): usar inf.* (valor canónico guardado) con pd.* como fallback
+    // Sin pgpData activo (historial): leer descontar canónico (>0 tiene prioridad sobre 0)
+    // reconocer y valorFinal siempre se recomputan para ser consistentes con descontar
     const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
-    const descontar = hasActiveGlosaFR ? descontarR : (inf.descontar ?? (pd as any).descontar ?? descontarR);
-    const reconocer = hasActiveGlosaFR ? reconocerR : (inf.reconocer ?? (pd as any).reconocer ?? reconocerR);
-    const valorFinal = hasActiveGlosaFR ? valorFinalR : (inf.valorFinal ?? (pd as any).valorFinal ?? valorFinalR);
+    const descontar = hasActiveGlosaFR ? descontarR
+      : (inf.descontar > 0 ? inf.descontar : ((pd as any).descontar > 0 ? (pd as any).descontar : descontarR));
+    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
+    const ejecutadoNetoEff  = Math.max(0, totalEjecutadoFinal - descontarGlosaEff);
+    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
+    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa

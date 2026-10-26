@@ -175,11 +175,12 @@ export async function PATCH(request: Request) {
         f.tipo_periodo = body.tipoPeriodo;
       }
       if (body.totalEjecutado !== undefined) f.total_ejecutado = body.totalEjecutado;
+      if (body.reconocer      !== undefined) f.reconocer       = body.reconocer;
       if (body.valorFinal     !== undefined) f.valor_final     = body.valorFinal;
       if (body.descontar      !== undefined) {
         f.descontar = body.descontar;
         const ntP = informes[idx].nt_periodo ?? 0;
-        const rec = informes[idx].reconocer  ?? 0;
+        const rec = (body.reconocer !== undefined ? body.reconocer : informes[idx].reconocer) ?? 0;
         f.valor_final = ntP - body.descontar + rec;
       }
       if (body.comentariosGlosa !== undefined) f.comentariosGlosa = body.comentariosGlosa;
