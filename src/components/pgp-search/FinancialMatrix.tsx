@@ -21,9 +21,11 @@ interface FinancialMatrixProps {
   /** Valor de CUPS / Tecnologías Inesperadas (manual) guardado en la sección CUPS.
    *  Se suma al último mes para mostrar el % real incluyendo inesperadas. */
   valorCupsInesperadas?: number;
+  /** Descuento por glosa de auditoría. Se resta del ejecutado para mostrar % neto. */
+  descuentoAplicado?: number;
 }
 
-const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, regimenByMonth, valorCupsInesperadas = 0 }) => {
+const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, regimenByMonth, valorCupsInesperadas = 0, descuentoAplicado = 0 }) => {
     
     if (!monthlyFinancials || monthlyFinancials.length === 0) {
         return null;
@@ -64,13 +66,17 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, re
                     {monthlyFinancials.map((summary, idx) => {
                         // Sumar inesperadas al último mes (mes de cierre del período)
                         const isLast = idx === monthlyFinancials.length - 1;
-                        const ejecutadoReal = isLast && valorCupsInesperadas > 0
+                        const ejecutadoBruto = isLast && valorCupsInesperadas > 0
                           ? summary.totalValorEjecutado + valorCupsInesperadas
                           : summary.totalValorEjecutado;
+                        // Restar glosa en el último mes para mostrar % neto auditado
+                        const ejecutadoReal = isLast && descuentoAplicado > 0
+                          ? Math.max(0, ejecutadoBruto - descuentoAplicado)
+                          : ejecutadoBruto;
                         const pctReal = summary.totalValorEsperado > 0
                           ? (ejecutadoReal / summary.totalValorEsperado) * 100
                           : summary.percentage;
-                        const adjustedSummary = isLast && valorCupsInesperadas > 0
+                        const adjustedSummary = (isLast && (valorCupsInesperadas > 0 || descuentoAplicado > 0))
                           ? { ...summary, totalValorEjecutado: ejecutadoReal, percentage: pctReal }
                           : summary;
                         const reg = regimenByMonth?.[summary.month];
@@ -89,8 +95,11 @@ const FinancialMatrix: React.FC<FinancialMatrixProps> = ({ monthlyFinancials, re
                                 {getPercentageCard(adjustedSummary.percentage)}
                                 <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200">
                                     <Wallet className="h-6 w-6 mx-auto text-green-500 mb-1" />
-                                    <p className="text-sm text-muted-foreground">Valor Ejecutado</p>
+                                    <p className="text-sm text-muted-foreground">Valor Ejecutado{isLast && descuentoAplicado > 0 ? ' (neto glosa)' : ''}</p>
                                     <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(adjustedSummary.totalValorEjecutado)}</p>
+                                    {isLast && descuentoAplicado > 0 && (
+                                      <p className="text-xs text-red-500 mt-1">Glosa: -{formatCurrency(descuentoAplicado)}</p>
+                                    )}
                                 </div>
                             </div>
                             {reg && (reg.subsidiado > 0 || reg.contributivo > 0) && (

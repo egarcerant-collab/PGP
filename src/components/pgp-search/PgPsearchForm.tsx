@@ -336,13 +336,22 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     }
   });
 
-  const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
-    month,
-    totalValorEsperado: data.expected,
-    totalValorEjecutado: data.executed,
-    percentage: data.expected > 0 ? (data.executed / data.expected) * 100 : 0,
-    totalActividades: data.activities,
-  }));
+  // Valor esperado mensual = Valor NT completo del mes (suma de TODAS las filas de la NT,
+  // misma base de la tarjeta "Valor NT (período)"). No se usa la suma de la matriz porque
+  // ésta colapsa CUPS repetidos y omite filas sin cantidad, quedando por debajo del valor NT.
+  const valorNtMensual = pgpData.reduce((acc, row) =>
+    acc + getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes'])), 0);
+
+  const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => {
+    const esperado = valorNtMensual > 0 ? valorNtMensual : data.expected;
+    return {
+      month,
+      totalValorEsperado: esperado,
+      totalValorEjecutado: data.executed,
+      percentage: esperado > 0 ? (data.executed / esperado) * 100 : 0,
+      totalActividades: data.activities,
+    };
+  });
 
   return { monthlyFinancials, overExecutedCups, underExecutedCups, missingCups, unexpectedCups, normalExecutionCups, matrizDescuentos };
 }
@@ -930,7 +939,7 @@ const PgPsearchForm = forwardRef<
         </div>
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
         </div>
       </div>
     );
@@ -1036,7 +1045,7 @@ const PgPsearchForm = forwardRef<
         {/* Financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Matriz Financiera Mensual</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
         </div>
       </div>
     );

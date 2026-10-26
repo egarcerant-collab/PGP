@@ -685,7 +685,9 @@ export default function CertificadoTrimestral({
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
+      // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
+      const ejecutadoNetoCorr = Math.max(0, totalEjecutadoFinal - descontarGlosa);
+      const reconocer = ejecutadoNetoCorr > maxPeriodo ? 0.50 * (ejecutadoNetoCorr - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       // ── Narrativa debajo de gráfica 2 (CUPS) ──
