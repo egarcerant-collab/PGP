@@ -1385,8 +1385,8 @@ export default function CertificadoTrimestral({
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
     // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG3?.descontar || 0;
+    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG3?.descontar || inf.descontar || 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
     const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
