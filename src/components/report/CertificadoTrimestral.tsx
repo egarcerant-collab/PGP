@@ -1377,18 +1377,24 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // Recalcular descontar/reconocer/valorFinal con lógica correcta:
-    // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
-    // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
+    // Recalcular descontar/reconocer/valorFinal con lógica correcta.
+    // Cuando hay pgpData activo (análisis en sesión), recalcular desde cero.
+    // Cuando viene del historial sin pgpData, usar los valores ya calculados del snapshot pd
+    // (más confiable: evita errores de glosa faltante y de neto vs bruto en reconocer).
+    const hasActiveGlosa = pgpData?.notaTecnica?.descuentoAplicado != null;
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+    const descontarGlosaFR     = hasActiveGlosa ? (pgpData!.notaTecnica!.descuentoAplicado) : 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const reconocerR = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
-    const descontar = descontarR;
-    const reconocer = reconocerR;
-    const valorFinal = valorFinalR;
+    // Si no hay pgpData activo, usar valores del snapshot pd (ya calculados correctamente al guardar)
+    const descontar = hasActiveGlosa ? descontarR : ((pd as any).descontar ?? inf.descontar ?? descontarR);
+    const reconocer = hasActiveGlosa ? reconocerR : ((pd as any).reconocer ?? inf.reconocer ?? reconocerR);
+    const valorFinal = hasActiveGlosa ? valorFinalR : ((pd as any).valorFinal ?? inf.valorFinal ?? valorFinalR);
+    const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
+      || (pd as any).comentariosGlosa
+      || inf.comentariosGlosa
+      || '';
 
     // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
     // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
@@ -1670,7 +1676,7 @@ export default function CertificadoTrimestral({
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
         { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
         { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
-        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución de ${fmtL(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}, sin valor a descontar ($0,00). En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado neto de ${fmtL(totalEjecutadoFinal)}${descontar > 0 ? ` (descontada la glosa de auditoría de ${fmtL(descontar)})` : ''} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontar > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontar)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
 
         // Tabla resumen final
         {
