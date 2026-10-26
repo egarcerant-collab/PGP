@@ -228,10 +228,15 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                         const infData = await infRes.json();
                         const informe = infData.informes?.[0];
                         if (informe?.numero) {
+                            const autoComentarios = Object.entries(comments)
+                                .filter(([cup]) => selectedRows[cup])
+                                .map(([cup, txt]) => `${cup}: ${txt}`)
+                                .filter(Boolean)
+                                .join(' | ');
                             await fetch('/api/informes', {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ numero: informe.numero, descontar: glosaTotal, updateFields: true }),
+                                body: JSON.stringify({ numero: informe.numero, descontar: glosaTotal, comentariosGlosa: autoComentarios, updateFields: true }),
                             });
                         }
                     } catch { /* silencioso: no bloquear el flujo */ }
@@ -316,10 +321,15 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 toast({ title: "Sin informe vinculado", description: `No se encontró informe para ${monthName}.`, variant: "destructive" });
                 return;
             }
+            const comentariosGlosaTexto = Object.entries(comments)
+                .filter(([cup]) => selectedRows[cup])
+                .map(([cup, txt]) => `${cup}: ${txt}`)
+                .filter(Boolean)
+                .join(' | ');
             const patchRes = await fetch('/api/informes', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, updateFields: true }),
+                body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, comentariosGlosa: comentariosGlosaTexto, updateFields: true }),
             });
             if (patchRes.ok) {
                 toast({ title: "Valor glosado guardado", description: `Se guardó $${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });

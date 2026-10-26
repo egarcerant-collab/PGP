@@ -697,6 +697,7 @@ export default function CertificadoTrimestral({
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const comentariosGlosa: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
@@ -1066,6 +1067,17 @@ export default function CertificadoTrimestral({
             },
           ] : []),
 
+          // ── Fundamento de glosa de auditoría ──
+          ...(descontarGlosa > 0 && comentariosGlosa.trim() ? [
+            { text: 'FUNDAMENTO DE LA GLOSA DE AUDITORÍA:', bold: true, fontSize: 7.5, color: '#b91c1c', margin: [0, 4, 0, 2] },
+            {
+              table: { widths: ['*'], body: [[{ text: comentariosGlosa.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4], color: '#7f1d1d' }]] },
+              layout: { hLineColor: () => '#fca5a5', vLineColor: () => '#fca5a5' },
+              fillColor: '#fff1f2',
+              margin: [0, 0, 0, 6],
+            },
+          ] : []),
+
           // ── Notas adicionales ──
           ...(notaAdicional.trim() ? [
             {
@@ -1243,6 +1255,7 @@ export default function CertificadoTrimestral({
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
@@ -1649,6 +1662,12 @@ export default function CertificadoTrimestral({
         ...(notaEF && notaEF.trim() ? [
           { text: 'NOTA DE EJECUCIÓN FINANCIERA:', bold: true, fontSize: 7.5, margin: [0, 8, 0, 2] },
           { table: { widths: ['*'], body: [[{ text: notaEF.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#93c5fd', vLineColor: () => '#93c5fd' }, fillColor: '#eff6ff', margin: [0, 0, 0, 6] },
+        ] : []),
+
+        // Fundamento de glosa de auditoría
+        ...(descontarR > 0 && comentariosGlosaT.trim() ? [
+          { text: 'FUNDAMENTO DE LA GLOSA DE AUDITORÍA:', bold: true, fontSize: 7.5, color: '#b91c1c', margin: [0, 4, 0, 2] },
+          { table: { widths: ['*'], body: [[{ text: comentariosGlosaT.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4], color: '#7f1d1d' }]] }, layout: { hLineColor: () => '#fca5a5', vLineColor: () => '#fca5a5' }, fillColor: '#fff1f2', margin: [0, 0, 0, 6] },
         ] : []),
 
         // Notas adicionales

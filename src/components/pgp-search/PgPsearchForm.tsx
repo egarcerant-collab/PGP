@@ -468,7 +468,14 @@ const PgPsearchForm = forwardRef<
         totalFinal: sumaMensual - totalDescuentoCalculado,
         descuentoAplicado: totalDescuentoCalculado > 0
           ? totalDescuentoCalculado
-          : (initialAuditData?.informeRestored?.descontar ?? 0)
+          : (initialAuditData?.informeRestored?.descontar ?? 0),
+        comentariosGlosa: totalDescuentoCalculado > 0
+          ? Object.entries(adjustedData.comments || {})
+              .filter(([cup]) => adjustedData.selectedRows[cup])
+              .map(([cup, txt]) => `${cup}: ${txt}`)
+              .filter(Boolean)
+              .join(' | ')
+          : (initialAuditData?.informeRestored?.comentariosGlosa || '')
       },
       overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,

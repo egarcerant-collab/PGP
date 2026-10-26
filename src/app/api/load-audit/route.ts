@@ -56,6 +56,8 @@ export async function GET(request: Request) {
             valorCupsInesperadas,
             cantidadCupsInesperadas,
             totalEjecutadoGuardado: typeof match.total_ejecutado === 'number' ? match.total_ejecutado : 0,
+            descontar:              match.descontar ?? 0,
+            comentariosGlosa:       match.comentariosGlosa || '',
           };
 
           // Auto-sync: copiar notas al datos si aún no las tiene (fire-and-forget)
@@ -72,21 +74,21 @@ export async function GET(request: Request) {
                 valorCupsInesperadas,
                 cantidadCupsInesperadas,
               },
-              ...(!datosActuales.informeRestored ? {
-                informeRestored: {
-                  numero:                 match.numero,
-                  contrato:               match.contrato,
-                  tipoPeriodo:            match.tipo_periodo,
-                  periodo:                match.periodo,
-                  ntPeriodo:              match.nt_periodo,
-                  responsable:            match.responsable,
-                  notaEjecucionFinanciera: notaEF,
-                  notaAdicional:          notaAd,
-                  valorCupsInesperadas,
-                  cantidadCupsInesperadas,
-                  descontar:              match.descontar ?? 0,
-                },
-              } : {}),
+              informeRestored: {
+                ...(datosActuales.informeRestored || {}),
+                numero:                 match.numero,
+                contrato:               match.contrato,
+                tipoPeriodo:            match.tipo_periodo,
+                periodo:                match.periodo,
+                ntPeriodo:              match.nt_periodo,
+                responsable:            match.responsable,
+                notaEjecucionFinanciera: notaEF,
+                notaAdicional:          notaAd,
+                valorCupsInesperadas,
+                cantidadCupsInesperadas,
+                descontar:              match.descontar ?? 0,
+                comentariosGlosa:       match.comentariosGlosa || '',
+              },
             };
             writeJson(drive, auditoriaFolder, `${id}.json`, { ...data, datos: datosMerged }).catch(() => {});
           }
