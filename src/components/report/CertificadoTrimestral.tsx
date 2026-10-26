@@ -39,6 +39,10 @@ interface InformeRestored {
   cantidadCupsInesperadas?: string;
   /** total_ejecutado guardado en Supabase (incluye inesperadas si las hubo) */
   totalEjecutadoGuardado?: number;
+  /** Glosa de auditoría aplicada (suma de todos los meses del período) */
+  descontar?: number;
+  /** Comentarios por CUPS de la glosa */
+  comentariosGlosa?: string;
 }
 
 export interface NotasAuditoria {
@@ -49,7 +53,7 @@ export interface NotasAuditoria {
 
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
-  pgpData: { notaTecnica: { valor3m: number } } | null;
+  pgpData: { notaTecnica: { valor3m: number; descuentoAplicado?: number; comentariosGlosa?: string } } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
   onSaveAudit?: (notas?: NotasAuditoria) => Promise<void>;
@@ -409,25 +413,7 @@ export default function CertificadoTrimestral({
       if (sumCant > 0) savedCant  = String(sumCant);
     }
 
-    // 3. Fallback: informe vinculado — solo cuando localStorage no tiene nada.
-    // localStorage SIEMPRE gana sobre el informe (el valor manual del usuario manda).
-    if ((!savedValor || Number(savedValor) <= 0) && initialInforme) {
-      if (initialInforme.valorCupsInesperadas && initialInforme.valorCupsInesperadas > 0) {
-        savedValor = String(initialInforme.valorCupsInesperadas);
-        if (!savedCant && initialInforme.cantidadCupsInesperadas) savedCant = initialInforme.cantidadCupsInesperadas;
-      } else if (initialInforme.totalEjecutadoGuardado && initialInforme.totalEjecutadoGuardado > 0) {
-        const periodMonthNames = (initialInforme.periodo || '')
-          .toUpperCase().split('-').map((s: string) => s.trim()).filter(Boolean);
-        const periodRIPSTotal = (comparisonSummary?.monthlyFinancials || [])
-          .filter(m => {
-            const mn = MONTH_ES[m.month] || m.month.toUpperCase();
-            return periodMonthNames.length === 0 || periodMonthNames.includes(mn);
-          })
-          .reduce((s, m) => s + (isNaN(m.totalValorEjecutado) ? 0 : m.totalValorEjecutado), 0);
-        const derivedInesp = initialInforme.totalEjecutadoGuardado - periodRIPSTotal;
-        if (derivedInesp > 100) savedValor = String(Math.round(derivedInesp));
-      }
-    }
+    // Inesperadas: solo se cargan desde localStorage (entrada manual), nunca desde Drive (datos pueden estar obsoletos).
 
     setValorCupsInesperadas(savedValor && Number(savedValor) > 0 ? Number(savedValor) : 0);
     setCantidadCupsInesperadas(savedCant || '');
@@ -697,7 +683,7 @@ export default function CertificadoTrimestral({
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
-      const comentariosGlosa: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
+      const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
