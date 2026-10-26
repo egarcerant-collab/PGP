@@ -1663,7 +1663,7 @@ export default function CertificadoTrimestral({
         ] : []),
 
         // Fundamento de glosa de auditoría
-        ...(descontarR > 0 && comentariosGlosaT.trim() ? [
+        ...(descontar > 0 && comentariosGlosaT.trim() ? [
           { text: 'FUNDAMENTO DE LA GLOSA DE AUDITORÍA:', bold: true, fontSize: 7.5, color: '#b91c1c', margin: [0, 4, 0, 2] },
           { table: { widths: ['*'], body: comentariosGlosaT.trim().split(' | ').map(item => [{ text: item.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 3, 4, 3], color: '#7f1d1d' }]) }, layout: { hLineColor: () => '#fca5a5', vLineColor: () => '#fca5a5' }, fillColor: '#fff1f2', margin: [0, 0, 0, 6] },
         ] : []),
