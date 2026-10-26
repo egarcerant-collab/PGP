@@ -1378,6 +1378,13 @@ export default function CertificadoTrimestral({
       totalEjecutadoFinal, totalCups,
     } = pd;
 
+    // Corregir período según mesData real (snapshot puede tener trimestral aunque sea mensual)
+    const _mdArr = (md as any[]) || [];
+    const effectiveMonths: number = _mdArr.length > 0 ? _mdArr.length : (expectedMonths || 1);
+    const effectiveNtPeriodoFull: number = effectiveMonths * (monthlyNT || 0);
+    const effectivePeriodoLabel: string = effectiveMonths >= 3 ? 'TRIMESTRAL' : effectiveMonths === 2 ? 'BIMENSUAL' : 'MENSUAL';
+    const effectivePt: string = effectiveMonths >= 3 ? 'trimestral' : effectiveMonths === 2 ? 'bimensual' : 'mensual';
+
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
@@ -1466,7 +1473,7 @@ export default function CertificadoTrimestral({
     }).join(' ');
 
     const detalleCups = (md as any[]).map((m: any, i: number) => {
-      if (i === (md as any[]).length - 1) return `y en mes de ${m.name} un ${fmtNL(m.cups)} así concluyendo el ${periodoLabel.toLowerCase()}`;
+      if (i === (md as any[]).length - 1) return `y en mes de ${m.name} un ${fmtNL(m.cups)} así concluyendo el ${effectivePeriodoLabel.toLowerCase()}`;
       return `para un total de CUPS ${fmtNL(m.cups)} en el mes de ${m.name}`;
     }).join(', ');
 
@@ -1516,7 +1523,7 @@ export default function CertificadoTrimestral({
               [{ text: 'PRESTADOR IPS', ...HS }, { text: empresa, ...CS }, { text: 'NIT', ...HS }, { text: empresaNit, ...CS }],
               [{ text: 'MUNICIPIO', ...HS }, { text: municipio, ...CS }, { text: 'DEPARTAMENTO', ...HS }, { text: depto, ...CS }],
               [{ text: 'Nº CONTRATO', ...HS }, { text: contratoNum, ...CS }, { text: 'VIGENCIA CONTRACTUAL', ...HS }, { text: `${fechaInicio} - ${fechaFin}`, ...CS }],
-              [{ text: 'OBJETO DE LA EVALUACIÓN', ...HS }, { text: 'Seguimiento y evaluación de la ejecución financiera del contrato PGP frente a la Nota Técnica establecida', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: periodoLabel, ...CS }],
+              [{ text: 'OBJETO DE LA EVALUACIÓN', ...HS }, { text: 'Seguimiento y evaluación de la ejecución financiera del contrato PGP frente a la Nota Técnica establecida', ...CS }, { text: 'PERIODO EVALUADO', ...HS }, { text: effectivePeriodoLabel, ...CS }],
               [{ text: 'RESPONSABLE', ...HS }, { text: 'COORDINACION DE MEDIANA Y ALTA COMLEJIDAD', ...CS }, { text: 'CORTE DE LA INFORMACIÓN', ...HS }, { text: periodo, ...CS }],
             ],
           },
@@ -1541,14 +1548,14 @@ export default function CertificadoTrimestral({
 
         // ══ NARRATIVA 2 ══
         { text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valCupsIn > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtNL(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmtL(valCupsIn)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`, style: 'p' },
-        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${periodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
+        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${effectivePeriodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
 
         // ══ GRÁFICA 2 ══
         { text: cantInespNum > 0 ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS' : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
         chart2 ? { image: chart2, width: 490, margin: [0, 0, 0, 2] } : {},
 
         // ══ NARRATIVA 3 ══
-        { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${periodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
+        { text: `La ejecución de los códigos CUPS en el marco de las notas técnicas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud constituye un elemento estructural en la gestión operativa y financiera del modelo de pago prospectivo. Estos códigos identifican los procedimientos, tratamientos e intervenciones médicas suministradas a la población afiliada, y su registro preciso garantiza la coherencia entre la facturación, la compensación y el cumplimiento de los compromisos contractuales. El seguimiento sistemático de su ejecución permite mantener una relación transparente con los prestadores, fortalecer la red de atención y promover la eficiencia en los procesos administrativos. Durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo}, la institución ${empresa} reportó ${detalleCups}${cantInespNum > 0 ? `, con un total adicional de ${fmtNL(cantInespNum)} actividades correspondientes a CUPS / Tecnologías Inesperadas, las cuales fueron identificadas, validadas e incorporadas al consolidado del período` : ''}.`, style: 'p' },
 
         // ══ TABLA % EJECUCIÓN MENSUAL ══
         { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
@@ -1609,14 +1616,24 @@ export default function CertificadoTrimestral({
             body: [
               [{ text: 'VALOR ESTIMADO', ...TS2, alignment: 'center' }, { text: 'DESCONTAR', ...TS2, alignment: 'center' }, { text: 'RECONOCER', ...TS2, alignment: 'center' }],
               [{ text: `% MINIMO PERMITIDO 90%   ${fmtL(minPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
-              [{ text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmtL(ntPeriodoFull)}`, ...CS, bold: true }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right' }],
+              [{ text: `VALOR DE ${effectiveMonths} MES${effectiveMonths > 1 ? 'ES' : ''}   ${fmtL(effectiveNtPeriodoFull)}`, ...CS, bold: true }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{ text: `% MAXIMO PERMITIDO 110%   ${fmtL(maxPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{
                 text: valCupsIn > 0
-                  ? `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)} (incl. ${fmtL(valCupsIn)} tec. inesperadas)`
-                  : `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
+                  ? `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)} (incl. ${fmtL(valCupsIn)} tec. inesperadas)`
+                  : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
                 ...CS, bold: true, fillColor: '#f0fdf4',
-              }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' }],
+              }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
+              ...(descontar > 0 ? [[
+                { text: 'VALOR DESCONTADO POR GLOSA', ...CS, bold: true, color: '#b91c1c' },
+                { text: fmtL(descontar), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: '$ -', ...CS, alignment: 'right' },
+              ]] : []),
+              ...(reconocer > 0 ? [[
+                { text: 'VALOR A RECONOCER', ...CS, bold: true, color: '#047857' },
+                { text: '$ -', ...CS, alignment: 'right' },
+                { text: fmtL(reconocer), ...CS, alignment: 'right', bold: true, color: '#047857' },
+              ]] : []),
             ],
           },
           layout: 'lightHorizontalLines',
@@ -1634,8 +1651,8 @@ export default function CertificadoTrimestral({
               ...(advanceMonths > 0
                 ? (md as any[]).slice(0, advanceMonths).map((m: any) => [{ text: m.name, ...CS }, { text: fmtL(monthlyNT), ...CS, alignment: 'right' }, { text: fmtL(adv80), ...CS, alignment: 'right' }])
                 : [[{ text: '(Pago directo mensual)', ...CS, italics: true }, { text: fmtL(monthlyNT), ...CS, alignment: 'right' }, { text: fmtL(monthlyNT * 0.8), ...CS, alignment: 'right' }]]),
-              [{ text: pt === 'trimestral' ? 'TOTAL VALOR A PAGAR EN EL MES DE LIQUIDACIÓN (3er MES)' : 'TOTAL VALOR A PAGAR EN EL ÚLTIMO MES', ...CS, bold: true }, { text: fmtL(ntPeriodoFull), ...CS, alignment: 'right', bold: true }, { text: fmtL(advanceMonths === 0 ? adv80 : Math.max(0, valorFinal - totalAdv)), ...CS, alignment: 'right', bold: true }],
-              [{ text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true }, { text: '', ...CS }, { text: fmtL(ntPeriodoFull), ...CS, alignment: 'right', bold: true }],
+              [{ text: effectivePt === 'trimestral' ? 'TOTAL VALOR A PAGAR EN EL MES DE LIQUIDACIÓN (3er MES)' : 'TOTAL VALOR A PAGAR EN EL ÚLTIMO MES', ...CS, bold: true }, { text: fmtL(effectiveNtPeriodoFull), ...CS, alignment: 'right', bold: true }, { text: fmtL(advanceMonths === 0 ? adv80 : Math.max(0, valorFinal - totalAdv)), ...CS, alignment: 'right', bold: true }],
+              [{ text: 'TOTAL CONTRATO DEL PERÍODO', ...CS, bold: true }, { text: '', ...CS }, { text: fmtL(effectiveNtPeriodoFull), ...CS, alignment: 'right', bold: true }],
               [{ text: 'TOTAL ANTICIPOS PAGADOS', ...CS, bold: true }, { text: '', ...CS }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true }],
             ],
           },
@@ -1685,7 +1702,7 @@ export default function CertificadoTrimestral({
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
         { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
         { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
-        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${effectivePeriodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${effectivePeriodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
 
         // Tabla resumen final
         {
@@ -1693,7 +1710,7 @@ export default function CertificadoTrimestral({
             widths: ['*', 90, 90, 90],
             body: [
               [{ text: 'CONCEPTO', ...TS2, alignment: 'left' }, { text: 'DESCONTAR', ...TS2, alignment: 'right' }, { text: 'RECONOCER', ...TS2, alignment: 'right' }, { text: 'VALOR ESTIMADO', ...TS2, alignment: 'right', fillColor: '#bbf7d0' }],
-              [{ text: `Valor NT del ${periodoLabel} (${periodo})`, ...CS }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' }, { text: fmtL(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
+              [{ text: `Valor NT del ${effectivePeriodoLabel} (${periodo})`, ...CS }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' }, { text: fmtL(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
               [{ text: 'Total anticipos pagados (80% mensual)', ...CS }, { text: '', ...CS }, { text: fmtL(totalAdv), ...CS, alignment: 'right' }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
               [{ text: `Saldo a pagar en el mes de cierre (${(md as any[])[(md as any[]).length - 1]?.name || ''})`, ...CS, bold: true }, { text: '', ...CS }, { text: '', ...CS }, { text: fmtL(Math.max(0, valorFinal - totalAdv)), ...CS, alignment: 'right', bold: true, fillColor: '#dcfce7' }],
             ],
@@ -1706,7 +1723,7 @@ export default function CertificadoTrimestral({
         { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 3] },
 
         // Narrativa CUPS
-        { text: `La ejecución de los códigos CUPS durante el ${periodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
+        { text: `La ejecución de los códigos CUPS durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
 
         // ══ NOTA ACLARATORIA — solo desde agosto en adelante ══
         ...(showNotaAclaratoria ? [{
