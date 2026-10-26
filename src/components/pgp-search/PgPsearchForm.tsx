@@ -398,6 +398,25 @@ const PgPsearchForm = forwardRef<
     }
   }, [initialAuditData]);
 
+  // Los ajustes pertenecen al prestador, contrato y meses cargados.
+  const adjustmentContext = JSON.stringify([selectedPrestador?.PRESTADOR, selectedPrestador?.CONTRATO, [...executionDataByMonth.keys()].sort()]);
+  const previousAdjustmentContext = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPrestador) return;
+    if (previousAdjustmentContext.current !== null && previousAdjustmentContext.current !== adjustmentContext) {
+      const sameSavedContext = initialAuditData?.selectedPrestador?.PRESTADOR === selectedPrestador.PRESTADOR &&
+        initialAuditData?.selectedPrestador?.CONTRATO === selectedPrestador.CONTRATO &&
+        JSON.stringify(Object.keys(initialAuditData?.executionData || {}).sort()) === JSON.stringify([...executionDataByMonth.keys()].sort());
+      setAdjustedData({
+        adjustedQuantities: sameSavedContext ? initialAuditData?.adjustedQuantities || {} : {},
+        adjustedValues: {},
+        comments: sameSavedContext ? initialAuditData?.comments || {} : {},
+        selectedRows: sameSavedContext ? initialAuditData?.selectedRows || {} : {},
+      });
+    }
+    previousAdjustmentContext.current = adjustmentContext;
+  }, [adjustmentContext, initialAuditData, selectedPrestador, executionDataByMonth]);
+
   // Mostrar el dashboard en cuanto la NT esté cargada.
   // Si no hay datos de ejecución, buildMatrizEjecucion usa un dummy month
   // y todas las actividades aparecen como "Faltante" (comportamiento informativo).
