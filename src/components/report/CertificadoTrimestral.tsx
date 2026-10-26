@@ -696,7 +696,7 @@ export default function CertificadoTrimestral({
       // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
       const comentariosGlosa: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
@@ -1254,7 +1254,7 @@ export default function CertificadoTrimestral({
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
@@ -1394,7 +1394,7 @@ export default function CertificadoTrimestral({
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
     // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado ?? 0;
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const reconocerR = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
@@ -2361,6 +2361,7 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Ejecutado</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
@@ -2390,8 +2391,8 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-right font-semibold">{inf.descontar > 0 ? <span className="text-red-600">{fmtCOP2(inf.descontar)}</span> : <span className="text-muted-foreground text-[10px]">—</span>}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}
