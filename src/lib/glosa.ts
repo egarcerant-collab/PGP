@@ -4,6 +4,10 @@ export function calcularGlosa(rows: Array<{ CUPS: string; Valor_Ejecutado: numbe
   ), 0);
 }
 
+export function resolverGlosa(calculada: number, tieneDetalle: boolean, guardada?: number) {
+  return tieneDetalle ? calculada : (guardada ?? calculada);
+}
+
 export function descuentoGuardado(informe: Record<string, any>, fallback: number) {
   return Number(informe.descontar ?? informe.pdfData?.descontar ?? fallback);
 }

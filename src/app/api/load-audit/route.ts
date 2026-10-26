@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, writeJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { glosaGuardada } from '@/lib/glosa';
 
 const MESES: Record<string, string> = {
   ENERO:'1', FEBRERO:'2', MARZO:'3', ABRIL:'4', MAYO:'5', JUNIO:'6',
@@ -57,6 +58,8 @@ export async function GET(request: Request) {
           const cantidadCupsInesperadas = match.pdf_data?.cantidadCupsInesperadas || '';
 
           informeRelacionado = {
+            glosaAuditoria:          glosaGuardada(match),
+            descontar:              match.descontar,
             numero:                 match.numero,
             contrato:               match.contrato,
             tipoPeriodo:            match.tipo_periodo,

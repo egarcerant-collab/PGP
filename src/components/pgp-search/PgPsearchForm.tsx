@@ -29,7 +29,7 @@ import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
 import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
-import { calcularGlosa } from '@/lib/glosa';
+import { calcularGlosa, resolverGlosa } from '@/lib/glosa';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
@@ -466,7 +466,12 @@ const PgPsearchForm = forwardRef<
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
 
     // La cantidad validada determina la glosa, igual que en la matriz y al guardar.
-    const totalDescuentoCalculado = calcularGlosa(comparisonSummary.matrizDescuentos, adjustedData.adjustedQuantities);
+    const tieneDetalle = Array.from(executionDataByMonth.values()).some(month => (month.cupCounts?.size ?? 0) > 0);
+    const totalDescuentoCalculado = resolverGlosa(
+      calcularGlosa(comparisonSummary.matrizDescuentos, adjustedData.adjustedQuantities),
+      tieneDetalle,
+      initialAuditData?.glosaAuditoria ?? initialAuditData?.informeRestored?.glosaAuditoria,
+    );
 
     // Para archivos de medicamentos PGP los precios en RIPS son siempre $0.
     // En ese caso se usa el valor calculado por la NT (cantidad × precio_NT).
@@ -490,9 +495,7 @@ const PgPsearchForm = forwardRef<
         min90: globalSummary.costoMinimoPeriodo, valor3m: globalSummary.totalPeriodo, max110: globalSummary.costoMaximoPeriodo,
         anticipos: 0, totalPagar: sumaMensual,
         totalFinal: sumaMensual - totalDescuentoCalculado,
-        descuentoAplicado: totalDescuentoCalculado > 0
-          ? totalDescuentoCalculado
-          : (initialAuditData?.informeRestored?.descontar ?? 0)
+        descuentoAplicado: totalDescuentoCalculado
       },
       overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,
@@ -500,7 +503,7 @@ const PgPsearchForm = forwardRef<
       unexpectedCups: comparisonSummary.unexpectedCups,
       adjustedData,
     };
-  }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData]);
+  }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData, initialAuditData]);
 
   // \u2500\u2500 Descarga consolidada (1 fila por CUPS, suma todos los meses) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadMatrizComparativa = useCallback(() => {

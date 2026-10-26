@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actualizarGlosa, descuentoGuardado, calcularGlosa, glosaGuardada, contenidoGlosas } from '../src/lib/glosa.ts';
+import { actualizarGlosa, descuentoGuardado, calcularGlosa, glosaGuardada, contenidoGlosas, resolverGlosa } from '../src/lib/glosa.ts';
 
 const informe = {
   nt_periodo: 293511721.17, total_ejecutado: 358861216, reconocer: 22714092.67,
@@ -46,4 +46,10 @@ test('columna de glosa distingue subejecución, cero explícito y datos ausentes
   assert.equal(glosaGuardada({ descontar: 50, pdfData: { glosaAuditoria: 0 } }), 0);
   assert.equal(glosaGuardada({}), null);
   assert.deepEqual(contenidoGlosas(0, {}), []);
+});
+
+test('restaurar glosa sin detalle no revive una glosa eliminada en la matriz', () => {
+  assert.equal(resolverGlosa(0, true, 26079235), 0);
+  assert.equal(resolverGlosa(0, false, 26079235), 26079235);
+  assert.equal(resolverGlosa(100, true, 26079235), 100);
 });

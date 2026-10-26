@@ -23,6 +23,7 @@ export interface MonthlyExecutionData {
 }
 
 export interface InformeRestored {
+  glosaAuditoria?: number;
   numero?: string;
   contrato?: string;
   tipoPeriodo?: string;
