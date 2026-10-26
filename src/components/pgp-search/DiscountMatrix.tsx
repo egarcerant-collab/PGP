@@ -71,10 +71,11 @@ export interface AdjustedData {
 }
 
 interface DiscountMatrixProps {
+  adjustments: AdjustedData;
   data: DiscountMatrixRow[];
   executionDataByMonth: ExecutionDataByMonth;
   pgpData: any[];
-  onAdjustmentsChange: (adjustments: AdjustedData) => void;
+  onAdjustmentsChange: React.Dispatch<React.SetStateAction<AdjustedData>>;
   storageKey: string;
   selectedPrestador: any;
   initialAuditData: SavedAuditData | null;
@@ -84,6 +85,7 @@ interface DiscountMatrixProps {
 }
 
 const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
+    adjustments,
     data,
     executionDataByMonth,
     pgpData,
@@ -94,9 +96,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     jsonPrestadorCode,
     userRole,
 }) => {
-    const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
-    const [comments, setComments] = useState<Record<string, string>>({});
-    const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+    const { adjustedQuantities, comments, selectedRows } = adjustments;
+    const setAdjustedQuantities = (value: React.SetStateAction<Record<string, number>>) => onAdjustmentsChange(prev => ({ ...prev, adjustedQuantities: typeof value === 'function' ? value(prev.adjustedQuantities) : value }));
+    const setComments = (value: React.SetStateAction<Record<string, string>>) => onAdjustmentsChange(prev => ({ ...prev, comments: typeof value === 'function' ? value(prev.comments) : value }));
+    const setSelectedRows = (value: React.SetStateAction<Record<string, boolean>>) => onAdjustmentsChange(prev => ({ ...prev, selectedRows: typeof value === 'function' ? value(prev.selectedRows) : value }));
     const [activeFilter, setActiveFilter] = useState<ServiceType>("Todos");
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
@@ -115,28 +118,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     useEffect(() => { fetchExcepciones(); }, []);
     const [isSaving, setIsSaving] = useState(false);
 
-    useEffect(() => {
-        if (initialAuditData) {
-            setAdjustedQuantities(initialAuditData.adjustedQuantities || {});
-            setComments(initialAuditData.comments || {});
-            setSelectedRows(initialAuditData.selectedRows || {});
-        } else {
-            const initialQuantities: Record<string, number> = {};
-            data.forEach(row => { initialQuantities[row.CUPS] = row.Cantidad_Ejecutada; });
-            setAdjustedQuantities(initialQuantities);
-        }
-    }, [data, initialAuditData]);
-    
-    useEffect(() => {
-        const adjustedValues: Record<string, number> = {};
-        data.forEach(row => {
-            const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-            const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
-            const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
-            adjustedValues[row.CUPS] = discountValue > 0 ? discountValue : 0;
-        });
-        onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments, selectedRows });
-    }, [adjustedQuantities, comments, selectedRows, data, onAdjustmentsChange]);
     
     const filteredData = useMemo(() => {
         if (activeFilter === "Todos") return data;
@@ -147,20 +128,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     const glosaCompleta = useMemo(() => data.reduce((sum, row) => sum + Math.max(0,
         row.Valor_Ejecutado - (adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada) * row.Valor_Unitario
     ), 0), [data, adjustedQuantities]);
-
-    const buscarInforme = async (monthName: string) => {
-        const res = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
-        if (!res.ok) throw new Error('No se pudo consultar el informe vinculado.');
-        const result = await res.json();
-        const normalizar = (value: unknown) => String(value ?? '').trim().toUpperCase();
-        const matches = (result.informes || []).filter((inf: any) =>
-            normalizar(inf.prestador) === normalizar(selectedPrestador?.PRESTADOR) &&
-            normalizar(inf.periodo) === normalizar(monthName) &&
-            (!selectedPrestador?.CONTRATO || normalizar(inf.contrato) === normalizar(selectedPrestador.CONTRATO))
-        );
-        if (matches.length !== 1) throw new Error('No se encontró un informe único para el prestador, contrato y período. Revise el registro antes de guardar la glosa.');
-        return matches[0];
-    };
 
     const handleSaveState = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
@@ -173,19 +140,11 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
         // pgpData y jsonPrestadorCode NO se incluyen: son demasiado grandes (10MB+)
         // jsonPrestadorCode es redundante (= selectedPrestador['ID DE ZONA'])
         const auditPackage: SavedAuditData = {
+            glosaAuditoria: glosaCompleta,
             adjustedQuantities,
             comments,
             selectedRows,
-            executionData: {
-                // Solo totales por mes, sin cupCounts completo
-                ...Object.fromEntries(
-                    Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-                        totalRealValue: v.totalRealValue,
-                        uniqueCupCount: v.cupCounts?.size ?? 0,
-                        totalCups: v.cupCounts?.size ?? 0,
-                    }])
-                )
-            },
+            executionData: serializeExecutionData(executionDataByMonth),
             uniqueUserCount,
             selectedPrestador: selectedPrestador
         };
@@ -227,23 +186,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             if (response.ok) {
                 toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
 
-                const glosaTotal = glosaCompleta;
-
-                {
-                    try {
-                        const informe = await buscarInforme(monthName);
-                        if (informe?.numero) {
-                            const syncRes = await fetch('/api/informes', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ numero: informe.numero, glosaAuditoria: glosaTotal, updateFields: true }),
-                            });
-                            if (!syncRes.ok) throw new Error('No se pudo actualizar la glosa del informe.');
-                        }
-                    } catch {
-                        toast({ title: 'Informe sin actualizar', description: 'La auditoría se guardó, pero falló la actualización de la glosa del informe. Reintente guardar.', variant: 'destructive' });
-                    }
-                }
+                if (data.warning) toast({ title: 'Acta pendiente de actualizar', description: data.warning, variant: 'destructive' });
             } else {
                 toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
             }
@@ -308,29 +251,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
 
     const handleSaveGlosa = async () => {
         setIsSavingGlosa(true);
-        try {
-            const monthName = Array.from(executionDataByMonth.keys()).sort((a, b) => Number(a) - Number(b)).map(key => new Date(2024, Number(key) - 1, 1).toLocaleString('es-CO', { month: 'long' })).join('-');
-
-            const informe = await buscarInforme(monthName);
-            if (!informe?.numero) {
-                toast({ title: "Sin informe vinculado", description: `No se encontró informe para ${monthName}.`, variant: "destructive" });
-                return;
-            }
-            const patchRes = await fetch('/api/informes', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero: informe.numero, glosaAuditoria: glosaCompleta, updateFields: true }),
-            });
-            if (patchRes.ok) {
-                toast({ title: "Valor glosado guardado", description: `Se guardó $${glosaCompleta.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
-            } else {
-                toast({ title: "Error al guardar", description: "No se pudo actualizar el informe.", variant: "destructive" });
-            }
-        } catch (e: any) {
-            toast({ title: "Error", description: e?.message || "Error de red.", variant: "destructive" });
-        } finally {
-            setIsSavingGlosa(false);
-        }
+        try { await handleSaveState(); } finally { setIsSavingGlosa(false); }
     };
 
     const filterOptions: { label: string; value: ServiceType; icon: any }[] = [

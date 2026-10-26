@@ -13,7 +13,8 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
-import { descuentoGuardado } from '@/lib/glosa';
+import { descuentoGuardado, glosaGuardada, contenidoGlosas } from '@/lib/glosa';
+import type { AdjustedData } from '../pgp-search/DiscountMatrix';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell,
@@ -50,7 +51,7 @@ export interface NotasAuditoria {
 
 interface CertificadoTrimestralProps {
   comparisonSummary: { monthlyFinancials: MonthlyFinancialSummary[] } | null;
-  pgpData: { notaTecnica: { valor3m: number } } | null;
+  pgpData: { notaTecnica: { valor3m: number; descuentoAplicado: number }; adjustedData?: AdjustedData } | null;
   selectedPrestador: Prestador | null;
   executionDataByMonth: Map<string, { totalRealValue: number; uniqueCupCount?: number; totalCups?: number }>;
   onSaveAudit?: (notas?: NotasAuditoria) => Promise<void>;
@@ -1150,6 +1151,8 @@ export default function CertificadoTrimestral({
             margin: [0, 4, 0, 8],
           },
 
+          ...contenidoGlosas(descontarGlosa, pgpData?.adjustedData?.comments),
+
           // Párrafo de cierre
           {
             text: `Finalmente, el total reconocido por valor de ${fmt(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`,
@@ -1258,6 +1261,8 @@ export default function CertificadoTrimestral({
 
       // Snapshot completo para regenerar el PDF completo desde el Registro
       const pdfData = {
+        glosaAuditoria: descontarGlosaR,
+        ajustesGlosa: pgpData?.adjustedData ?? null,
         mesData,
         monthlyNT,
         fechaInicio,
@@ -1320,6 +1325,9 @@ export default function CertificadoTrimestral({
         setInformeNum(String(parseInt(data.numero) + 1).padStart(3, '0'));
         toast({ title: `✓ Informe N° ${data.numero} guardado`, description: `${selectedPrestador.PRESTADOR} · ${selectedGroup?.label}` });
         loadHistorial();
+        return data.numero as string;
+      } else {
+        throw new Error(data.message || 'No se pudo guardar el informe.');
       }
     } catch (e: any) {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
@@ -1330,6 +1338,18 @@ export default function CertificadoTrimestral({
 
   // Genera PDF completo desde los datos guardados en el Registro (idéntico a handleGenerate)
   const handleGenerateFromRecord = useCallback(async (inf: any) => {
+    // Otro auditor puede haber guardado una glosa después de abrir el registro.
+    try {
+      const response = await fetch('/api/informes', { cache: 'no-store' });
+      if (!response.ok) throw new Error('No se pudo consultar el informe actualizado.');
+      const result = await response.json();
+      const actualizado = result.informes?.find((item: any) => item.numero === inf.numero);
+      if (!actualizado) throw new Error('El informe ya no está disponible.');
+      inf = actualizado;
+    } catch (error: any) {
+      toast({ title: 'No se generó el PDF', description: error.message, variant: 'destructive' });
+      return;
+    }
     const logoBase64 = await loadLogoBase64();
     const pd = inf.pdfData;
 
@@ -1353,6 +1373,7 @@ export default function CertificadoTrimestral({
           { table: { widths: ['auto','*','auto','*'], body: [[{ text: 'INFORME Nº', ...HSB },{ text: inf.numero||'', ...CSB },{ text: 'FECHA', ...HSB },{ text: inf.fecha||'', ...CSB }],[{ text: 'PRESTADOR IPS', ...HSB },{ text: inf.prestador||'', ...CSB },{ text: 'NIT', ...HSB },{ text: inf.nit||'', ...CSB }],[{ text: 'MUNICIPIO', ...HSB },{ text: (inf.municipio||'').toUpperCase(), ...CSB },{ text: 'DEPARTAMENTO', ...HSB },{ text: (inf.departamento||'').toUpperCase(), ...CSB }],[{ text: 'Nº CONTRATO', ...HSB },{ text: inf.contrato||'', ...CSB },{ text: 'VIGENCIA CONTRACTUAL', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'OBJETO DE LA EVALUACIÓN', ...HSB },{ text: 'Ejecución Financiera y Financiación', ...CSB },{ text: 'PERIODO EVALUADO', ...HSB },{ text: inf.tipoPeriodo||'', ...CSB }],[{ text: 'RESPONSABLE', ...HSB },{ text: inf.responsable||'', ...CSB },{ text: 'CORTE DE LA INFORMACIÓN', ...HSB },{ text: inf.periodo||'', ...CSB }]] }, margin: [0,0,0,8] },
           { text: 'RESUMEN FINANCIERO DEL PERÍODO', bold: true, fontSize: 8, margin: [0,4,0,2] },
           { table: { widths: ['*',130], body: [[{ text: 'CONCEPTO', ...TS2B, alignment: 'center' },{ text: 'VALOR', ...TS2B, alignment: 'right' }],[{ text: 'VALOR NT DEL PERÍODO', ...CSB, bold: true },{ text: fmtB(inf.ntPeriodo), ...CSB, alignment: 'right' }],[{ text: 'FRANJA INFERIOR (90%)', ...CSB },{ text: fmtB(minPB), ...CSB, alignment: 'right' }],[{ text: 'FRANJA SUPERIOR (110%)', ...CSB },{ text: fmtB(maxPB), ...CSB, alignment: 'right' }],[{ text: 'TOTAL EJECUTADO', ...CSB, bold: true },{ text: fmtB(inf.totalEjecutado), ...CSB, alignment: 'right', bold: true }],[{ text: 'VALOR A DESCONTAR', ...CSB },{ text: fmtB(inf.descontar), ...CSB, alignment: 'right' }],[{ text: 'VALOR A RECONOCER', ...CSB },{ text: fmtB(inf.reconocer), ...CSB, alignment: 'right' }],[{ text: 'TOTAL ANTICIPOS PAGADOS', ...CSB },{ text: fmtB(inf.totalAnticipos), ...CSB, alignment: 'right' }],[{ text: 'VALOR FINAL DEL PERÍODO', bold: true, fontSize: 7.5, fillColor: '#d1fae5' },{ text: fmtB(inf.valorFinal), bold: true, fontSize: 7.5, fillColor: '#d1fae5', alignment: 'right' }]] }, layout: 'lightHorizontalLines', margin: [0,0,0,16] },
+          ...contenidoGlosas(glosaGuardada(inf) ?? 0, pd?.ajustesGlosa?.comments),
         ],
       };
       pdfMake.createPdf(docB).download(`Certificado_${inf.numero}_${(inf.prestador||'').replace(/\s+/g,'_')}.pdf`);
@@ -1654,6 +1675,7 @@ export default function CertificadoTrimestral({
         ] : []),
 
         // Notas adicionales
+        ...contenidoGlosas(glosaGuardada(inf) ?? 0, pd.ajustesGlosa?.comments),
         ...(notaAd && notaAd.trim() ? [
           { text: 'OBSERVACIONES ADICIONALES:', bold: true, fontSize: 7.5, margin: [0, 4, 0, 2] },
           { table: { widths: ['*'], body: [[{ text: notaAd.trim(), fontSize: 7.5, alignment: 'justify', margin: [4, 4, 4, 4] }]] }, layout: { hLineColor: () => '#d1fae5', vLineColor: () => '#d1fae5' }, fillColor: '#f0fdf4', margin: [0, 0, 0, 6] },
@@ -1981,26 +2003,12 @@ export default function CertificadoTrimestral({
             <Button variant="outline" onClick={async () => {
               setIsSavingAudit(true);
               try {
-                // 1. Sincronizar notas con el informe en Supabase (si existe número de informe).
-                //    Así la próxima apertura las encontrará en pdf_data.
-                if (informeNum && (notaEjecucionFinanciera || notaAdicional)) {
-                  try {
-                    await fetch('/api/informes', {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        numero: informeNum,
-                        notaEjecucionFinanciera: notaEjecucionFinanciera || '',
-                        notaAdicional: notaAdicional || '',
-                      }),
-                    });
-                  } catch { /* si falla no bloquear la auditoría */ }
-                }
-                // 2. Guardar auditoría pasando las notas como respaldo en datos.
+                const numeroGuardado = await handleSave();
+                if (!numeroGuardado) return;
                 await onSaveAudit({
                   notaEjecucionFinanciera: notaEjecucionFinanciera || '',
                   notaAdicional: notaAdicional || '',
-                  informeNum: informeNum || '',
+                  informeNum: numeroGuardado,
                 });
               } finally {
                 setIsSavingAudit(false);
@@ -2345,6 +2353,7 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-red-700">Valor glosado</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
                             <th className="px-3 py-1.5 text-center font-semibold text-emerald-700">Acta Inesp.</th>
@@ -2373,6 +2382,9 @@ export default function CertificadoTrimestral({
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-red-700">
+                                {glosaGuardada(inf) === null ? <span className="text-muted-foreground">Sin dato</span> : fmtCOP2(glosaGuardada(inf)!)}
+                              </td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}

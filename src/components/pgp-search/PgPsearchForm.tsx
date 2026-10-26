@@ -29,6 +29,7 @@ import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
 import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
+import { calcularGlosa } from '@/lib/glosa';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
@@ -379,6 +380,12 @@ const PgPsearchForm = forwardRef<
   const autoFetchedCode = useRef<string | null>(null);
 
   useEffect(() => {
+    setAdjustedData({
+      adjustedQuantities: initialAuditData?.adjustedQuantities || {},
+      adjustedValues: {},
+      comments: initialAuditData?.comments || {},
+      selectedRows: initialAuditData?.selectedRows || {},
+    });
     if (initialAuditData?.selectedPrestador) {
       if (initialAuditData.pgpData) {
         setPgpData(initialAuditData.pgpData);
@@ -440,8 +447,7 @@ const PgPsearchForm = forwardRef<
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
 
     // La cantidad validada determina la glosa, igual que en la matriz y al guardar.
-    const totalDescuentoCalculado = Object.values(adjustedData.adjustedValues)
-      .reduce((acc, val) => acc + val, 0);
+    const totalDescuentoCalculado = calcularGlosa(comparisonSummary.matrizDescuentos, adjustedData.adjustedQuantities);
 
     // Para archivos de medicamentos PGP los precios en RIPS son siempre $0.
     // En ese caso se usa el valor calculado por la NT (cantidad × precio_NT).
@@ -696,6 +702,7 @@ const PgPsearchForm = forwardRef<
       // Serializar con datos completos (cupCounts incluido) para análisis desde historial
       const fullExecutionData = serializeExecutionData(executionDataByMonth);
       const auditPackage = {
+        glosaAuditoria: reportData?.notaTecnica.descuentoAplicado ?? 0,
         adjustedQuantities: adjustedData.adjustedQuantities,
         comments: adjustedData.comments,
         selectedRows: adjustedData.selectedRows,
@@ -722,7 +729,11 @@ const PgPsearchForm = forwardRef<
         const rawText = await response.text();
         let data: any = {};
         try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 200) }; }
-        if (response.ok) { setSavedInformeNumero(data.numero); return { numero: data.numero }; }
+        if (response.ok) {
+          setSavedInformeNumero(data.numero);
+          if (data.warning) toast({ title: 'Acta pendiente de actualizar', description: data.warning, variant: 'destructive' });
+          return { numero: data.numero };
+        }
         return { error: data.message || `Error ${response.status}` };
       } catch (e: any) {
         return { error: `Error de red: ${e?.message || e}` };
@@ -1026,6 +1037,8 @@ const PgPsearchForm = forwardRef<
           </Button>
         </div>
         <DiscountMatrix
+          key={selectedPrestador?.PRESTADOR}
+          adjustments={adjustedData}
           data={comparisonSummary!.matrizDescuentos}
           executionDataByMonth={executionDataByMonth}
           pgpData={pgpData}
@@ -1087,6 +1100,7 @@ const PgPsearchForm = forwardRef<
                 // Serializar con datos completos (cupCounts incluido) para análisis desde historial
                 const fullExecutionData = serializeExecutionData(executionDataByMonth);
                 const auditPackage = {
+                  glosaAuditoria: reportData?.notaTecnica.descuentoAplicado ?? 0,
                   adjustedQuantities: adjustedData.adjustedQuantities,
                   comments: adjustedData.comments,
                   selectedRows: adjustedData.selectedRows,
@@ -1127,6 +1141,7 @@ const PgPsearchForm = forwardRef<
                   try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
                   if (response.ok) {
                     setSavedInformeNumero(data.numero);
+                    if (data.warning) alert(data.warning);
                     alert(`✅ Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} exitosamente.`);
                   } else {
                     alert(`❌ Error al guardar (${response.status}): ${data.message || 'Error desconocido'}`);

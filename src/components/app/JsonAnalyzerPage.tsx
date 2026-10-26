@@ -36,6 +36,7 @@ export interface InformeRestored {
 }
 
 export interface SavedAuditData {
+  glosaAuditoria?: number;
   adjustedQuantities: Record<string, number>;
   comments: Record<string, string>;
   selectedRows: Record<string, boolean>;

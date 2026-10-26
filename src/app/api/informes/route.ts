@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       valor_final:    body.valorFinal   || 0,
       total_anticipos: body.totalAnticipos || 0,
       responsable:    body.responsable  || '',
-      pdf_data:       body.pdfData      || {},
+      pdf_data:       body.pdfData ? { ...body.pdfData, ...(body.pdfData.ajustesGlosa ? { glosaActualizadaEn: new Date().toISOString() } : {}) } : {},
     };
 
     // Si se especifica un número explícito (restauración), úsalo aunque no coincida por prestador+periodo
