@@ -84,6 +84,7 @@ export async function GET(request: Request) {
                   notaAdicional:          notaAd,
                   valorCupsInesperadas,
                   cantidadCupsInesperadas,
+                  descontar:              match.descontar ?? 0,
                 },
               } : {}),
             };
