@@ -682,8 +682,9 @@ export default function CertificadoTrimestral({
       // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
-      const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
+      const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG1?.descontar || 0;
+      const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
       const ejecutadoNetoCorr = Math.max(0, totalEjecutadoFinal - descontarGlosa);
@@ -1242,10 +1243,12 @@ export default function CertificadoTrimestral({
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
-      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || '';
+      const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG2?.descontar || 0;
+      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
-      const reconocer = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
+      const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
+      const reconocer = ejecutadoNetoR > maxPeriodo ? 0.50 * (ejecutadoNetoR - maxPeriodo) : 0;
       const valorFinal = ntPeriodo - descontar + reconocer;
 
       const periodoLabel = periodType === 'trimestral' ? 'TRIMESTRAL' : periodType === 'bimensual' ? 'BIMENSUAL' : 'MENSUAL';
@@ -1382,9 +1385,11 @@ export default function CertificadoTrimestral({
     // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
     // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || 0;
+    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG3?.descontar || 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
-    const reconocerR = totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0;
+    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
+    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
     // Aliases para el resto del bloque (sustituyen los valores del snapshot pd)
     const descontar = descontarR;

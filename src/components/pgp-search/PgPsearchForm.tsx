@@ -523,6 +523,17 @@ const PgPsearchForm = forwardRef<
     };
   }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData, initialAuditData]);
 
+  // Persistir glosa en localStorage para que el certificado la use sin restaurar el informe
+  useEffect(() => {
+    const nit = selectedPrestador?.NIT;
+    if (!nit) return;
+    const descuento = reportData?.notaTecnica?.descuentoAplicado ?? 0;
+    const comentarios = reportData?.notaTecnica?.comentariosGlosa ?? '';
+    if (descuento > 0) {
+      try { localStorage.setItem(`pgp_glosa_${nit}`, JSON.stringify({ descontar: descuento, comentariosGlosa: comentarios })); } catch {}
+    }
+  }, [reportData?.notaTecnica?.descuentoAplicado, reportData?.notaTecnica?.comentariosGlosa, selectedPrestador?.NIT]);
+
   // \u2500\u2500 Descarga consolidada (1 fila por CUPS, suma todos los meses) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadMatrizComparativa = useCallback(() => {
     if (!showComparison || !comparisonSummary) return;
