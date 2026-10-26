@@ -72,6 +72,7 @@ export async function GET(request: Request) {
       notaPrestador: r.nota_prestador || null,
       estadoPrestador: r.estado_prestador || null,
       notaPrestadorFecha: r.nota_prestador_fecha || null,
+      comentariosGlosa: r.comentariosGlosa || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });

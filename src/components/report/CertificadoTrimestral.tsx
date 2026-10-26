@@ -1391,14 +1391,14 @@ export default function CertificadoTrimestral({
     const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
     const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
     const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    // Sin pgpData activo (historial), usar valores del snapshot pd — son los correctos al guardar
+    // Sin pgpData activo (historial): usar inf.* (valor canónico guardado) con pd.* como fallback
     const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
-    const descontar = hasActiveGlosaFR ? descontarR : ((pd as any).descontar ?? inf.descontar ?? descontarR);
-    const reconocer = hasActiveGlosaFR ? reconocerR : ((pd as any).reconocer ?? inf.reconocer ?? reconocerR);
-    const valorFinal = hasActiveGlosaFR ? valorFinalR : ((pd as any).valorFinal ?? inf.valorFinal ?? valorFinalR);
+    const descontar = hasActiveGlosaFR ? descontarR : (inf.descontar ?? (pd as any).descontar ?? descontarR);
+    const reconocer = hasActiveGlosaFR ? reconocerR : (inf.reconocer ?? (pd as any).reconocer ?? reconocerR);
+    const valorFinal = hasActiveGlosaFR ? valorFinalR : (inf.valorFinal ?? (pd as any).valorFinal ?? valorFinalR);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
-      || (pd as any).comentariosGlosa
       || inf.comentariosGlosa
+      || (pd as any).comentariosGlosa
       || '';
 
     // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
