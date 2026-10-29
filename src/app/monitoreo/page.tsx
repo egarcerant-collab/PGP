@@ -50,16 +50,18 @@ function mesLabel(m: string): string {
 }
 
 function CoberturaBar({ mesesCargados, mesesEsperados }: { mesesCargados: string[]; mesesEsperados: string[] }) {
-  if (!mesesEsperados.length) return null;
-  const cargadoSet = new Set(mesesCargados);
+  const esperados = mesesEsperados ?? [];
+  const cargados = mesesCargados ?? [];
+  if (!esperados.length) return null;
+  const cargadoSet = new Set(cargados);
   return (
     <div className="flex flex-wrap gap-1 mt-2">
-      {mesesEsperados.map(m => {
+      {esperados.map(m => {
         const ok = cargadoSet.has(m);
         return (
           <span
             key={m}
-            title={ok ? `${m} — cargado` : `${m} — pendiente`}
+            title={ok ? `${m} — RIPS recibido` : `${m} — pendiente (2 JSON: subsidiado + contributivo)`}
             className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${
               ok
                 ? 'bg-green-100 text-green-800 border-green-300'
@@ -164,7 +166,7 @@ export default function MonitoreoPage() {
 
   // Resumen global de cobertura mensual
   const totalMesesEsperados = contratos.reduce((acc, c) => acc + (c.estado?.mesesEsperados?.length ?? 0), 0);
-  const totalMesesCargados = contratos.reduce((acc, c) => acc + (c.estado?.mesesCargados?.length ?? 0), 0);
+  const totalMesesCargados = contratos.reduce((acc, c) => acc + ((c.estado?.mesesCargados ?? []).length), 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -225,7 +227,7 @@ export default function MonitoreoPage() {
           const cargando = consultando === c.contrato;
           const infoBase = contratoMap.get(c.contrato);
           const mesesPendientes = est
-            ? est.mesesEsperados.filter(m => !est.mesesCargados.includes(m))
+            ? (est.mesesEsperados ?? []).filter(m => !(est.mesesCargados ?? []).includes(m))
             : [];
 
           return (
@@ -278,10 +280,10 @@ export default function MonitoreoPage() {
                   )}
 
                   {/* Barra de cobertura mensual */}
-                  {est && est.mesesEsperados.length > 0 && (
+                  {est && (est.mesesEsperados ?? []).length > 0 && (
                     <CoberturaBar
-                      mesesCargados={est.mesesCargados}
-                      mesesEsperados={est.mesesEsperados}
+                      mesesCargados={est.mesesCargados ?? []}
+                      mesesEsperados={est.mesesEsperados ?? []}
                     />
                   )}
                 </div>
@@ -311,7 +313,7 @@ export default function MonitoreoPage() {
                       {est.ultimaRadicacion && (
                         <span>Última recepción: {est.ultimaRadicacion.slice(0, 10)}</span>
                       )}
-                      {est.mesesCargados.length > 0 && (
+                      {(est.mesesCargados ?? []).length > 0 && (
                         <span className="text-green-600">
                           {est.mesesCargados.length} mes(es) con datos
                         </span>
