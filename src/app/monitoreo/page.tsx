@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock,
-  ArrowLeft, Building2, MapPin, Search, ExternalLink, Download,
+  ArrowLeft, Building2, MapPin, Search, ExternalLink,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
 
@@ -46,7 +46,6 @@ export default function MonitoreoPage() {
   const [estados, setEstados] = useState<EstadoContrato[]>([]);
   const [loading, setLoading] = useState(false);
   const [consultando, setConsultando] = useState<string | null>(null);
-  const [descargando, setDescargando] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
@@ -88,22 +87,6 @@ export default function MonitoreoPage() {
       showToast(`Error: ${e.message}`, 'err');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const descargarRips = async (contrato: string) => {
-    setDescargando(contrato);
-    try {
-      const res = await fetch(`/api/sie/descargar?contrato=${encodeURIComponent(contrato)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? data.mensaje ?? 'Error desconocido');
-      const n = data.descargados ?? 0;
-      if (n === 0) throw new Error(data.mensaje ?? 'No se descargaron archivos');
-      showToast(`✅ ${n} archivo(s) RIPS descargado(s) de ${contrato}`, 'ok');
-    } catch (e: any) {
-      showToast(`Error descarga: ${e.message}`, 'err');
-    } finally {
-      setDescargando(null);
     }
   };
 
@@ -246,24 +229,12 @@ export default function MonitoreoPage() {
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <button
                     onClick={() => consultarUno(c.contrato)}
-                    disabled={cargando || loading || descargando === c.contrato}
+                    disabled={cargando || loading}
                     title="Consultar en SIE"
                     className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-40"
                   >
                     {cargando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   </button>
-                  {est?.hayRips && (
-                    <button
-                      onClick={() => descargarRips(c.contrato)}
-                      disabled={descargando === c.contrato || loading}
-                      title="Descargar JSON RIPS del SIE"
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-40"
-                    >
-                      {descargando === c.contrato
-                        ? <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                        : <Download className="w-4 h-4" />}
-                    </button>
-                  )}
                   {c.webSheet && (
                     <a href={c.webSheet} target="_blank" rel="noopener noreferrer" title="Abrir Sheet del prestador">
                       <ExternalLink className="w-4 h-4 text-gray-400 hover:text-blue-600 transition-colors" />

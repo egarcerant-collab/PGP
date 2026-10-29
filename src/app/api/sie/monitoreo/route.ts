@@ -25,6 +25,7 @@ interface EstadoContrato {
   estados: string[];
   ultimaConsulta: string;
   ultimaRadicacion: string | null;
+  archivosDescargados?: number;
 }
 
 async function sendTelegram(message: string) {
@@ -129,10 +130,28 @@ export async function POST(request: Request) {
         estadoActual[contrato.contrato] = nuevoEstado;
         resultados.push(nuevoEstado);
 
-        // Detectar nueva radicación
+        // Detectar nueva radicación → descargar JSONs y guardar en Drive
         if (hayDatos && rips.length > prevTotal) {
           nuevasRadicaciones.push(contrato.prestador);
           await guardarNotificacionInterna(drive, contrato.contrato, contrato.prestador, rips.length);
+
+          // Descarga automática de JSONs RIPS y persistencia en Drive
+          try {
+            const archivos = await sieClient.descargarRipsDeUltimaConsulta(rips.length);
+            for (const archivo of archivos) {
+              let contenido: unknown;
+              try {
+                contenido = JSON.parse(archivo.content.toString('utf-8'));
+              } catch {
+                contenido = { raw: archivo.content.toString('base64') };
+              }
+              const nombreArchivo = `rips_${contrato.contrato}_${archivo.filename}`;
+              await writeJson(drive, ROOT_FOLDER_ID, nombreArchivo, contenido);
+            }
+            nuevoEstado.archivosDescargados = archivos.length;
+          } catch {
+            // No crítico — la notificación ya se guardó
+          }
 
           const msg =
             `🏥 <b>Nueva Radicación RIPS</b>\n` +

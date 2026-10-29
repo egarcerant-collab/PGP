@@ -315,7 +315,6 @@ export class SieClient {
     }
 
     const descargados: RipsDescargado[] = [];
-    const recepcionIds = Object.values(this.lastFormBase).filter(Boolean);
 
     for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
       const downloadBtnId = `dtMttoT:${rowIndex}:${this.lastDownloadBtnSuffix}`;
