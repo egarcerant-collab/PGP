@@ -5,8 +5,33 @@ import { useRouter } from 'next/navigation';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock,
   ArrowLeft, Building2, MapPin, Search, ExternalLink, Calendar, Play,
+  ClipboardList, X,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
+
+// ─── Helpers de periodo ───────────────────────────────────────────────────────
+
+const MESES_ES: Record<string, number> = {
+  ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
+  JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12,
+};
+
+/** Convierte un periodo almacenado ("ENERO", "ENERO-FEBRERO-MARZO") a meses YYYY-MM */
+function periodoToMeses(periodo: string, year = 2026): string[] {
+  return periodo.split('-').flatMap(p => {
+    const n = MESES_ES[p.trim().toUpperCase()];
+    return n ? [`${year}-${String(n).padStart(2, '0')}`] : [];
+  });
+}
+
+/** Dado un array de informes, devuelve el Set de meses YYYY-MM ya auditados */
+function mesesAuditadosDeInformes(informes: any[], year = 2026): Set<string> {
+  const set = new Set<string>();
+  for (const inf of informes) {
+    for (const m of periodoToMeses(inf.periodo ?? '', year)) set.add(m);
+  }
+  return set;
+}
 
 interface EstadoContrato {
   contrato: string;
@@ -76,6 +101,14 @@ function CoberturaBar({ mesesCargados, mesesEsperados }: { mesesCargados: string
   );
 }
 
+interface EvaluarModal {
+  contrato: string;
+  prestador: string;
+  nit: string;
+  mesesDisponibles: string[]; // YYYY-MM pendientes de evaluación
+  mesesYaAuditados: string[];
+}
+
 export default function MonitoreoPage() {
   const router = useRouter();
   const [estados, setEstados] = useState<EstadoContrato[]>([]);
@@ -83,6 +116,10 @@ export default function MonitoreoPage() {
   const [consultando, setConsultando] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Informes ya auditados por NIT
+  const [informesPorNit, setInformesPorNit] = useState<Record<string, any[]>>({});
+  // Modal de evaluación
+  const [evalModal, setEvalModal] = useState<EvaluarModal | null>(null);
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
     setToast({ msg, type });
