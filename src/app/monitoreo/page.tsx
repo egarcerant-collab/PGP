@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock,
-  ArrowLeft, Building2, MapPin, Search, ExternalLink,
+  ArrowLeft, Building2, MapPin, Search, ExternalLink, Calendar,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
 
@@ -19,6 +19,9 @@ interface EstadoContrato {
   estados: string[];
   ultimaConsulta: string;
   ultimaRadicacion: string | null;
+  mesesCargados: string[];
+  mesesEsperados: string[];
+  archivosDescargados?: number;
 }
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -39,6 +42,36 @@ function fmtDate(iso: string | null): string {
 
 function fmtCOP(val: number): string {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
+}
+
+function mesLabel(m: string): string {
+  const [y, mo] = m.split('-');
+  return new Date(+y, +mo - 1, 1).toLocaleString('es-CO', { month: 'short' }).replace('.', '') + ' ' + y.slice(2);
+}
+
+function CoberturaBar({ mesesCargados, mesesEsperados }: { mesesCargados: string[]; mesesEsperados: string[] }) {
+  if (!mesesEsperados.length) return null;
+  const cargadoSet = new Set(mesesCargados);
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {mesesEsperados.map(m => {
+        const ok = cargadoSet.has(m);
+        return (
+          <span
+            key={m}
+            title={ok ? `${m} — cargado` : `${m} — pendiente`}
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+              ok
+                ? 'bg-green-100 text-green-800 border-green-300'
+                : 'bg-red-50 text-red-600 border-red-200'
+            }`}
+          >
+            {mesLabel(m)}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function MonitoreoPage() {
@@ -81,7 +114,7 @@ export default function MonitoreoPage() {
         nuevas > 0
           ? `✅ ${nuevas} nueva(s) radicación(es) detectada(s)`
           : `Consulta completada — sin cambios nuevos`,
-        nuevas > 0 ? 'ok' : 'ok'
+        'ok'
       );
     } catch (e: any) {
       showToast(`Error: ${e.message}`, 'err');
@@ -118,10 +151,8 @@ export default function MonitoreoPage() {
     }
   };
 
-  // Enriquecer con info del contrato base
   const contratoMap = new Map(CONTRATOS_PGP.map(c => [c.contrato, c]));
 
-  // Contratos sin estado aún (no consultados)
   const contratos = CONTRATOS_PGP.map(c => {
     const est = estados.find(e => e.contrato === c.contrato);
     return { ...c, estado: est ?? null };
@@ -130,6 +161,10 @@ export default function MonitoreoPage() {
   const totalConRips = contratos.filter(c => c.estado?.hayRips).length;
   const totalSinRips = contratos.filter(c => c.estado && !c.estado.hayRips).length;
   const totalSinConsultar = contratos.filter(c => !c.estado).length;
+
+  // Resumen global de cobertura mensual
+  const totalMesesEsperados = contratos.reduce((acc, c) => acc + (c.estado?.mesesEsperados?.length ?? 0), 0);
+  const totalMesesCargados = contratos.reduce((acc, c) => acc + (c.estado?.mesesCargados?.length ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -162,7 +197,7 @@ export default function MonitoreoPage() {
       )}
 
       {/* Resumen */}
-      <div className="px-6 py-4 grid grid-cols-3 gap-4 max-w-4xl">
+      <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-5xl">
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-green-700">{totalConRips}</p>
           <p className="text-xs text-green-600 mt-1">Con RIPS radicados</p>
@@ -175,6 +210,12 @@ export default function MonitoreoPage() {
           <p className="text-2xl font-bold text-gray-600">{totalSinConsultar}</p>
           <p className="text-xs text-gray-500 mt-1">Sin consultar</p>
         </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-blue-700">
+            {totalMesesEsperados > 0 ? `${totalMesesCargados}/${totalMesesEsperados}` : '—'}
+          </p>
+          <p className="text-xs text-blue-600 mt-1">Meses-mes cubiertos</p>
+        </div>
       </div>
 
       {/* Tabla de contratos */}
@@ -183,6 +224,9 @@ export default function MonitoreoPage() {
           const est = c.estado;
           const cargando = consultando === c.contrato;
           const infoBase = contratoMap.get(c.contrato);
+          const mesesPendientes = est
+            ? est.mesesEsperados.filter(m => !est.mesesCargados.includes(m))
+            : [];
 
           return (
             <div
@@ -210,6 +254,13 @@ export default function MonitoreoPage() {
                         {e}
                       </span>
                     ))}
+                    {/* Badge de meses faltantes */}
+                    {mesesPendientes.length > 0 && (
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium bg-orange-50 text-orange-700 border-orange-200">
+                        <Calendar className="w-3 h-3" />
+                        {mesesPendientes.length} mes{mesesPendientes.length > 1 ? 'es' : ''} pendiente{mesesPendientes.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                   <p className="font-semibold text-gray-900 mt-1 truncate">{c.prestador}</p>
                   <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
@@ -224,6 +275,14 @@ export default function MonitoreoPage() {
                     <p className="text-xs text-gray-400 mt-1">
                       {c.meses} meses · {fmtCOP(c.valorMensual)}/mes · {c.poblacion.toLocaleString('es-CO')} personas
                     </p>
+                  )}
+
+                  {/* Barra de cobertura mensual */}
+                  {est && est.mesesEsperados.length > 0 && (
+                    <CoberturaBar
+                      mesesCargados={est.mesesCargados}
+                      mesesEsperados={est.mesesEsperados}
+                    />
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
@@ -251,6 +310,11 @@ export default function MonitoreoPage() {
                       <span className="font-semibold">{est.totalRegistros} registro(s) en SIE</span>
                       {est.ultimaRadicacion && (
                         <span>Última recepción: {est.ultimaRadicacion.slice(0, 10)}</span>
+                      )}
+                      {est.mesesCargados.length > 0 && (
+                        <span className="text-green-600">
+                          {est.mesesCargados.length} mes(es) con datos
+                        </span>
                       )}
                     </>
                   ) : (

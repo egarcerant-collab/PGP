@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   LogOut, FileText, Download, ShieldCheck, Building2, Calendar,
   DollarSign, ClipboardCheck, ChevronDown, ChevronUp, CheckCircle2,
-  XCircle, MessageSquare, Clock, Send,
+  XCircle, MessageSquare, Clock, Send, Bell,
 } from 'lucide-react';
 
 const GREEN = '#4CAF50';
@@ -59,6 +59,11 @@ export default function PrestadorPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState<string | null>(null);
 
+  // Notificaciones RIPS
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [sinLeerNotifs, setSinLeerNotifs] = useState(0);
+  const [showNotifs, setShowNotifs] = useState(false);
+
   useEffect(() => {
     async function load() {
       try {
@@ -74,6 +79,16 @@ export default function PrestadorPage() {
         const data = await infRes.json();
         const list: Informe[] = data.informes ?? [];
         setInformes(list);
+
+        // Cargar notificaciones RIPS del prestador
+        try {
+          const nRes = await fetch('/api/prestador/notificaciones');
+          if (nRes.ok) {
+            const nData = await nRes.json();
+            setNotifs(nData.notificaciones ?? []);
+            setSinLeerNotifs(nData.sinLeer ?? 0);
+          }
+        } catch { /* no crítico */ }
 
         // Inicializar textos/estados con los valores guardados
         const texts: Record<string, string> = {};
@@ -96,6 +111,18 @@ export default function PrestadorPage() {
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
+  };
+
+  const marcarNotifsLeidas = async () => {
+    const sinLeer = notifs.filter(n => !n.leida).map(n => n.id);
+    if (!sinLeer.length) return;
+    await fetch('/api/prestador/notificaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: sinLeer }),
+    });
+    setNotifs(prev => prev.map(n => ({ ...n, leida: true })));
+    setSinLeerNotifs(0);
   };
 
   async function guardarNota(inf: Informe) {
@@ -163,11 +190,59 @@ export default function PrestadorPage() {
             ASOCIACIÓN DE CABILDOS INDÍGENAS DEL CESAR Y LA GUAJIRA
           </span>
         </div>
-        <button onClick={handleLogout}
-          className="flex items-center gap-1.5 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-white/10">
-          <LogOut className="h-4 w-4" /> Salir
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Campana de notificaciones RIPS */}
+          <button
+            onClick={() => { setShowNotifs(v => !v); if (sinLeerNotifs > 0) marcarNotifsLeidas(); }}
+            className="relative p-2 rounded-lg hover:bg-white/10 transition-colors text-white"
+            title="Notificaciones RIPS"
+          >
+            <Bell className="h-5 w-5" />
+            {sinLeerNotifs > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
+                {sinLeerNotifs}
+              </span>
+            )}
+          </button>
+          <button onClick={handleLogout}
+            className="flex items-center gap-1.5 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-white/10">
+            <LogOut className="h-4 w-4" /> Salir
+          </button>
+        </div>
       </div>
+
+      {/* Panel de notificaciones RIPS */}
+      {showNotifs && notifs.length > 0 && (
+        <div className="w-full border-b border-green-800 bg-green-900 px-6 py-3 space-y-2">
+          <p className="text-xs font-semibold text-green-300 uppercase tracking-wide">Notificaciones RIPS</p>
+          {notifs.slice(0, 5).map(n => (
+            <div key={n.id} className="flex items-start gap-3 bg-green-800/60 rounded-lg px-3 py-2">
+              <Bell className="h-4 w-4 text-green-300 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">{n.titulo}</p>
+                <p className="text-xs text-green-200">{n.mensaje}</p>
+                {n.mesesCargados?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(n.mesesCargados as string[]).map(m => (
+                      <span key={m} className="inline-block px-1.5 py-0.5 bg-green-700 text-green-100 text-[10px] rounded">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <span className="text-[10px] text-green-400 shrink-0">
+                {new Date(n.fecha).toLocaleDateString('es-CO')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {showNotifs && notifs.length === 0 && (
+        <div className="w-full bg-green-900 border-b border-green-800 px-6 py-3 text-xs text-green-300">
+          No hay notificaciones de RIPS para este prestador.
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
