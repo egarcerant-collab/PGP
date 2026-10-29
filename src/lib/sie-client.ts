@@ -7,7 +7,7 @@ const SIE_BASE = process.env.SIE_URL ?? 'http://asdempleados.dusakawiepsi.com:80
 const SIE_USER = process.env.SIE_USER ?? '';
 const SIE_PASS = process.env.SIE_PASS ?? '';
 
-const LOGIN_PATH = '/';
+const LOGIN_PATH = '/login.xhtml';
 const CONSULTA_PATH = '/pages/audit/reception_consulta_support_rips/reception_consulta_support_rips.xhtml';
 
 export interface RecepcionRips {
@@ -87,7 +87,7 @@ export class SieClient {
   private cookies = '';
   private loggedIn = false;
 
-  private async fetchUrl(url: string, opts: RequestInit = {}): Promise<{ html: string; ok: boolean }> {
+  private async fetchUrl(url: string, opts: RequestInit = {}): Promise<{ html: string; ok: boolean; finalUrl: string }> {
     const res = await fetch(url, {
       ...opts,
       headers: {
@@ -100,34 +100,61 @@ export class SieClient {
     const newCookies = extractCookies(res.headers);
     if (newCookies) this.cookies = mergeCookies(this.cookies, newCookies);
     const html = await res.text();
-    return { html, ok: res.ok };
+    return { html, ok: res.ok, finalUrl: res.url };
   }
 
   async login(): Promise<boolean> {
     try {
-      // 1. GET login para obtener ViewState y cookies de sesión
+      // 1. GET login.xhtml para obtener ViewState, cookies y IDs de campos JSF dinámicos
       const { html: loginHtml } = await this.fetchUrl(`${SIE_BASE}${LOGIN_PATH}`);
       const viewState = extractViewState(loginHtml);
 
-      // 2. POST credenciales (campos JSF genéricos: j_idt7/j_idt9 para user/pass)
+      // Extraer IDs dinámicos: buscar campos por type en el HTML
+      const textInputs = [...loginHtml.matchAll(/name="([^"]+)"[^>]*type="text"|type="text"[^>]*name="([^"]+)"/g)]
+        .map(m => m[1] ?? m[2]).filter(Boolean);
+      const passInput = (loginHtml.match(/name="([^"]+)"[^>]*type="password"/)
+        ?? loginHtml.match(/type="password"[^>]*name="([^"]+)"/))?.[1]
+        ?? 'j_idt18:j_idt27';
+      const userField = textInputs[0] ?? 'j_idt18:j_idt23';
+      const yearField = textInputs[1] ?? 'j_idt18:j_idt31';
+      // El form ID JSF es el prefijo antes de ":" en cualquier campo
+      const formId = userField.includes(':') ? userField.split(':')[0] : 'j_idt18';
+
+      // Extraer el botón submit (JSF requiere que se incluya en el POST)
+      const submitBtn = loginHtml.match(/name="([^"]+)"[^>]*type="submit"|type="submit"[^>]*name="([^"]+)"/)?.[1]
+        ?? loginHtml.match(/<button[^>]+name="([^"]+)"[^>]*type="submit"/)?.[1]
+        ?? loginHtml.match(/type="submit"[^>]*name="([^"]+)"/)?.[2]
+        ?? `${formId}:j_idt40`;
+
+      // 2. POST credenciales con los IDs extraídos (botón incluido — JSF lo requiere para ejecutar la acción)
       const formBody = new URLSearchParams({
-        'j_idt1': 'j_idt1',
-        'j_idt1:j_idt7': SIE_USER,
-        'j_idt1:j_idt9': SIE_PASS,
-        'j_idt1:j_idt11': '2026',
+        [formId]: formId,
+        [userField]: SIE_USER,
+        [passInput]: SIE_PASS,
+        [yearField]: '2026',
+        [submitBtn]: '',
         'javax.faces.ViewState': viewState,
       });
 
-      const { html: postHtml } = await this.fetchUrl(`${SIE_BASE}${LOGIN_PATH}`, {
+      const loginUrl = `${SIE_BASE}${LOGIN_PATH}`;
+      const { html: postHtml, finalUrl } = await this.fetchUrl(loginUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Referer': loginUrl,
+          'Origin': SIE_BASE,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'es-CO,es;q=0.9',
+        },
         body: formBody.toString(),
       });
 
+      // Login exitoso si la URL final ya no es login.xhtml, o si el HTML no tiene form de login
       this.loggedIn =
-        postHtml.includes('Gestión') ||
-        postHtml.includes('Dashboard') ||
-        postHtml.includes('home.xhtml');
+        !finalUrl.includes('login.xhtml') ||
+        postHtml.includes('logout') ||
+        postHtml.includes('Cerrar Sesi') ||
+        (!postHtml.includes('ingrese al sistema') && !postHtml.includes('type="password"'));
 
       return this.loggedIn;
     } catch {
@@ -185,9 +212,6 @@ export class SieClient {
   }
 }
 
-let _singleton: SieClient | null = null;
-
 export function getSieClient(): SieClient {
-  if (!_singleton) _singleton = new SieClient();
-  return _singleton;
+  return new SieClient();
 }
