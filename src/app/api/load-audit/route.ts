@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, writeJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { glosaGuardada } from '@/lib/glosa';
 
 const MESES: Record<string, string> = {
   ENERO:'1', FEBRERO:'2', MARZO:'3', ABRIL:'4', MAYO:'5', JUNIO:'6',
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     const data            = await readJson(drive, auditoriaFolder, `${id}.json`);
     if (!data) return NextResponse.json({ message: 'No encontrado.' }, { status: 404 });
 
-    const datosActuales = data.datos || {};
+    let datosActuales = data.datos || {};
 
     // Buscar informe relacionado en informes.json
     let informeRelacionado: any = null;
@@ -37,6 +38,18 @@ export async function GET(request: Request) {
         const exacto   = candidatos.find(inf => inf.periodo.trim().toUpperCase() === mesNorm);
         const conNotas = candidatos.find(inf => inf.pdf_data?.notaEjecucionFinanciera || inf.pdf_data?.notaAdicional);
         const match    = exacto ?? conNotas ?? candidatos[0];
+        // Restaurar el snapshot más reciente, únicamente para el mismo contrato/período.
+        const snapshot = match.pdf_data;
+        const sameContract = !datosActuales.selectedPrestador?.CONTRATO || String(match.contrato || '').trim().toUpperCase() === String(datosActuales.selectedPrestador.CONTRATO).trim().toUpperCase();
+        if (exacto && sameContract && snapshot?.ajustesGlosa && snapshot.glosaActualizadaEn &&
+            (!datosActuales.glosaActualizadaEn || snapshot.glosaActualizadaEn >= datosActuales.glosaActualizadaEn)) {
+          datosActuales = {
+            ...datosActuales,
+            ...snapshot.ajustesGlosa,
+            glosaAuditoria: snapshot.glosaAuditoria,
+            glosaActualizadaEn: snapshot.glosaActualizadaEn,
+          };
+        }
 
         if (match) {
           const notaEF                = match.pdf_data?.notaEjecucionFinanciera || '';
@@ -45,6 +58,8 @@ export async function GET(request: Request) {
           const cantidadCupsInesperadas = match.pdf_data?.cantidadCupsInesperadas || '';
 
           informeRelacionado = {
+            glosaAuditoria:          glosaGuardada(match),
+            descontar:              match.descontar,
             numero:                 match.numero,
             contrato:               match.contrato,
             tipoPeriodo:            match.tipo_periodo,
@@ -56,7 +71,6 @@ export async function GET(request: Request) {
             valorCupsInesperadas,
             cantidadCupsInesperadas,
             totalEjecutadoGuardado: typeof match.total_ejecutado === 'number' ? match.total_ejecutado : 0,
-            descontar:              match.descontar ?? 0,
             comentariosGlosa:       match.comentariosGlosa || '',
           };
 
@@ -74,21 +88,22 @@ export async function GET(request: Request) {
                 valorCupsInesperadas,
                 cantidadCupsInesperadas,
               },
-              informeRestored: {
-                ...(datosActuales.informeRestored || {}),
-                numero:                 match.numero,
-                contrato:               match.contrato,
-                tipoPeriodo:            match.tipo_periodo,
-                periodo:                match.periodo,
-                ntPeriodo:              match.nt_periodo,
-                responsable:            match.responsable,
-                notaEjecucionFinanciera: notaEF,
-                notaAdicional:          notaAd,
-                valorCupsInesperadas,
-                cantidadCupsInesperadas,
-                descontar:              match.descontar ?? 0,
-                comentariosGlosa:       match.comentariosGlosa || '',
-              },
+              ...(!datosActuales.informeRestored ? {
+                informeRestored: {
+                  numero:                 match.numero,
+                  contrato:               match.contrato,
+                  tipoPeriodo:            match.tipo_periodo,
+                  periodo:                match.periodo,
+                  ntPeriodo:              match.nt_periodo,
+                  responsable:            match.responsable,
+                  notaEjecucionFinanciera: notaEF,
+                  notaAdicional:          notaAd,
+                  valorCupsInesperadas,
+                  cantidadCupsInesperadas,
+                  descontar:              match.descontar ?? 0,
+                  comentariosGlosa:       match.comentariosGlosa || '',
+                },
+              } : {}),
             };
             writeJson(drive, auditoriaFolder, `${id}.json`, { ...data, datos: datosMerged }).catch(() => {});
           }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, writeJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
 import { getCurrentUser } from '@/lib/get-current-user';
+import { actualizarGlosa } from '@/lib/glosa';
 
 type Informe = Record<string, any>;
 
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
       notaPrestador: r.nota_prestador || null,
       estadoPrestador: r.estado_prestador || null,
       notaPrestadorFecha: r.nota_prestador_fecha || null,
+      comentariosGlosa: r.comentariosGlosa || null,
     }));
 
     return NextResponse.json({ lastNumber, informes });
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
       valor_final:    body.valorFinal   || 0,
       total_anticipos: body.totalAnticipos || 0,
       responsable:    body.responsable  || '',
-      pdf_data:       body.pdfData      || {},
+      pdf_data:       body.pdfData ? { ...body.pdfData, ...(body.pdfData.ajustesGlosa ? { glosaActualizadaEn: new Date().toISOString() } : {}) } : {},
     };
 
     // Si se especifica un número explícito (restauración), úsalo aunque no coincida por prestador+periodo
@@ -151,6 +153,10 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const { numero, notaEjecucionFinanciera, notaAdicional, updateFields } = body;
+    if (body.glosaAuditoria !== undefined &&
+        (typeof body.glosaAuditoria !== 'number' || !Number.isFinite(body.glosaAuditoria) || body.glosaAuditoria < 0)) {
+      return NextResponse.json({ message: 'Glosa inválida' }, { status: 400 });
+    }
     if (!numero) return NextResponse.json({ message: 'Falta número' }, { status: 400 });
 
     const drive = getDrive();
@@ -169,9 +175,15 @@ export async function PATCH(request: Request) {
         f.tipo_periodo = body.tipoPeriodo;
       }
       if (body.totalEjecutado !== undefined) f.total_ejecutado = body.totalEjecutado;
+      if (body.reconocer      !== undefined) f.reconocer       = body.reconocer;
       if (body.valorFinal     !== undefined) f.valor_final     = body.valorFinal;
-      if (body.descontar           !== undefined) f.descontar            = body.descontar;
-      if (body.comentariosGlosa   !== undefined) f.comentariosGlosa     = body.comentariosGlosa;
+      if (body.descontar      !== undefined) {
+        f.descontar = body.descontar;
+        const ntP = informes[idx].nt_periodo ?? 0;
+        const rec = (body.reconocer !== undefined ? body.reconocer : informes[idx].reconocer) ?? 0;
+        f.valor_final = ntP - body.descontar + rec;
+      }
+      if (body.comentariosGlosa !== undefined) f.comentariosGlosa = body.comentariosGlosa;
       if (body.nit            !== undefined) f.nit             = body.nit;
       if (body.contrato       !== undefined) f.contrato        = body.contrato;
       if (body.responsable    !== undefined) f.responsable     = body.responsable;
@@ -192,6 +204,9 @@ export async function PATCH(request: Request) {
       }
 
       informes[idx] = { ...informes[idx], ...f };
+      if (body.glosaAuditoria !== undefined) {
+        informes[idx] = { ...informes[idx], ...actualizarGlosa(informes[idx], body.glosaAuditoria) };
+      }
     } else {
       informes[idx] = {
         ...informes[idx],

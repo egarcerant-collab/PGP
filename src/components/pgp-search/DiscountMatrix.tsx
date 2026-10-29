@@ -71,10 +71,11 @@ export interface AdjustedData {
 }
 
 interface DiscountMatrixProps {
+  adjustments: AdjustedData;
   data: DiscountMatrixRow[];
   executionDataByMonth: ExecutionDataByMonth;
   pgpData: any[];
-  onAdjustmentsChange: (adjustments: AdjustedData) => void;
+  onAdjustmentsChange: React.Dispatch<React.SetStateAction<AdjustedData>>;
   storageKey: string;
   selectedPrestador: any;
   initialAuditData: SavedAuditData | null;
@@ -84,6 +85,7 @@ interface DiscountMatrixProps {
 }
 
 const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
+    adjustments,
     data,
     executionDataByMonth,
     pgpData,
@@ -94,9 +96,10 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     jsonPrestadorCode,
     userRole,
 }) => {
-    const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
-    const [comments, setComments] = useState<Record<string, string>>({});
-    const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+    const { adjustedQuantities, comments, selectedRows } = adjustments;
+    const setAdjustedQuantities = (value: React.SetStateAction<Record<string, number>>) => onAdjustmentsChange(prev => ({ ...prev, adjustedQuantities: typeof value === 'function' ? value(prev.adjustedQuantities) : value }));
+    const setComments = (value: React.SetStateAction<Record<string, string>>) => onAdjustmentsChange(prev => ({ ...prev, comments: typeof value === 'function' ? value(prev.comments) : value }));
+    const setSelectedRows = (value: React.SetStateAction<Record<string, boolean>>) => onAdjustmentsChange(prev => ({ ...prev, selectedRows: typeof value === 'function' ? value(prev.selectedRows) : value }));
     const [activeFilter, setActiveFilter] = useState<ServiceType>("Todos");
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [currentCupForComment, setCurrentCupForComment] = useState<string | null>(null);
@@ -115,33 +118,16 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     useEffect(() => { fetchExcepciones(); }, []);
     const [isSaving, setIsSaving] = useState(false);
 
-    useEffect(() => {
-        if (initialAuditData) {
-            setAdjustedQuantities(initialAuditData.adjustedQuantities || {});
-            setComments(initialAuditData.comments || {});
-            setSelectedRows(initialAuditData.selectedRows || {});
-        } else {
-            const initialQuantities: Record<string, number> = {};
-            data.forEach(row => { initialQuantities[row.CUPS] = row.Cantidad_Ejecutada; });
-            setAdjustedQuantities(initialQuantities);
-        }
-    }, [data, initialAuditData]);
-    
-    useEffect(() => {
-        const adjustedValues: Record<string, number> = {};
-        data.forEach(row => {
-            const validatedQuantity = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-            const recalculatedValorReconocer = validatedQuantity * row.Valor_Unitario;
-            const discountValue = row.Valor_Ejecutado - recalculatedValorReconocer;
-            adjustedValues[row.CUPS] = discountValue > 0 ? discountValue : 0;
-        });
-        onAdjustmentsChange({ adjustedQuantities, adjustedValues, comments, selectedRows });
-    }, [adjustedQuantities, comments, selectedRows, data, onAdjustmentsChange]);
     
     const filteredData = useMemo(() => {
         if (activeFilter === "Todos") return data;
         return data.filter(row => row.Tipo_Servicio === activeFilter);
     }, [data, activeFilter]);
+
+    // Guardar siempre el período completo, aunque haya un filtro de visualización.
+    const glosaCompleta = useMemo(() => data.reduce((sum, row) => sum + Math.max(0,
+        row.Valor_Ejecutado - (adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada) * row.Valor_Unitario
+    ), 0), [data, adjustedQuantities]);
 
     const handleSaveState = async () => {
         if (!selectedPrestador || executionDataByMonth.size === 0) {
@@ -149,27 +135,16 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             return;
         }
         setIsSaving(true);
-        
-        const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
-        const date = new Date(2024, parseInt(monthKey) - 1, 1);
-        const monthName = date.toLocaleString('es-CO', { month: 'long' });
+        const monthName = Array.from(executionDataByMonth.keys()).sort((a, b) => Number(a) - Number(b)).map(key => new Date(2024, Number(key) - 1, 1).toLocaleString('es-CO', { month: 'long' })).join('-');
 
         // pgpData y jsonPrestadorCode NO se incluyen: son demasiado grandes (10MB+)
         // jsonPrestadorCode es redundante (= selectedPrestador['ID DE ZONA'])
         const auditPackage: SavedAuditData = {
+            glosaAuditoria: glosaCompleta,
             adjustedQuantities,
             comments,
             selectedRows,
-            executionData: {
-                // Solo totales por mes, sin cupCounts completo
-                ...Object.fromEntries(
-                    Array.from(executionDataByMonth.entries()).map(([k, v]) => [k, {
-                        totalRealValue: v.totalRealValue,
-                        uniqueCupCount: v.cupCounts?.size ?? 0,
-                        totalCups: v.cupCounts?.size ?? 0,
-                    }])
-                )
-            },
+            executionData: serializeExecutionData(executionDataByMonth),
             uniqueUserCount,
             selectedPrestador: selectedPrestador
         };
@@ -211,36 +186,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             if (response.ok) {
                 toast({ title: "Guardado Exitoso", description: `Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} en ${monthName}.` });
 
-                // Calcular descuento total directamente desde filteredData (en scope)
-                let glosaTotal = 0;
-                let reconocerTotal = 0;
-                for (const row of filteredData) {
-                    const vq = adjustedQuantities[row.CUPS] ?? row.Cantidad_Ejecutada;
-                    const reconocido = vq * row.Valor_Unitario;
-                    const descuento = row.Valor_Ejecutado - reconocido;
-                    glosaTotal    += descuento > 0 ? descuento : 0;
-                    reconocerTotal += descuento > 0 ? reconocido : row.Valor_Ejecutado;
-                }
-
-                if (glosaTotal > 0) {
-                    try {
-                        const infRes = await fetch(`/api/audit-informe?prestador=${encodeURIComponent(selectedPrestador?.PRESTADOR || '')}&mes=${encodeURIComponent(monthName)}`);
-                        const infData = await infRes.json();
-                        const informe = infData.informes?.[0];
-                        if (informe?.numero) {
-                            const autoComentarios = Object.entries(comments)
-                                .filter(([cup]) => selectedRows[cup])
-                                .map(([cup, txt]) => `${cup}: ${txt}`)
-                                .filter(Boolean)
-                                .join(' | ');
-                            await fetch('/api/informes', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ numero: informe.numero, descontar: glosaTotal, comentariosGlosa: autoComentarios, updateFields: true }),
-                            });
-                        }
-                    } catch { /* silencioso: no bloquear el flujo */ }
-                }
+                if (data.warning) toast({ title: 'Acta pendiente de actualizar', description: data.warning, variant: 'destructive' });
             } else {
                 toast({ title: "Error del Servidor", description: `(${response.status}) ${data.message || 'No se pudo guardar.'}`, variant: "destructive" });
             }
@@ -304,10 +250,6 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
     };
 
     const handleSaveGlosa = async () => {
-        if (totals.glosa <= 0) {
-            toast({ title: "Sin glosa", description: "No hay descuentos aplicados para guardar.", variant: "destructive" });
-            return;
-        }
         setIsSavingGlosa(true);
         try {
             const monthKey = Array.from(executionDataByMonth.keys())[0] || String(new Date().getMonth() + 1);
@@ -318,7 +260,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
             const infData = await infRes.json();
             const informe = infData.informes?.[0];
             if (!informe?.numero) {
-                toast({ title: "Sin informe vinculado", description: `No se encontró informe para ${monthName}.`, variant: "destructive" });
+                toast({ title: 'Sin informe vinculado', description: `No se encontró informe para ${monthName}.`, variant: 'destructive' });
                 return;
             }
             const comentariosGlosaTexto = Object.entries(comments)
@@ -332,12 +274,12 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                 body: JSON.stringify({ numero: informe.numero, descontar: totals.glosa, comentariosGlosa: comentariosGlosaTexto, updateFields: true }),
             });
             if (patchRes.ok) {
-                toast({ title: "Valor glosado guardado", description: `Se guardó $${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
+                toast({ title: 'Valor glosado guardado', description: `Se guardó ${totals.glosa.toLocaleString('es-CO')} como glosa en el informe N° ${informe.numero}.` });
             } else {
-                toast({ title: "Error al guardar", description: "No se pudo actualizar el informe.", variant: "destructive" });
+                toast({ title: 'Error al guardar', description: 'No se pudo actualizar el informe.', variant: 'destructive' });
             }
         } catch (e: any) {
-            toast({ title: "Error", description: e?.message || "Error de red.", variant: "destructive" });
+            toast({ title: 'Error', description: e?.message || 'Error de red.', variant: 'destructive' });
         } finally {
             setIsSavingGlosa(false);
         }
@@ -381,7 +323,7 @@ const DiscountMatrix: React.FC<DiscountMatrixProps> = ({
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                             Guardar Auditoría
                         </Button>
-                        <Button onClick={handleSaveGlosa} variant="default" size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={isSavingGlosa || totals.glosa <= 0}>
+                        <Button onClick={handleSaveGlosa} variant="default" size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={isSavingGlosa}>
                             {isSavingGlosa ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrendingDown className="mr-2 h-4 w-4" />}
                             Guardar Valor Glosado
                         </Button>

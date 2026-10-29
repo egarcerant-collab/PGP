@@ -29,6 +29,7 @@ import { buildMatrizEjecucion, findColumnValue } from '@/lib/matriz-helpers';
 import Papa from 'papaparse';
 import { getNumericValue, serializeExecutionData, type SavedAuditData, type RegimenTotals } from '../app/JsonAnalyzerPage';
 import DiscountMatrix, { type DiscountMatrixRow, type ServiceType, type AdjustedData } from './DiscountMatrix';
+import { calcularGlosa, resolverGlosa } from '@/lib/glosa';
 import StatCard from '../shared/StatCard';
 import InformeDesviaciones from '../report/InformeDesviaciones';
 import CertificadoTrimestral from '../report/CertificadoTrimestral';
@@ -335,13 +336,22 @@ export function calculateComparison(pgpData: any[], executionDataByMonth: Execut
     }
   });
 
-  const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => ({
-    month,
-    totalValorEsperado: data.expected,
-    totalValorEjecutado: data.executed,
-    percentage: data.expected > 0 ? (data.executed / data.expected) * 100 : 0,
-    totalActividades: data.activities,
-  }));
+  // Valor esperado mensual = Valor NT completo del mes (suma de TODAS las filas de la NT,
+  // misma base de la tarjeta "Valor NT (período)"). No se usa la suma de la matriz porque
+  // ésta colapsa CUPS repetidos y omite filas sin cantidad, quedando por debajo del valor NT.
+  const valorNtMensual = pgpData.reduce((acc, row) =>
+    acc + getNumericValue(findColumnValue(row, ['costo evento mes (valor mes)', 'costo evento mes', 'costoMes', 'costo_mes', 'costo mes'])), 0);
+
+  const monthlyFinancials: MonthlyFinancialSummary[] = Array.from(monthlyFinancialsMap.entries()).map(([month, data]) => {
+    const esperado = valorNtMensual > 0 ? valorNtMensual : data.expected;
+    return {
+      month,
+      totalValorEsperado: esperado,
+      totalValorEjecutado: data.executed,
+      percentage: esperado > 0 ? (data.executed / esperado) * 100 : 0,
+      totalActividades: data.activities,
+    };
+  });
 
   return { monthlyFinancials, overExecutedCups, underExecutedCups, missingCups, unexpectedCups, normalExecutionCups, matrizDescuentos };
 }
@@ -379,6 +389,12 @@ const PgPsearchForm = forwardRef<
   const autoFetchedCode = useRef<string | null>(null);
 
   useEffect(() => {
+    setAdjustedData({
+      adjustedQuantities: initialAuditData?.adjustedQuantities || {},
+      adjustedValues: {},
+      comments: initialAuditData?.comments || {},
+      selectedRows: initialAuditData?.selectedRows || {},
+    });
     if (initialAuditData?.selectedPrestador) {
       if (initialAuditData.pgpData) {
         setPgpData(initialAuditData.pgpData);
@@ -390,6 +406,25 @@ const PgPsearchForm = forwardRef<
       autoFetchedCode.current = null;
     }
   }, [initialAuditData]);
+
+  // Los ajustes pertenecen al prestador, contrato y meses cargados.
+  const adjustmentContext = JSON.stringify([selectedPrestador?.PRESTADOR, selectedPrestador?.CONTRATO, [...executionDataByMonth.keys()].sort()]);
+  const previousAdjustmentContext = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPrestador) return;
+    if (previousAdjustmentContext.current !== null && previousAdjustmentContext.current !== adjustmentContext) {
+      const sameSavedContext = initialAuditData?.selectedPrestador?.PRESTADOR === selectedPrestador.PRESTADOR &&
+        initialAuditData?.selectedPrestador?.CONTRATO === selectedPrestador.CONTRATO &&
+        JSON.stringify(Object.keys(initialAuditData?.executionData || {}).sort()) === JSON.stringify([...executionDataByMonth.keys()].sort());
+      setAdjustedData({
+        adjustedQuantities: sameSavedContext ? initialAuditData?.adjustedQuantities || {} : {},
+        adjustedValues: {},
+        comments: sameSavedContext ? initialAuditData?.comments || {} : {},
+        selectedRows: sameSavedContext ? initialAuditData?.selectedRows || {} : {},
+      });
+    }
+    previousAdjustmentContext.current = adjustmentContext;
+  }, [adjustmentContext, initialAuditData, selectedPrestador, executionDataByMonth]);
 
   // Mostrar el dashboard en cuanto la NT esté cargada.
   // Si no hay datos de ejecución, buildMatrizEjecucion usa un dummy month
@@ -439,10 +474,13 @@ const PgPsearchForm = forwardRef<
   const reportData = useMemo((): ReportData | null => {
     if (!showComparison || !selectedPrestador || !globalSummary || !comparisonSummary) return null;
 
-    const totalDescuentoCalculado = Object.entries(adjustedData.adjustedValues).reduce((acc, [cup, val]) => {
-      if (adjustedData.selectedRows[cup]) return acc + val;
-      return acc;
-    }, 0);
+    // La cantidad validada determina la glosa, igual que en la matriz y al guardar.
+    const tieneDetalle = Array.from(executionDataByMonth.values()).some(month => (month.cupCounts?.size ?? 0) > 0);
+    const totalDescuentoCalculado = resolverGlosa(
+      calcularGlosa(comparisonSummary.matrizDescuentos, adjustedData.adjustedQuantities),
+      tieneDetalle,
+      initialAuditData?.glosaAuditoria ?? initialAuditData?.informeRestored?.glosaAuditoria,
+    );
 
     // Para archivos de medicamentos PGP los precios en RIPS son siempre $0.
     // En ese caso se usa el valor calculado por la NT (cantidad × precio_NT).
@@ -474,8 +512,8 @@ const PgPsearchForm = forwardRef<
               .filter(([cup]) => adjustedData.selectedRows[cup])
               .map(([cup, txt]) => `${cup}: ${txt}`)
               .filter(Boolean)
-              .join(' | ')
-          : (initialAuditData?.informeRestored?.comentariosGlosa || '')
+              .join(" | ")
+          : (initialAuditData?.informeRestored?.comentariosGlosa || "")
       },
       overExecutedCups: comparisonSummary.overExecutedCups,
       underExecutedCups: comparisonSummary.underExecutedCups,
@@ -483,7 +521,18 @@ const PgPsearchForm = forwardRef<
       unexpectedCups: comparisonSummary.unexpectedCups,
       adjustedData,
     };
-  }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData]);
+  }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData, initialAuditData]);
+
+  // Persistir glosa en localStorage para que el certificado la use sin restaurar el informe
+  useEffect(() => {
+    const nit = selectedPrestador?.NIT;
+    if (!nit) return;
+    const descuento = reportData?.notaTecnica?.descuentoAplicado ?? 0;
+    const comentarios = reportData?.notaTecnica?.comentariosGlosa ?? '';
+    if (descuento > 0) {
+      try { localStorage.setItem(`pgp_glosa_${nit}`, JSON.stringify({ descontar: descuento, comentariosGlosa: comentarios })); } catch {}
+    }
+  }, [reportData?.notaTecnica?.descuentoAplicado, reportData?.notaTecnica?.comentariosGlosa, selectedPrestador?.NIT]);
 
   // \u2500\u2500 Descarga consolidada (1 fila por CUPS, suma todos los meses) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadMatrizComparativa = useCallback(() => {
@@ -706,6 +755,7 @@ const PgPsearchForm = forwardRef<
       // Serializar con datos completos (cupCounts incluido) para análisis desde historial
       const fullExecutionData = serializeExecutionData(executionDataByMonth);
       const auditPackage = {
+        glosaAuditoria: reportData?.notaTecnica.descuentoAplicado ?? 0,
         adjustedQuantities: adjustedData.adjustedQuantities,
         comments: adjustedData.comments,
         selectedRows: adjustedData.selectedRows,
@@ -732,7 +782,11 @@ const PgPsearchForm = forwardRef<
         const rawText = await response.text();
         let data: any = {};
         try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 200) }; }
-        if (response.ok) { setSavedInformeNumero(data.numero); return { numero: data.numero }; }
+        if (response.ok) {
+          setSavedInformeNumero(data.numero);
+          if (data.warning) toast({ title: 'Acta pendiente de actualizar', description: data.warning, variant: 'destructive' });
+          return { numero: data.numero };
+        }
         return { error: data.message || `Error ${response.status}` };
       } catch (e: any) {
         return { error: `Error de red: ${e?.message || e}` };
@@ -896,7 +950,7 @@ const PgPsearchForm = forwardRef<
         </div>
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
         </div>
       </div>
     );
@@ -1002,7 +1056,7 @@ const PgPsearchForm = forwardRef<
         {/* Financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Matriz Financiera Mensual</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} />
+          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
         </div>
       </div>
     );
@@ -1036,6 +1090,8 @@ const PgPsearchForm = forwardRef<
           </Button>
         </div>
         <DiscountMatrix
+          key={selectedPrestador?.PRESTADOR}
+          adjustments={adjustedData}
           data={comparisonSummary!.matrizDescuentos}
           executionDataByMonth={executionDataByMonth}
           pgpData={pgpData}
@@ -1097,6 +1153,7 @@ const PgPsearchForm = forwardRef<
                 // Serializar con datos completos (cupCounts incluido) para análisis desde historial
                 const fullExecutionData = serializeExecutionData(executionDataByMonth);
                 const auditPackage = {
+                  glosaAuditoria: reportData?.notaTecnica.descuentoAplicado ?? 0,
                   adjustedQuantities: adjustedData.adjustedQuantities,
                   comments: adjustedData.comments,
                   selectedRows: adjustedData.selectedRows,
@@ -1137,6 +1194,7 @@ const PgPsearchForm = forwardRef<
                   try { data = JSON.parse(rawText); } catch { data = { message: rawText.slice(0, 300) }; }
                   if (response.ok) {
                     setSavedInformeNumero(data.numero);
+                    if (data.warning) alert(data.warning);
                     alert(`✅ Auditoría N° ${data.numero} ${data.updated ? 'actualizada' : 'guardada'} exitosamente.`);
                   } else {
                     alert(`❌ Error al guardar (${response.status}): ${data.message || 'Error desconocido'}`);

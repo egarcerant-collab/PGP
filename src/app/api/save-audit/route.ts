@@ -1,6 +1,30 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, writeJson, deleteJson, getSubfolder, listFiles, ROOT_FOLDER_ID } from '@/lib/gdrive';
 import { getCurrentUser } from '@/lib/get-current-user';
+import { actualizarGlosa } from '@/lib/glosa';
+
+async function sincronizarGlosa(drive: any, auditData: any, prestador: string, periodo: string): Promise<string | null> {
+  if (auditData.glosaAuditoria === undefined) return null;
+  try {
+    const informes: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'informes.json')) ?? [];
+    const norm = (value: any) => String(value ?? '').trim().toUpperCase();
+    const contrato = auditData.selectedPrestador?.CONTRATO;
+    const matches = informes.filter(inf => norm(inf.prestador) === norm(prestador) && norm(inf.periodo) === norm(periodo) && (!contrato || norm(inf.contrato) === norm(contrato)));
+    if (matches.length !== 1) return 'Auditoría guardada. No se actualizó el acta porque no hay un informe único para ese contrato y período. Use Guardar en Registro en Informes.';
+    const informe = matches[0];
+    Object.assign(informe, actualizarGlosa(informe, auditData.glosaAuditoria));
+    informe.pdf_data.ajustesGlosa = {
+      adjustedQuantities: auditData.adjustedQuantities || {},
+      comments: auditData.comments || {},
+      selectedRows: auditData.selectedRows || {},
+    };
+    informe.pdf_data.glosaActualizadaEn = auditData.glosaActualizadaEn;
+    await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+    return null;
+  } catch {
+    return 'Auditoría guardada, pero no se pudo actualizar la glosa y los comentarios del acta. Reintente guardar.';
+  }
+}
 
 const PASSWORD = '123456';
 
@@ -49,6 +73,9 @@ export async function POST(request: Request) {
     if (!auditData || !prestadorName || !month) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
+    if (auditData.glosaAuditoria !== undefined && (typeof auditData.glosaAuditoria !== 'number' || !Number.isFinite(auditData.glosaAuditoria) || auditData.glosaAuditoria < 0)) {
+      return NextResponse.json({ message: 'Glosa inválida.' }, { status: 400 });
+    }
 
     const nit             = auditData.selectedPrestador?.NIT || '';
     const drive           = getDrive();
@@ -57,6 +84,7 @@ export async function POST(request: Request) {
 
     const auditDataWithOwner = {
       ...auditData,
+      ...(auditData.glosaAuditoria !== undefined ? { glosaActualizadaEn: new Date().toISOString() } : {}),
       auditor_id:     currentUser?.id     || null,
       auditor_nombre: currentUser?.nombre || '',
     };
@@ -100,6 +128,7 @@ export async function POST(request: Request) {
       ]);
 
       return NextResponse.json({
+        warning: await sincronizarGlosa(drive, preserved, prestadorName, month),
         message: `Auditoría N° ${existing.numero} actualizada.`,
         numero:  existing.numero,
         id:      existing.id,
@@ -131,6 +160,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       message: `Auditoría N° ${numero} guardada exitosamente.`,
+      warning: await sincronizarGlosa(drive, auditDataWithOwner, prestadorName, month),
       numero, id, updated: false,
     });
   } catch (error: any) {
