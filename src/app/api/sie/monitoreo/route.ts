@@ -57,7 +57,7 @@ async function guardarNotificacionInterna(
     mensaje: `El prestador ${prestador} radicó ${total} registro(s) en el SIE para el contrato ${contrato}.`,
     contrato,
     fecha: new Date().toISOString(),
-    leida: false,
+    leidaPor: [],   // Notificación global: cada usuario la marca leída de forma independiente
   });
   // Mantener máximo 200 notificaciones
   await writeJson(drive, ROOT_FOLDER_ID, 'notificaciones.json', notifs.slice(0, 200));

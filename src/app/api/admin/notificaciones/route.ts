@@ -18,18 +18,26 @@ export async function GET(request: Request) {
     const drive = getDrive();
     const notifs: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'notificaciones.json')) ?? [];
 
-    // Si es auditor, filtrar solo sus notificaciones
+    // Auditor ve sus notificaciones + las globales (sin campo auditor = notificación del sistema)
     const nombre = currentUser?.nombre?.toLowerCase() ?? '';
     const filtered =
       currentUser?.rol === 'auditor'
-        ? notifs.filter(n => n.auditor?.toLowerCase().includes(nombre))
+        ? notifs.filter(n => !n.auditor || n.auditor.toLowerCase().includes(nombre))
         : notifs;
 
     // Más recientes primero
     filtered.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
-    const sinLeer = filtered.filter(n => !n.leida).length;
-    return NextResponse.json({ notificaciones: filtered, sinLeer });
+    const userId = currentUser?.id ?? currentUser?.nombre ?? '';
+    // Para notificaciones globales, "leida" se evalúa por usuario (leidaPor: string[])
+    const normalizada = filtered.map(n => {
+      if (n.leidaPor !== undefined) {
+        return { ...n, leida: (n.leidaPor as string[]).includes(userId) };
+      }
+      return n;
+    });
+    const sinLeer = normalizada.filter(n => !n.leida).length;
+    return NextResponse.json({ notificaciones: normalizada, sinLeer });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
   }
@@ -47,10 +55,17 @@ export async function PATCH(request: Request) {
     const { ids } = (await request.json()) as { ids: string[] };
     const drive = getDrive();
     const notifs: any[] = (await readJson(drive, ROOT_FOLDER_ID, 'notificaciones.json')) ?? [];
+    const userId = currentUser?.id ?? currentUser?.nombre ?? '';
 
-    const updated = notifs.map(n =>
-      ids.includes(n.id) ? { ...n, leida: true } : n
-    );
+    const updated = notifs.map(n => {
+      if (!ids.includes(n.id)) return n;
+      // Notificación global: agrega el usuario a leidaPor en vez de marcar leida=true globalmente
+      if (n.leidaPor !== undefined) {
+        const ya = n.leidaPor as string[];
+        return { ...n, leidaPor: ya.includes(userId) ? ya : [...ya, userId] };
+      }
+      return { ...n, leida: true };
+    });
     await writeJson(drive, ROOT_FOLDER_ID, 'notificaciones.json', updated);
 
     return NextResponse.json({ success: true });
