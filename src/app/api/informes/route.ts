@@ -73,6 +73,10 @@ export async function GET(request: Request) {
       estadoPrestador: r.estado_prestador || null,
       notaPrestadorFecha: r.nota_prestador_fecha || null,
       comentariosGlosa: r.comentariosGlosa || null,
+      glosaAuditoria: r.pdf_data?.glosaAuditoria ?? null,
+      descontarMeta: r.pdf_data?.glosaAuditoria != null
+        ? Math.max(0, (r.descontar ?? 0) - (r.pdf_data.glosaAuditoria ?? 0))
+        : null,
     }));
 
     return NextResponse.json({ lastNumber, informes });

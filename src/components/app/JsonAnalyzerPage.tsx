@@ -398,6 +398,35 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
       .catch(() => {});
   }, [isClient]);
 
+  // Escuchar evento "Evaluar" desde Registro de Informes
+  useEffect(() => {
+    if (!isClient) return;
+    const handler = async (e: Event) => {
+      const { nit, prestador, meses } = (e as CustomEvent).detail as { nit: string; prestador: string; meses: string[] };
+      if (!meses?.length) return;
+      try {
+        // Cargar pendientes filtrados por NIT / meses disponibles
+        const r = await fetch('/api/sie/pendientes');
+        const data = await r.json();
+        const archivos: Array<{ filename: string; contenido: unknown }> = data.archivos ?? [];
+        // Filtrar los que correspondan a los meses solicitados
+        const nitClean = nit.replace(/\D/g, '');
+        const filtrados = archivos.length
+          ? archivos.filter(a => meses.some(m => a.filename.includes(m) || a.filename.includes(nitClean)))
+          : [];
+        if (filtrados.length) {
+          setSieArchivos(filtrados);
+          toast({ title: `${filtrados.length} RIPS listos`, description: `${prestador} — meses: ${meses.map(m => m.slice(5)).join(', ')}` });
+        } else {
+          // No hay pendientes: notificar que deben ejecutarse desde Monitoreo
+          toast({ title: 'Sin archivos pendientes', description: 'Ejecuta "Consultar SIE" en el módulo de Monitoreo primero.', variant: 'destructive' });
+        }
+      } catch { /* silencioso */ }
+    };
+    window.addEventListener('sie:evaluar', handler);
+    return () => window.removeEventListener('sie:evaluar', handler);
+  }, [isClient, toast]);
+
   const getMonthName = (monthNumber: string) => {
     const date = new Date(2024, parseInt(monthNumber) - 1, 1);
     const name = date.toLocaleString('es-CO', { month: 'long' });
