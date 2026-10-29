@@ -1,6 +1,6 @@
 /**
  * Cliente HTTP para el SIE (Sistema de Información Empresarial)
- * Consulta recepciones RIPS por número de contrato PGP
+ * Consulta y descarga recepciones RIPS por número de contrato PGP
  */
 
 const SIE_BASE = process.env.SIE_URL ?? 'http://asdempleados.dusakawiepsi.com:8080/sie_dusakawi';
@@ -25,8 +25,16 @@ export interface RecepcionRips {
   tipoRegimen: string;
 }
 
+export interface RipsDescargado {
+  recepcionId: string;
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+// ─── Cookie utilities ─────────────────────────────────────────────────────────
+
 function extractCookies(headers: Headers): string {
-  // getSetCookie() returns array of Set-Cookie header values
   const raw = headers.getSetCookie?.() ?? [];
   return raw.map(c => c.split(';')[0]).join('; ');
 }
@@ -43,73 +51,152 @@ function mergeCookies(base: string, incoming: string): string {
   return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
 }
 
+// ─── HTML extraction helpers ──────────────────────────────────────────────────
+
 function extractViewState(html: string): string {
-  const m = html.match(/name="javax\.faces\.ViewState"[^>]*value="([^"]+)"/);
-  return m?.[1] ?? '';
+  return html.match(/name="javax\.faces\.ViewState"[^>]*value="([^"]+)"/)?.[1] ?? '';
 }
 
-function noData(html: string): boolean {
-  return html.includes('No existen datos para mostrar') || html.includes('no existen datos');
+function cellText(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/** Parsea filas de la tabla de Consulta Recepción */
-function parseResultados(html: string, contrato: string): RecepcionRips[] {
-  if (noData(html)) return [];
+/** Extrae las filas de la tabla de resultados */
+function parseResultadosFromHtml(html: string, contrato: string): {
+  resultados: RecepcionRips[];
+  downloadBtnSuffix: string;  // e.g. "j_idt181" para botón de descarga col 3
+  rowCount: number;
+} {
+  const empty = { resultados: [], downloadBtnSuffix: 'j_idt181', rowCount: 0 };
 
-  const resultados: RecepcionRips[] = [];
-
-  // Cada fila tiene: Recepción-RIPS | NIT IPS | Nombre IPS | Fecha | Usuario | Contrato | TipoContrato | CantAF | ValorAF | Tipo | Estado | NroRad | TipoReg | PBS | CUV
-  // Usamos bloques delimitados por los botones de acción
-  const blockPattern = /(\d{2,6})\s+(\d{8,12})\s+([A-ZÁÉÍÓÚÑ\w\s\.\-&,]+?)\s+(\d{4}\/\d{2}\/\d{2}[^<\t\n]*?)\s+(\w+)\s+([\w\-]*)\s+([\w\sRS]*?)\s+(\d+)\s+\$([\d\.,]+)\s+(Factura RIPS|Evento RIPS|Capita RIPS|Factura)\s+(Recepcionado|Radicado|Pre Radicado|Devuelto|Gestionado|Anulado|Radicado con devolución|Radicado pendiente|Revisión pendiente|Devuelto Parcial|En Revisión|Registro de Ajuste|Devuelto Registro de Ajuste)/g;
-
-  let m: RegExpExecArray | null;
-  while ((m = blockPattern.exec(html)) !== null) {
-    resultados.push({
-      recepcionId: m[1].trim(),
-      nit: m[2].trim(),
-      prestador: m[3].trim(),
-      fechaRecepcion: m[4].trim(),
-      contrato,
-      tipoContrato: m[7].trim(),
-      cantidadAF: m[8].trim(),
-      valorAF: m[9].trim(),
-      tipo: m[10].trim(),
-      estado: m[11].trim(),
-      numeroRadicacion: '',
-      tipoRegimen: '',
-    });
+  if (html.includes('No existen datos para mostrar') || html.includes('no existen datos')) {
+    return empty;
   }
 
-  return resultados;
+  // Encontrar tbody de la tabla de resultados
+  const tbodyMatch = html.match(/class="[^"]*ui-datatable-data[^"]*"[^>]*>([\s\S]*?)<\/tbody>/);
+  if (!tbodyMatch) return empty;
+
+  const tbodyHtml = tbodyMatch[1];
+  const resultados: RecepcionRips[] = [];
+  let downloadBtnSuffix = 'j_idt181';
+
+  const rowRegex = /<tr[^>]*class="[^"]*ui-widget-content[^"]*"[^>]*>([\s\S]*?)<\/tr>/g;
+  let rowMatch: RegExpExecArray | null;
+
+  while ((rowMatch = rowRegex.exec(tbodyHtml)) !== null) {
+    const rowHtml = rowMatch[1];
+
+    // Extraer sufijo del botón de descarga (fa-file-o) de la primera fila
+    if (resultados.length === 0) {
+      const btnMatch = rowHtml.match(/name="dtMttoT:\d+:(j_idt\d+)"[^>]*>[\s\S]{0,300}?fa-file-o/);
+      if (btnMatch) downloadBtnSuffix = btnMatch[1];
+    }
+
+    // Extraer celdas
+    const cells: string[] = [];
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/g;
+    let tdMatch: RegExpExecArray | null;
+    while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+      cells.push(cellText(tdMatch[1]));
+    }
+
+    // Columnas de datos comienzan en el índice 9 (las primeras 9 son botones de acción)
+    if (cells.length >= 19 && cells[9]?.trim()) {
+      const nitPrestador = cells[10].split(/\s+/).filter(Boolean);
+      resultados.push({
+        recepcionId: cells[9].trim(),
+        nit: nitPrestador[0] ?? '',
+        prestador: nitPrestador.slice(1).join(' '),
+        fechaRecepcion: cells[11].trim(),
+        contrato: cells[13].trim() || contrato,
+        tipoContrato: cells[14].trim(),
+        cantidadAF: cells[15].trim(),
+        valorAF: cells[16].trim(),
+        tipo: cells[17].trim(),
+        estado: cells[18].trim(),
+        numeroRadicacion: cells[19]?.trim() ?? '',
+        tipoRegimen: cells[20]?.trim() ?? '',
+      });
+    }
+  }
+
+  return { resultados, downloadBtnSuffix, rowCount: resultados.length };
 }
+
+/** Extrae el ID del select de Estado buscando la opción "No Aplica" */
+function extractEstadoSelectId(html: string): string {
+  return html.match(/<select[^>]*id="([^"]+)"[^>]*>[\s\S]*?<option[^>]*value="0"[^>]*>No Aplica/)?.[1]
+    ?? html.match(/id="([^"]+_input)"[^>]*>\s*<option[^>]*value="0"[^>]*>No Aplica/)?.[1]
+    ?? 'j_idt123_input';
+}
+
+// ─── SieClient ────────────────────────────────────────────────────────────────
 
 export class SieClient {
   private cookies = '';
   private loggedIn = false;
+  // Estado de la última consulta (necesario para descargar)
+  private lastFormBase: Record<string, string> = {};
+  private lastViewState = '';
+  private lastDownloadBtnSuffix = 'j_idt181';
 
-  private async fetchUrl(url: string, opts: RequestInit = {}): Promise<{ html: string; ok: boolean; finalUrl: string }> {
+  private async fetchUrl(
+    url: string,
+    opts: RequestInit = {},
+  ): Promise<{ html: string; ok: boolean; finalUrl: string; headers: Headers }> {
     const res = await fetch(url, {
       ...opts,
       headers: {
         ...((opts.headers as Record<string, string>) ?? {}),
         Cookie: this.cookies,
-        'User-Agent': 'Mozilla/5.0 (compatible; PGP-Monitor/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'es-CO,es;q=0.9',
       },
       redirect: 'follow',
     });
     const newCookies = extractCookies(res.headers);
     if (newCookies) this.cookies = mergeCookies(this.cookies, newCookies);
     const html = await res.text();
-    return { html, ok: res.ok, finalUrl: res.url };
+    return { html, ok: res.ok, finalUrl: res.url, headers: res.headers };
+  }
+
+  /** Descarga un recurso como binario (para JSON/ZIP de RIPS) */
+  private async fetchBinary(
+    url: string,
+    opts: RequestInit = {},
+  ): Promise<{ data: Buffer; contentType: string; contentDisposition: string; ok: boolean }> {
+    const res = await fetch(url, {
+      ...opts,
+      headers: {
+        ...((opts.headers as Record<string, string>) ?? {}),
+        Cookie: this.cookies,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*',
+      },
+      redirect: 'follow',
+    });
+    const newCookies = extractCookies(res.headers);
+    if (newCookies) this.cookies = mergeCookies(this.cookies, newCookies);
+    const arrayBuf = await res.arrayBuffer();
+    return {
+      data: Buffer.from(arrayBuf),
+      contentType: res.headers.get('content-type') ?? 'application/octet-stream',
+      contentDisposition: res.headers.get('content-disposition') ?? '',
+      ok: res.ok,
+    };
   }
 
   async login(): Promise<boolean> {
     try {
-      // 1. GET login.xhtml para obtener ViewState, cookies y IDs de campos JSF dinámicos
-      const { html: loginHtml } = await this.fetchUrl(`${SIE_BASE}${LOGIN_PATH}`);
+      const loginUrl = `${SIE_BASE}${LOGIN_PATH}`;
+
+      // 1. GET login para obtener ViewState y cookies
+      const { html: loginHtml } = await this.fetchUrl(loginUrl);
       const viewState = extractViewState(loginHtml);
 
-      // Extraer IDs dinámicos: buscar campos por type en el HTML
+      // Extraer IDs de campos dinámicamente
       const textInputs = [...loginHtml.matchAll(/name="([^"]+)"[^>]*type="text"|type="text"[^>]*name="([^"]+)"/g)]
         .map(m => m[1] ?? m[2]).filter(Boolean);
       const passInput = (loginHtml.match(/name="([^"]+)"[^>]*type="password"/)
@@ -117,16 +204,13 @@ export class SieClient {
         ?? 'j_idt18:j_idt27';
       const userField = textInputs[0] ?? 'j_idt18:j_idt23';
       const yearField = textInputs[1] ?? 'j_idt18:j_idt31';
-      // El form ID JSF es el prefijo antes de ":" en cualquier campo
       const formId = userField.includes(':') ? userField.split(':')[0] : 'j_idt18';
-
-      // Extraer el botón submit (JSF requiere que se incluya en el POST)
-      const submitBtn = loginHtml.match(/name="([^"]+)"[^>]*type="submit"|type="submit"[^>]*name="([^"]+)"/)?.[1]
-        ?? loginHtml.match(/<button[^>]+name="([^"]+)"[^>]*type="submit"/)?.[1]
-        ?? loginHtml.match(/type="submit"[^>]*name="([^"]+)"/)?.[2]
+      const submitBtn = (loginHtml.match(/name="([^"]+)"[^>]*type="submit"/)
+        ?? loginHtml.match(/<button[^>]+name="([^"]+)"[^>]*type="submit"/)
+        ?? loginHtml.match(/type="submit"[^>]*name="([^"]+)"/))?.[1]
         ?? `${formId}:j_idt40`;
 
-      // 2. POST credenciales con los IDs extraídos (botón incluido — JSF lo requiere para ejecutar la acción)
+      // 2. POST credenciales (incluir botón submit — JSF lo requiere para ejecutar la acción)
       const formBody = new URLSearchParams({
         [formId]: formId,
         [userField]: SIE_USER,
@@ -136,20 +220,16 @@ export class SieClient {
         'javax.faces.ViewState': viewState,
       });
 
-      const loginUrl = `${SIE_BASE}${LOGIN_PATH}`;
       const { html: postHtml, finalUrl } = await this.fetchUrl(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Referer': loginUrl,
           'Origin': SIE_BASE,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'es-CO,es;q=0.9',
         },
         body: formBody.toString(),
       });
 
-      // Login exitoso si la URL final ya no es login.xhtml, o si el HTML no tiene form de login
       this.loggedIn =
         !finalUrl.includes('login.xhtml') ||
         postHtml.includes('logout') ||
@@ -168,47 +248,114 @@ export class SieClient {
       if (!ok) return { resultados: [], hayDatos: false };
     }
 
-    // 1. GET la página de consulta para obtener ViewState y IDs de campos
-    const { html: pageHtml } = await this.fetchUrl(
-      `${SIE_BASE}${CONSULTA_PATH}?SW_CREACION_EPS=1`
-    );
+    // 1. GET página de consulta
+    const consultaUrl = `${SIE_BASE}${CONSULTA_PATH}?SW_CREACION_EPS=1`;
+    const { html: pageHtml } = await this.fetchUrl(consultaUrl);
     const viewState = extractViewState(pageHtml);
     if (!viewState) {
       this.loggedIn = false;
-      return this.consultarContrato(numeroContrato);
+      return { resultados: [], hayDatos: false };
     }
 
-    // Detectar el ID del formulario de filtros
-    const formMatch = pageHtml.match(/id="(form[A-Za-z0-9_]+)"[^>]*method="post"/i);
-    const formId = formMatch?.[1] ?? 'formFiltroRecepcion';
+    const estadoSelectId = extractEstadoSelectId(pageHtml);
 
-    // 2. POST búsqueda con número de contrato y estado vacío (No Aplica)
-    const body = new URLSearchParams({
-      [formId]: formId,
-      [`${formId}:txtNumeroContratoPrestador`]: numeroContrato,
-      [`${formId}:cmbEstado`]: '',
-      [`${formId}:txtCantidad`]: '200',
+    // Base del formulario — todos los campos que el browser enviaría
+    const formBase: Record<string, string> = {
+      formMtto: 'formMtto',
+      j_idt102_input: '',
+      txtRecepcionRipsC: '',
+      txtNumeroContratoC: numeroContrato,
+      txtNumeroRadicadoC: '',
+      j_idt119_input: '',
+      j_idt119_hinput: '',
+      j_idt123_focus: '',
+      [estadoSelectId]: '0',  // No Aplica
+      j_idt129: '200',        // Cantidad
+      j_idt138_focus: '',
+      j_idt138_input: '-1',
+      j_idt144_focus: '',
+      j_idt144_input: '-1',
+      j_idt150: '',
+      j_idt155: '',
+      txtAfiliadoC: '',
+      dtMttoT_selection: '',
       'javax.faces.ViewState': viewState,
-      'javax.faces.source': `${formId}:cmdBuscar`,
-      'javax.faces.partial.event': 'click',
-      'javax.faces.partial.execute': `${formId}`,
-      'javax.faces.partial.render': `${formId}`,
-      'javax.faces.behavior.event': 'click',
-    });
+    };
 
+    // 2. POST búsqueda (POST normal, no AJAX, para obtener HTML completo)
+    const searchBody = new URLSearchParams({ ...formBase, cmdBuscar: '' });
     const { html: resultHtml } = await this.fetchUrl(`${SIE_BASE}${CONSULTA_PATH}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Faces-Request': 'partial/ajax',
+        'Referer': consultaUrl,
+        'Origin': SIE_BASE,
       },
-      body: body.toString(),
+      body: searchBody.toString(),
     });
 
-    const resultados = parseResultados(resultHtml, numeroContrato);
-    const hayDatos = resultados.length > 0;
+    // 3. Parsear tabla de resultados
+    const { resultados, downloadBtnSuffix, rowCount } = parseResultadosFromHtml(resultHtml, numeroContrato);
 
-    return { resultados, hayDatos };
+    // Guardar estado para descargas posteriores
+    this.lastViewState = extractViewState(resultHtml) || viewState;
+    this.lastDownloadBtnSuffix = downloadBtnSuffix;
+    this.lastFormBase = { ...formBase, 'javax.faces.ViewState': this.lastViewState };
+
+    return { resultados, hayDatos: rowCount > 0 };
+  }
+
+  /**
+   * Descarga los archivos RIPS de cada fila del último resultado de consultarContrato.
+   * Retorna los buffers con el contenido de cada archivo.
+   */
+  async descargarRipsDeUltimaConsulta(maxRows = 10): Promise<RipsDescargado[]> {
+    if (!this.lastViewState || Object.keys(this.lastFormBase).length === 0) {
+      throw new Error('Debe llamar consultarContrato antes de descargar');
+    }
+
+    const descargados: RipsDescargado[] = [];
+    const recepcionIds = Object.values(this.lastFormBase).filter(Boolean);
+
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+      const downloadBtnId = `dtMttoT:${rowIndex}:${this.lastDownloadBtnSuffix}`;
+      const body = new URLSearchParams({
+        ...this.lastFormBase,
+        [downloadBtnId]: '',
+      });
+
+      try {
+        const { data, contentType, contentDisposition, ok } = await this.fetchBinary(
+          `${SIE_BASE}${CONSULTA_PATH}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Referer': `${SIE_BASE}${CONSULTA_PATH}`,
+              'Origin': SIE_BASE,
+            },
+            body: body.toString(),
+          }
+        );
+
+        if (!ok || !contentDisposition.includes('attachment')) break;
+
+        const filename = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/)?.[2]
+          ?? contentDisposition.match(/filename\*=UTF-8''([^\s;]+)/)?.[1]
+          ?? `rips_row${rowIndex}_${Date.now()}.json`;
+
+        descargados.push({
+          recepcionId: `row${rowIndex}`,
+          filename: decodeURIComponent(filename),
+          content: data,
+          contentType,
+        });
+      } catch {
+        break; // Si falla una fila, detenemos
+      }
+    }
+
+    return descargados;
   }
 }
 
