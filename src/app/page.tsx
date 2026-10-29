@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, BarChart3, FileJson, LayoutDashboard, TrendingUp,
   Sliders, FileText, Archive, CheckCircle2, Lock, ChevronRight, Activity, Search, ShieldCheck, Save,
-  Users, LogOut, ClipboardCheck, FileSpreadsheet, Bell, XCircle, X,
+  Users, LogOut, ClipboardCheck, FileSpreadsheet, Bell, XCircle, X, Radio,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -413,6 +413,16 @@ export default function Home() {
 
         {/* User footer — siempre visible */}
         <div className="px-3 pb-1 pt-2 border-t border-border shrink-0 space-y-1">
+          {/* Monitoreo RIPS: visible para staff o en modo local */}
+          {(currentUser?.rol === 'superadmin' || currentUser?.rol === 'auditor' || process.env.NEXT_PUBLIC_LOCAL_BYPASS === 'true') && (
+            <button
+              onClick={() => router.push('/monitoreo')}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <Radio className="h-3.5 w-3.5 shrink-0" />
+              <span>Monitoreo RIPS</span>
+            </button>
+          )}
           {currentUser && (
             <>
               {currentUser.rol === 'superadmin' && (
