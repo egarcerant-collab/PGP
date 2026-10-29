@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock,
-  ArrowLeft, Building2, MapPin, Search, ExternalLink, Calendar,
+  ArrowLeft, Building2, MapPin, Search, ExternalLink, Calendar, Play,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
 
@@ -181,14 +181,25 @@ export default function MonitoreoPage() {
             {lastUpdate ? `Última actualización: ${fmtDate(lastUpdate)}` : 'Sin consultas aún'}
           </p>
         </div>
-        <button
-          onClick={consultarTodos}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Consultando...' : 'Consultar todos'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={cargarEstado}
+            disabled={loading}
+            title="Recargar estado guardado"
+            className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={consultarTodos}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors shadow"
+          >
+            <Play className={`w-4 h-4 ${loading ? 'hidden' : ''}`} />
+            <RefreshCw className={`w-4 h-4 animate-spin ${loading ? '' : 'hidden'}`} />
+            {loading ? 'Ejecutando...' : 'Ejecutar consulta SIE'}
+          </button>
+        </div>
       </div>
 
       {/* Toast */}

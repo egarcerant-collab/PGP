@@ -110,11 +110,17 @@ async function guardarNotificacion(
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
+function isCronRequest(request: Request): boolean {
+  return request.headers.get('x-cron-token') === process.env.CRON_SECRET && !!process.env.CRON_SECRET;
+}
+
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    const isStaff = user?.rol === 'superadmin' || user?.rol === 'admin' || user?.rol === 'auditor';
-    if (!isStaff) return NextResponse.json({ message: 'Acceso denegado' }, { status: 403 });
+    if (!isCronRequest(request)) {
+      const user = await getCurrentUser(request);
+      const isStaff = user?.rol === 'superadmin' || user?.rol === 'admin' || user?.rol === 'auditor';
+      if (!isStaff) return NextResponse.json({ message: 'Acceso denegado' }, { status: 403 });
+    }
 
     const drive = getDrive();
     const estado: EstadoContrato[] = (await readJson(drive, ROOT_FOLDER_ID, MONITOREO_FILE)) ?? [];
@@ -128,9 +134,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    const isStaff = user?.rol === 'superadmin' || user?.rol === 'admin' || user?.rol === 'auditor';
-    if (!isStaff) return NextResponse.json({ message: 'Acceso denegado' }, { status: 403 });
+    if (!isCronRequest(request)) {
+      const user = await getCurrentUser(request);
+      const isStaff = user?.rol === 'superadmin' || user?.rol === 'admin' || user?.rol === 'auditor';
+      if (!isStaff) return NextResponse.json({ message: 'Acceso denegado' }, { status: 403 });
+    }
 
     const body = await request.json().catch(() => ({}));
     const filtroContrato: string | undefined = body.contrato;
