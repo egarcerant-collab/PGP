@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/get-current-user';
 import { getSieClient } from '@/lib/sie-client';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
-import { getDrive, readJson, writeJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, readJson, writeJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
 const MONITOREO_FILE = 'sie_monitoreo.json';
 
@@ -135,9 +135,10 @@ export async function POST(request: Request) {
           nuevasRadicaciones.push(contrato.prestador);
           await guardarNotificacionInterna(drive, contrato.contrato, contrato.prestador, rips.length);
 
-          // Descarga automática de JSONs RIPS y persistencia en Drive
+          // Descarga automática de JSONs RIPS → carpeta sie_rips/pending_ en Drive
           try {
             const archivos = await sieClient.descargarRipsDeUltimaConsulta(rips.length);
+            const sieFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'sie_rips');
             for (const archivo of archivos) {
               let contenido: unknown;
               try {
@@ -145,8 +146,9 @@ export async function POST(request: Request) {
               } catch {
                 contenido = { raw: archivo.content.toString('base64') };
               }
-              const nombreArchivo = `rips_${contrato.contrato}_${archivo.filename}`;
-              await writeJson(drive, ROOT_FOLDER_ID, nombreArchivo, contenido);
+              // Prefijo pending_ para que la API /sie/pendientes los detecte
+              const nombreArchivo = `pending_${contrato.contrato}_${archivo.filename}`;
+              await writeJson(drive, sieFolder, nombreArchivo, contenido);
             }
             nuevoEstado.archivosDescargados = archivos.length;
           } catch {

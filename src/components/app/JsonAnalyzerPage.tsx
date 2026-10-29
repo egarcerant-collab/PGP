@@ -6,7 +6,7 @@ import FileUpload from "@/components/json-analyzer/FileUpload";
 import DataVisualizer, { calculateSummary } from "@/components/json-analyzer/DataVisualizer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Terminal, Building, Loader2, RefreshCw, AlertTriangle, Calendar, ShieldCheck, ShieldOff, Radio } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
@@ -341,6 +341,10 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   const [allowDuplicates, setAllowDuplicates] = useState(false);
   const isAdmin = userRole === 'superadmin' || userRole === 'admin';
 
+  // Archivos pendientes descargados del SIE
+  const [sieArchivos, setSieArchivos] = useState<Array<{ filename: string; contenido: unknown }>>([]);
+  const [cargandoSie, setCargandoSie] = useState(false);
+
   const filesByMonth = useMemo(() => {
     return files.reduce((acc, file) => {
       const monthFiles = acc.get(file.month) || [];
@@ -382,6 +386,15 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   useEffect(() => {
     if (isClient) handleLoadProviders();
   }, [isClient, handleLoadProviders]);
+
+  // Verificar archivos RIPS pendientes del SIE al montar
+  useEffect(() => {
+    if (!isClient) return;
+    fetch('/api/sie/pendientes')
+      .then(r => r.json())
+      .then(data => { if (data.archivos?.length) setSieArchivos(data.archivos); })
+      .catch(() => {});
+  }, [isClient]);
 
   const getMonthName = (monthNumber: string) => {
     const date = new Date(2024, parseInt(monthNumber) - 1, 1);
@@ -434,6 +447,30 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
       setFiles(prevFiles => [...prevFiles, ...processedFiles]);
     });
   }, [providers, toast, selectedMonth, files.length]);
+
+  const cargarDesdeSie = useCallback(async () => {
+    if (!sieArchivos.length) return;
+    setCargandoSie(true);
+    try {
+      // Convertir contenidos JSON en objetos File del navegador
+      const fileObjects = sieArchivos.map(a =>
+        new File(
+          [JSON.stringify(a.contenido)],
+          a.filename.endsWith('.json') ? a.filename : `${a.filename}.json`,
+          { type: 'application/json' }
+        )
+      );
+      handleFileLoad(fileObjects);
+      // Marcar como procesados en Drive
+      await fetch('/api/sie/pendientes', { method: 'DELETE' });
+      setSieArchivos([]);
+      toast({ title: `${fileObjects.length} archivo(s) RIPS del SIE cargados`, description: 'Procesando datos...' });
+    } catch (e: any) {
+      toast({ title: 'Error al cargar desde SIE', description: e.message, variant: 'destructive' });
+    } finally {
+      setCargandoSie(false);
+    }
+  }, [sieArchivos, handleFileLoad, toast]);
 
   useEffect(() => {
     const allUsersCombined = files.flatMap(file => file.jsonData?.usuarios || []);
@@ -536,6 +573,27 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Banner: archivos RIPS pendientes descargados del SIE */}
+          {sieArchivos.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-blue-800">
+                <Radio className="h-4 w-4 shrink-0" />
+                <span className="text-sm font-medium">
+                  {sieArchivos.length} archivo(s) RIPS disponibles del SIE
+                </span>
+              </div>
+              <Button
+                size="sm"
+                onClick={cargarDesdeSie}
+                disabled={cargandoSie}
+                className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+              >
+                {cargandoSie
+                  ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Cargando...</>
+                  : 'Cargar automáticamente'}
+              </Button>
+            </div>
+          )}
           <FileUpload onFileLoad={handleFileLoad} disabled={isLoadingProviders} loadedFileNames={files.map(f => `${f.fileName} (${getMonthName(f.month)})`)} maxFiles={50} />
 
           {/* Checkbox: desactivar restricción de duplicados */}
