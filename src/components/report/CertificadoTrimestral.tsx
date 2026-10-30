@@ -304,12 +304,23 @@ function calcInfTotals(inf: any, allInfs: any[]) {
   const cantCupsEfectiva = usandoSuma
     ? mensuals.reduce((s: number, i: any) => s + (Number(i.pdfData?.cantidadCupsInesperadas) || 0), 0)
     : (Number(inf.pdfData?.cantidadCupsInesperadas) || 0);
+  const totalRealEfectivo = ripsEfectivo + inesperadasEfectivas;
+  // Descontar = (110%*NT − totalReal) / 2 cuando se suma desde mensuales
+  const nt = inf.ntPeriodo || 0;
+  const descontarEfectivo = usandoSuma && nt > 0
+    ? Math.max(0, (nt * 1.1 - totalRealEfectivo) / 2)
+    : null;
+  const valorFinalEfectivo = usandoSuma && nt > 0
+    ? nt - (descontarEfectivo ?? 0) + (inf.reconocer || 0)
+    : null;
   return {
-    totalRealEfectivo: ripsEfectivo + inesperadasEfectivas,
+    totalRealEfectivo,
     inesperadasEfectivas,
     cantCupsEfectiva,
     ripsEfectivo,
     usandoSuma,
+    descontarEfectivo,
+    valorFinalEfectivo,
   };
 }
 
@@ -2475,7 +2486,7 @@ export default function CertificadoTrimestral({
                         </thead>
                         <tbody>
                           {trim.infs.map((inf: any) => {
-                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf, trim.infs);
+                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma, descontarEfectivo, valorFinalEfectivo } = calcInfTotals(inf, trim.infs);
                             return (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
@@ -2500,9 +2511,11 @@ export default function CertificadoTrimestral({
                               {/* Descuento por meta (<90% NT) */}
                               <td className="px-3 py-1.5 text-right font-semibold">
                                 {(() => {
-                                  const dm = inf.descontarMeta ?? (inf.glosaAuditoria == null && inf.descontar > 0 ? inf.descontar : 0);
+                                  const dm = descontarEfectivo !== null
+                                    ? descontarEfectivo
+                                    : (inf.descontarMeta ?? (inf.glosaAuditoria == null && inf.descontar > 0 ? inf.descontar : 0));
                                   return dm > 0
-                                    ? <span className="text-orange-600">{fmtCOP2(dm)}</span>
+                                    ? <span className="text-orange-600">{fmtCOP2(dm)}{usandoSuma && <span className="block text-[9px] text-orange-400">(110%-Σ)/2</span>}</span>
                                     : <span className="text-muted-foreground text-[10px]">—</span>;
                                 })()}
                               </td>
@@ -2512,7 +2525,10 @@ export default function CertificadoTrimestral({
                                   ? <span className="text-red-600">{fmtCOP2(inf.glosaAuditoria)}</span>
                                   : <span className="text-muted-foreground text-[10px]">—</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">
+                                {fmtCOP2(valorFinalEfectivo !== null ? valorFinalEfectivo : inf.valorFinal)}
+                                {usandoSuma && valorFinalEfectivo !== null && <span className="block text-[9px] text-green-500">Σ meses</span>}
+                              </td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}
