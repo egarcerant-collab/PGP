@@ -309,14 +309,15 @@ export class SieClient {
    * Descarga los archivos RIPS de cada fila del último resultado de consultarContrato.
    * Retorna los buffers con el contenido de cada archivo.
    */
-  async descargarRipsDeUltimaConsulta(maxRows = 10): Promise<RipsDescargado[]> {
+  async descargarRipsDeUltimaConsulta(maxRows = 10, indices?: number[]): Promise<RipsDescargado[]> {
     if (!this.lastViewState || Object.keys(this.lastFormBase).length === 0) {
       throw new Error('Debe llamar consultarContrato antes de descargar');
     }
 
     const descargados: RipsDescargado[] = [];
+    const rowsToFetch = indices ?? Array.from({ length: maxRows }, (_, i) => i);
 
-    for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+    for (const rowIndex of rowsToFetch) {
       const downloadBtnId = `dtMttoT:${rowIndex}:${this.lastDownloadBtnSuffix}`;
       const body = new URLSearchParams({
         ...this.lastFormBase,
@@ -337,7 +338,7 @@ export class SieClient {
           }
         );
 
-        if (!ok || !contentDisposition.includes('attachment')) break;
+        if (!ok || !contentDisposition.includes('attachment')) continue;
 
         const filename = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/)?.[2]
           ?? contentDisposition.match(/filename\*=UTF-8''([^\s;]+)/)?.[1]

@@ -8,6 +8,7 @@ import {
   ClipboardList, X, FileJson, ChevronRight,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
+import type { RecepcionRips } from '@/lib/sie-client';
 
 // ─── Helpers de periodo ───────────────────────────────────────────────────────
 
@@ -105,8 +106,9 @@ interface EvaluarModal {
   contrato: string;
   prestador: string;
   nit: string;
-  mesesDisponibles: string[]; // YYYY-MM pendientes de evaluación
   mesesYaAuditados: string[];
+  radicaciones: RecepcionRips[] | null; // null = cargando
+  selectedRows: Set<number>;
 }
 
 export default function MonitoreoPage() {
@@ -157,50 +159,67 @@ export default function MonitoreoPage() {
       .catch(() => {});
   }, []);
 
-  const openEvalModal = (c: { contrato: string; prestador: string; nit: string; estado: EstadoContrato | null }) => {
+  const openEvalModal = async (c: { contrato: string; prestador: string; nit: string; estado: EstadoContrato | null }) => {
     const est = c.estado;
     if (!est?.hayRips) return;
     const nit = c.nit.replace(/\D/g, '');
     const mesesYaAuditados = [...mesesAuditadosDeInformes(informesPorNit[nit] ?? [])];
-    const mesesDisponibles = (est.mesesCargados ?? []).filter(m => !mesesYaAuditados.includes(m));
+
+    // Abrir modal en estado de carga
     setEvalModal({
       contrato: c.contrato,
       prestador: c.prestador,
       nit: c.nit,
-      mesesDisponibles,
       mesesYaAuditados,
+      radicaciones: null,
+      selectedRows: new Set(),
     });
+
+    // Consultar radicaciones del SIE
+    try {
+      const res = await fetch(`/api/sie/consultar?contrato=${encodeURIComponent(c.contrato)}`);
+      const data = await res.json();
+      const total = (data.resultados ?? []).length;
+      setEvalModal(prev => prev ? {
+        ...prev,
+        radicaciones: data.resultados ?? [],
+        selectedRows: new Set(Array.from({ length: total }, (_, i) => i)),
+      } : null);
+    } catch {
+      setEvalModal(prev => prev ? { ...prev, radicaciones: [] } : null);
+    }
   };
 
   const irAlAnalizador = async (modal: EvaluarModal) => {
+    if (!modal.selectedRows.size) {
+      showToast('Seleccione al menos un archivo RIPS', 'err');
+      return;
+    }
     setCargandoPendientes(true);
     try {
-      // 1. Descargar RIPS del SIE y guardarlos en Drive como pending
-      //    (POST monitoreo con un solo contrato ejecuta consulta + descarga)
-      const res = await fetch('/api/sie/monitoreo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contrato: modal.contrato }),
-      });
+      const rows = [...modal.selectedRows].sort((a, b) => a - b).join(',');
+
+      // Descargar RIPS seleccionados del SIE y guardar en Drive como pending
+      const res = await fetch(
+        `/api/sie/descargar?contrato=${encodeURIComponent(modal.contrato)}&rows=${rows}&guardar=1`
+      );
       const data = await res.json();
-      const descargados = data.resultados?.[0]?.archivosDescargados ?? 0;
 
-      if (!res.ok) throw new Error(data.message ?? 'Error al descargar RIPS del SIE');
-
-      if (descargados === 0 && !(data.resultados?.[0]?.hayRips)) {
-        showToast('No se encontraron RIPS en el SIE para este contrato', 'err');
+      if (!res.ok) throw new Error(data.error ?? 'Error al descargar RIPS del SIE');
+      if (!data.archivos?.length) {
+        showToast('No se pudieron descargar los archivos seleccionados', 'err');
         return;
       }
 
-      // 2. Guardar contexto de evaluación para que el analizador filtre por contrato
+      // Guardar contexto para que el analizador filtre por contrato
       sessionStorage.setItem('sie_evaluar', JSON.stringify({
         nit: modal.nit,
-        meses: modal.mesesDisponibles,
         prestador: modal.prestador,
         contrato: modal.contrato,
+        meses: [],
       }));
 
-      // 3. Navegar al analizador
+      showToast(`${data.archivos.length} RIPS descargados — cargando analizador`, 'ok');
       router.push('/');
     } catch (e: any) {
       showToast(`Error: ${e.message}`, 'err');
@@ -355,50 +374,98 @@ export default function MonitoreoPage() {
             </div>
 
             {/* Cuerpo */}
-            <div className="p-5 space-y-4">
-              {/* Meses disponibles */}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                  <FileJson className="w-3.5 h-3.5 text-blue-500" />
-                  RIPS disponibles en SIE ({evalModal.mesesDisponibles.length} mes{evalModal.mesesDisponibles.length !== 1 ? 'es' : ''})
-                </p>
-                {evalModal.mesesDisponibles.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {evalModal.mesesDisponibles.map(m => (
-                      <span key={m} className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                        {mesLabel(m)}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">Sin meses pendientes de evaluar</p>
-                )}
-              </div>
-
-              {/* Meses ya auditados */}
-              {evalModal.mesesYaAuditados.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                    Ya auditados ({evalModal.mesesYaAuditados.length})
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {evalModal.mesesYaAuditados.map(m => (
-                      <span key={m} className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                        {mesLabel(m)} ✓
-                      </span>
-                    ))}
-                  </div>
+            <div className="p-5 space-y-3">
+              {evalModal.radicaciones === null ? (
+                /* Cargando */
+                <div className="flex items-center gap-3 py-6 justify-center text-gray-500">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Consultando SIE...</span>
                 </div>
-              )}
+              ) : evalModal.radicaciones.length === 0 ? (
+                <p className="text-sm text-red-600 text-center py-4">No se encontraron radicaciones RIPS en el SIE para este contrato.</p>
+              ) : (
+                <>
+                  {/* Cabecera selección */}
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-gray-700">
+                      {evalModal.radicaciones.length} radicación(es) en el SIE
+                    </p>
+                    <div className="flex gap-3 text-xs text-blue-600">
+                      <button onClick={() => setEvalModal(prev => prev ? { ...prev, selectedRows: new Set(prev.radicaciones?.map((_, i) => i) ?? []) } : null)}>
+                        Todas
+                      </button>
+                      <button onClick={() => setEvalModal(prev => prev ? { ...prev, selectedRows: new Set() } : null)}>
+                        Ninguna
+                      </button>
+                    </div>
+                  </div>
 
-              <p className="text-xs text-gray-500">
-                Al abrir el analizador se cargarán automáticamente los archivos RIPS pendientes para este contrato.
-              </p>
+                  {/* Lista con checkboxes */}
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {evalModal.radicaciones.map((rad, idx) => {
+                      const checked = evalModal.selectedRows.has(idx);
+                      return (
+                        <label
+                          key={idx}
+                          className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                            checked ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setEvalModal(prev => {
+                              if (!prev) return null;
+                              const next = new Set(prev.selectedRows);
+                              if (next.has(idx)) next.delete(idx); else next.add(idx);
+                              return { ...prev, selectedRows: next };
+                            })}
+                            className="mt-0.5 accent-blue-600"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ESTADO_COLORS[rad.estado] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {rad.estado || 'Sin estado'}
+                              </span>
+                              <span className="text-xs text-gray-500">{rad.tipo}</span>
+                              <span className="text-xs text-gray-400">{rad.tipoRegimen}</span>
+                            </div>
+                            <p className="text-xs text-gray-700 mt-0.5">
+                              Recepción: <span className="font-medium">{rad.fechaRecepcion}</span>
+                              {rad.numeroRadicacion && <> · Rad. {rad.numeroRadicacion}</>}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {rad.cantidadAF} registros AF · {rad.valorAF}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-xs text-gray-400 pt-1">
+                    {evalModal.selectedRows.size} seleccionado(s) — se descargarán del SIE y cargarán en el analizador
+                  </p>
+
+                  {/* Meses ya auditados */}
+                  {evalModal.mesesYaAuditados.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1 border-t">
+                      <span className="text-[10px] text-gray-500 w-full mb-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-green-500" /> Ya auditados:
+                      </span>
+                      {evalModal.mesesYaAuditados.map(m => (
+                        <span key={m} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 border border-green-200">
+                          {mesLabel(m)} ✓
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 px-5 pb-5">
+            <div className="flex items-center justify-end gap-3 px-5 pb-5 border-t pt-4">
               <button
                 onClick={() => setEvalModal(null)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
@@ -407,12 +474,12 @@ export default function MonitoreoPage() {
               </button>
               <button
                 onClick={() => irAlAnalizador(evalModal)}
-                disabled={cargandoPendientes}
+                disabled={cargandoPendientes || evalModal.radicaciones === null || evalModal.selectedRows.size === 0}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {cargandoPendientes
-                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Descargando RIPS...</>
-                  : <><ChevronRight className="w-4 h-4" /> Descargar y Evaluar</>}
+                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Descargando...</>
+                  : <><FileJson className="w-4 h-4" /> Evaluar {evalModal.selectedRows.size > 0 ? `(${evalModal.selectedRows.size})` : ''}</>}
               </button>
             </div>
           </div>
