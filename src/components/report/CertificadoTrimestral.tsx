@@ -289,16 +289,27 @@ async function loadLogoBase64(): Promise<string> {
   });
 }
 
-function calcInfTotals(inf: any) {
-  const totalRealEfectivo = inf.totalEjecutado || 0;
-  const inesperadasEfectivas = inf.pdfData?.valorCupsInesperadas || 0;
-  const cantCupsEfectiva = Number(inf.pdfData?.cantidadCupsInesperadas) || 0;
+function calcInfTotals(inf: any, allInfs: any[]) {
+  const esFusion = inf.tipoPeriodo === 'TRIMESTRAL' || inf.tipoPeriodo === 'BIMENSUAL';
+  const mensuals = esFusion
+    ? allInfs.filter((i: any) => i.tipoPeriodo === 'MENSUAL' && i.numero !== inf.numero)
+    : [];
+  const usandoSuma = mensuals.length > 0;
+  const inesperadasEfectivas = usandoSuma
+    ? mensuals.reduce((s: number, i: any) => s + (i.pdfData?.valorCupsInesperadas || 0), 0)
+    : (inf.pdfData?.valorCupsInesperadas || 0);
+  const ripsEfectivo = usandoSuma
+    ? mensuals.reduce((s: number, i: any) => s + Math.max(0, (i.totalEjecutado || 0) - (i.pdfData?.valorCupsInesperadas || 0)), 0)
+    : Math.max(0, (inf.totalEjecutado || 0) - (inf.pdfData?.valorCupsInesperadas || 0));
+  const cantCupsEfectiva = usandoSuma
+    ? mensuals.reduce((s: number, i: any) => s + (Number(i.pdfData?.cantidadCupsInesperadas) || 0), 0)
+    : (Number(inf.pdfData?.cantidadCupsInesperadas) || 0);
   return {
-    totalRealEfectivo,
+    totalRealEfectivo: ripsEfectivo + inesperadasEfectivas,
     inesperadasEfectivas,
     cantCupsEfectiva,
-    ripsEfectivo: totalRealEfectivo - inesperadasEfectivas,
-    usandoSuma: false,
+    ripsEfectivo,
+    usandoSuma,
   };
 }
 
@@ -2464,7 +2475,7 @@ export default function CertificadoTrimestral({
                         </thead>
                         <tbody>
                           {trim.infs.map((inf: any) => {
-                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf);
+                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf, trim.infs);
                             return (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
