@@ -186,9 +186,11 @@ export async function POST(request: Request) {
           mesesEsperados,
         };
 
-        // Nueva radicación → descargar JSONs, extraer meses, notificar
-        if (hayDatos && rips.length > prevTotal) {
-          nuevasRadicaciones.push(contrato.prestador);
+        // Descargar JSONs cuando: nueva radicación O RIPS existentes sin meses detectados aún
+        const esNuevaRadicacion = hayDatos && rips.length > prevTotal;
+        const tieneRipsSinMeses = hayDatos && mesesPrevios.size === 0;
+        if (esNuevaRadicacion || tieneRipsSinMeses) {
+          if (esNuevaRadicacion) nuevasRadicaciones.push(contrato.prestador);
 
           let mesesDeArchivos = new Set<string>(mesesPrevios);
           try {
@@ -208,24 +210,26 @@ export async function POST(request: Request) {
 
           nuevoEstado.mesesCargados = [...mesesDeArchivos].sort();
 
-          // Notificación a auditores + al propio prestador (por NIT)
-          await guardarNotificacion(drive, {
-            contrato: contrato.contrato,
-            nit: contrato.nit,
-            prestador: contrato.prestador,
-            total: rips.length,
-            meses: nuevoEstado.mesesCargados,
-          });
+          // Notificación y Telegram solo cuando es radicación nueva (no en re-scan)
+          if (esNuevaRadicacion) {
+            await guardarNotificacion(drive, {
+              contrato: contrato.contrato,
+              nit: contrato.nit,
+              prestador: contrato.prestador,
+              total: rips.length,
+              meses: nuevoEstado.mesesCargados,
+            });
 
-          const mesesLabel = nuevoEstado.mesesCargados.join(', ') || `${rips.length} reg.`;
-          await sendTelegram(
-            `🏥 <b>Nueva Radicación RIPS</b>\n` +
-            `Prestador: ${contrato.prestador}\n` +
-            `Contrato: ${contrato.contrato}\n` +
-            `Meses: ${mesesLabel}\n` +
-            `Registros: ${rips.length} | Estado: ${estados.join(', ')}\n` +
-            `Fecha: ${new Date().toLocaleString('es-CO')}`
-          );
+            const mesesLabel = nuevoEstado.mesesCargados.join(', ') || `${rips.length} reg.`;
+            await sendTelegram(
+              `🏥 <b>Nueva Radicación RIPS</b>\n` +
+              `Prestador: ${contrato.prestador}\n` +
+              `Contrato: ${contrato.contrato}\n` +
+              `Meses: ${mesesLabel}\n` +
+              `Registros: ${rips.length} | Estado: ${estados.join(', ')}\n` +
+              `Fecha: ${new Date().toLocaleString('es-CO')}`
+            );
+          }
         }
 
         estadoActual[contrato.contrato] = nuevoEstado;

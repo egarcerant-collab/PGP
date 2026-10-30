@@ -390,13 +390,48 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   }, [isClient, handleLoadProviders]);
 
   // Verificar archivos RIPS pendientes del SIE al montar
+  // Si viene de "▶ Evaluar" (sessionStorage sie_evaluar), filtra por NIT/meses
   useEffect(() => {
     if (!isClient) return;
+    let nitFiltro = '';
+    let mesesFiltro: string[] = [];
+    let prestadorFiltro = '';
+    try {
+      const stored = sessionStorage.getItem('sie_evaluar');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        nitFiltro = (parsed.nit ?? '').replace(/\D/g, '');
+        mesesFiltro = parsed.meses ?? [];
+        prestadorFiltro = parsed.prestador ?? '';
+        sessionStorage.removeItem('sie_evaluar');
+      }
+    } catch {}
+
     fetch('/api/sie/pendientes')
       .then(r => r.json())
-      .then(data => { if (data.archivos?.length) setSieArchivos(data.archivos); })
+      .then(data => {
+        if (!data.archivos?.length) return;
+        if (nitFiltro) {
+          // Filtrar por NIT y meses específicos del prestador seleccionado
+          const filtrados = data.archivos.filter((a: any) => {
+            const fname = (a.filename ?? '').toLowerCase();
+            const matchNit = fname.includes(nitFiltro) || (a.contenido?.numeroContrato ?? '').includes(nitFiltro);
+            const matchMes = !mesesFiltro.length || mesesFiltro.some(m => fname.includes(m.replace('-', '')));
+            return matchNit || matchMes;
+          });
+          if (filtrados.length) {
+            setSieArchivos(filtrados);
+            toast({ title: `${filtrados.length} RIPS de ${prestadorFiltro || 'SIE'} listos`, description: `Meses: ${mesesFiltro.map(m => m.slice(5)).join(', ') || 'todos'}` });
+          } else {
+            setSieArchivos(data.archivos);
+            toast({ title: `${data.archivos.length} RIPS del SIE disponibles`, description: 'No se encontraron filtros exactos — mostrando todos.' });
+          }
+        } else {
+          setSieArchivos(data.archivos);
+        }
+      })
       .catch(() => {});
-  }, [isClient]);
+  }, [isClient, toast]);
 
   // Escuchar evento "Evaluar" desde Registro de Informes
   useEffect(() => {

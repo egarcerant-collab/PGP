@@ -179,6 +179,20 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // Escucha evento "▶ Evaluar" desde CertificadoTrimestral → cambia a módulo Carga de Datos
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { nit, prestador, meses } = (e as CustomEvent).detail ?? {};
+      if (!nit) return;
+      try {
+        sessionStorage.setItem('sie_evaluar', JSON.stringify({ nit, prestador, meses: meses ?? [] }));
+      } catch {}
+      setActiveModule('datos');
+    };
+    window.addEventListener('sie:evaluar', handler);
+    return () => window.removeEventListener('sie:evaluar', handler);
+  }, []);
+
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
