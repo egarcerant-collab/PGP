@@ -289,6 +289,29 @@ async function loadLogoBase64(): Promise<string> {
   });
 }
 
+function calcInfTotals(inf: any, allInfs: any[]) {
+  const esFusion = inf.tipoPeriodo === 'TRIMESTRAL' || inf.tipoPeriodo === 'BIMENSUAL';
+  const mensuals = esFusion
+    ? allInfs.filter((i: any) => i.tipoPeriodo === 'MENSUAL' && i.numero !== inf.numero)
+    : [];
+  const totalReal = mensuals.length > 0
+    ? mensuals.reduce((s: number, i: any) => s + (i.totalEjecutado || 0), 0)
+    : (inf.totalEjecutado || 0);
+  const inesperadas = mensuals.length > 0
+    ? mensuals.reduce((s: number, i: any) => s + (i.pdfData?.valorCupsInesperadas || 0), 0)
+    : (inf.pdfData?.valorCupsInesperadas || 0);
+  const cantCups = mensuals.length > 0
+    ? mensuals.reduce((s: number, i: any) => s + (Number(i.pdfData?.cantidadCupsInesperadas) || 0), 0)
+    : (Number(inf.pdfData?.cantidadCupsInesperadas) || 0);
+  return {
+    totalRealEfectivo: totalReal,
+    inesperadasEfectivas: inesperadas,
+    cantCupsEfectiva: cantCups,
+    ripsEfectivo: totalReal - inesperadas,
+    usandoSuma: mensuals.length > 0,
+  };
+}
+
 export default function CertificadoTrimestral({
   comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable, initialInforme,
 }: CertificadoTrimestralProps) {
@@ -2450,24 +2473,28 @@ export default function CertificadoTrimestral({
                           </tr>
                         </thead>
                         <tbody>
-                          {trim.infs.map((inf: any) => (
+                          {trim.infs.map((inf: any) => {
+                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf, trim.infs);
+                            return (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
                               <td className="px-3 py-1.5 font-medium max-w-[120px] truncate" title={inf.periodo}>{inf.periodo}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-blue-700">
-                                {fmtCOP2((inf.totalEjecutado || 0) - (inf.pdfData?.valorCupsInesperadas || 0))}
+                                {fmtCOP2(ripsEfectivo)}
+                                {usandoSuma && <span className="block text-[9px] text-blue-400">Σ meses</span>}
                               </td>
                               <td className="px-3 py-1.5 text-right text-purple-700">
-                                {inf.pdfData?.valorCupsInesperadas > 0 ? (
-                                  <span className="font-semibold">{fmtCOP2(inf.pdfData.valorCupsInesperadas)}</span>
+                                {inesperadasEfectivas > 0 ? (
+                                  <span className="font-semibold">{fmtCOP2(inesperadasEfectivas)}</span>
                                 ) : <span className="text-muted-foreground text-[10px]">—</span>}
-                                {inf.pdfData?.cantidadCupsInesperadas > 0 && (
-                                  <span className="block text-[10px] text-purple-500">{inf.pdfData.cantidadCupsInesperadas} CUPS</span>
+                                {cantCupsEfectiva > 0 && (
+                                  <span className="block text-[10px] text-purple-500">{cantCupsEfectiva} CUPS</span>
                                 )}
                               </td>
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
-                                {fmtCOP2(inf.totalEjecutado || 0)}
+                                {fmtCOP2(totalRealEfectivo)}
+                                {usandoSuma && <span className="block text-[9px] text-emerald-400">Σ meses</span>}
                               </td>
                               {/* Descuento por meta (<90% NT) */}
                               <td className="px-3 py-1.5 text-right font-semibold">
@@ -2554,7 +2581,8 @@ export default function CertificadoTrimestral({
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                       </div>
