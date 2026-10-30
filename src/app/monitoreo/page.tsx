@@ -175,16 +175,35 @@ export default function MonitoreoPage() {
   const irAlAnalizador = async (modal: EvaluarModal) => {
     setCargandoPendientes(true);
     try {
-      // Guardar contexto en sessionStorage para que JsonAnalyzerPage filtre automáticamente
+      // 1. Descargar RIPS del SIE y guardarlos en Drive como pending
+      //    (POST monitoreo con un solo contrato ejecuta consulta + descarga)
+      const res = await fetch('/api/sie/monitoreo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contrato: modal.contrato }),
+      });
+      const data = await res.json();
+      const descargados = data.resultados?.[0]?.archivosDescargados ?? 0;
+
+      if (!res.ok) throw new Error(data.message ?? 'Error al descargar RIPS del SIE');
+
+      if (descargados === 0 && !(data.resultados?.[0]?.hayRips)) {
+        showToast('No se encontraron RIPS en el SIE para este contrato', 'err');
+        return;
+      }
+
+      // 2. Guardar contexto de evaluación para que el analizador filtre por contrato
       sessionStorage.setItem('sie_evaluar', JSON.stringify({
         nit: modal.nit,
         meses: modal.mesesDisponibles,
         prestador: modal.prestador,
         contrato: modal.contrato,
       }));
+
+      // 3. Navegar al analizador
       router.push('/');
-    } catch {
-      router.push('/');
+    } catch (e: any) {
+      showToast(`Error: ${e.message}`, 'err');
     } finally {
       setCargandoPendientes(false);
       setEvalModal(null);
@@ -392,9 +411,8 @@ export default function MonitoreoPage() {
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {cargandoPendientes
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <ChevronRight className="w-4 h-4" />}
-                Abrir en Analizador
+                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Descargando RIPS...</>
+                  : <><ChevronRight className="w-4 h-4" /> Descargar y Evaluar</>}
               </button>
             </div>
           </div>
