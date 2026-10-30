@@ -289,26 +289,16 @@ async function loadLogoBase64(): Promise<string> {
   });
 }
 
-function calcInfTotals(inf: any, allInfs: any[]) {
-  const esFusion = inf.tipoPeriodo === 'TRIMESTRAL' || inf.tipoPeriodo === 'BIMENSUAL';
-  const mensuals = esFusion
-    ? allInfs.filter((i: any) => i.tipoPeriodo === 'MENSUAL' && i.numero !== inf.numero)
-    : [];
-  const totalReal = mensuals.length > 0
-    ? mensuals.reduce((s: number, i: any) => s + (i.totalEjecutado || 0), 0)
-    : (inf.totalEjecutado || 0);
-  const inesperadas = mensuals.length > 0
-    ? mensuals.reduce((s: number, i: any) => s + (i.pdfData?.valorCupsInesperadas || 0), 0)
-    : (inf.pdfData?.valorCupsInesperadas || 0);
-  const cantCups = mensuals.length > 0
-    ? mensuals.reduce((s: number, i: any) => s + (Number(i.pdfData?.cantidadCupsInesperadas) || 0), 0)
-    : (Number(inf.pdfData?.cantidadCupsInesperadas) || 0);
+function calcInfTotals(inf: any) {
+  const totalRealEfectivo = inf.totalEjecutado || 0;
+  const inesperadasEfectivas = inf.pdfData?.valorCupsInesperadas || 0;
+  const cantCupsEfectiva = Number(inf.pdfData?.cantidadCupsInesperadas) || 0;
   return {
-    totalRealEfectivo: totalReal,
-    inesperadasEfectivas: inesperadas,
-    cantCupsEfectiva: cantCups,
-    ripsEfectivo: totalReal - inesperadas,
-    usandoSuma: mensuals.length > 0,
+    totalRealEfectivo,
+    inesperadasEfectivas,
+    cantCupsEfectiva,
+    ripsEfectivo: totalRealEfectivo - inesperadasEfectivas,
+    usandoSuma: false,
   };
 }
 
@@ -2474,7 +2464,7 @@ export default function CertificadoTrimestral({
                         </thead>
                         <tbody>
                           {trim.infs.map((inf: any) => {
-                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf, trim.infs);
+                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma } = calcInfTotals(inf);
                             return (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
