@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock,
   ArrowLeft, Building2, MapPin, Search, ExternalLink, Calendar, Play,
-  ClipboardList, X,
+  ClipboardList, X, FileJson, ChevronRight,
 } from 'lucide-react';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
 
@@ -118,8 +118,8 @@ export default function MonitoreoPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   // Informes ya auditados por NIT
   const [informesPorNit, setInformesPorNit] = useState<Record<string, any[]>>({});
-  // Modal de evaluación
   const [evalModal, setEvalModal] = useState<EvaluarModal | null>(null);
+  const [cargandoPendientes, setCargandoPendientes] = useState(false);
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
     setToast({ msg, type });
@@ -139,6 +139,57 @@ export default function MonitoreoPage() {
   }, []);
 
   useEffect(() => { cargarEstado(); }, [cargarEstado]);
+
+  // Cargar informes auditados agrupados por NIT
+  useEffect(() => {
+    fetch('/api/informes')
+      .then(r => r.ok ? r.json() : { informes: [] })
+      .then(data => {
+        const grouped: Record<string, any[]> = {};
+        for (const inf of data.informes ?? []) {
+          const nit = (inf.nit ?? '').replace(/\D/g, '');
+          if (!nit) continue;
+          if (!grouped[nit]) grouped[nit] = [];
+          grouped[nit].push(inf);
+        }
+        setInformesPorNit(grouped);
+      })
+      .catch(() => {});
+  }, []);
+
+  const openEvalModal = (c: { contrato: string; prestador: string; nit: string; estado: EstadoContrato | null }) => {
+    const est = c.estado;
+    if (!est?.hayRips) return;
+    const nit = c.nit.replace(/\D/g, '');
+    const mesesYaAuditados = [...mesesAuditadosDeInformes(informesPorNit[nit] ?? [])];
+    const mesesDisponibles = (est.mesesCargados ?? []).filter(m => !mesesYaAuditados.includes(m));
+    setEvalModal({
+      contrato: c.contrato,
+      prestador: c.prestador,
+      nit: c.nit,
+      mesesDisponibles,
+      mesesYaAuditados,
+    });
+  };
+
+  const irAlAnalizador = async (modal: EvaluarModal) => {
+    setCargandoPendientes(true);
+    try {
+      // Guardar contexto en sessionStorage para que JsonAnalyzerPage filtre automáticamente
+      sessionStorage.setItem('sie_evaluar', JSON.stringify({
+        nit: modal.nit,
+        meses: modal.mesesDisponibles,
+        prestador: modal.prestador,
+        contrato: modal.contrato,
+      }));
+      router.push('/');
+    } catch {
+      router.push('/');
+    } finally {
+      setCargandoPendientes(false);
+      setEvalModal(null);
+    }
+  };
 
   const consultarTodos = async () => {
     setLoading(true);
@@ -268,6 +319,88 @@ export default function MonitoreoPage() {
         </div>
       </div>
 
+      {/* Modal de evaluación */}
+      {evalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between p-5 border-b">
+              <div>
+                <h2 className="font-bold text-gray-900 text-base">Evaluar RIPS</h2>
+                <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{evalModal.prestador}</p>
+                <p className="text-xs font-mono text-gray-400">{evalModal.contrato}</p>
+              </div>
+              <button onClick={() => setEvalModal(null)} className="text-gray-400 hover:text-gray-700 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="p-5 space-y-4">
+              {/* Meses disponibles */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <FileJson className="w-3.5 h-3.5 text-blue-500" />
+                  RIPS disponibles en SIE ({evalModal.mesesDisponibles.length} mes{evalModal.mesesDisponibles.length !== 1 ? 'es' : ''})
+                </p>
+                {evalModal.mesesDisponibles.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {evalModal.mesesDisponibles.map(m => (
+                      <span key={m} className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        {mesLabel(m)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Sin meses pendientes de evaluar</p>
+                )}
+              </div>
+
+              {/* Meses ya auditados */}
+              {evalModal.mesesYaAuditados.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                    Ya auditados ({evalModal.mesesYaAuditados.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {evalModal.mesesYaAuditados.map(m => (
+                      <span key={m} className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                        {mesLabel(m)} ✓
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500">
+                Al abrir el analizador se cargarán automáticamente los archivos RIPS pendientes para este contrato.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-5 pb-5">
+              <button
+                onClick={() => setEvalModal(null)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => irAlAnalizador(evalModal)}
+                disabled={cargandoPendientes}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {cargandoPendientes
+                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                  : <ChevronRight className="w-4 h-4" />}
+                Abrir en Analizador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabla de contratos */}
       <div className="px-6 pb-8 space-y-3 max-w-5xl">
         {contratos.map((c) => {
@@ -336,6 +469,16 @@ export default function MonitoreoPage() {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
+                  {est?.hayRips && (
+                    <button
+                      onClick={() => openEvalModal(c)}
+                      title="Evaluar RIPS en el analizador"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-lg transition-colors"
+                    >
+                      <FileJson className="w-3.5 h-3.5" />
+                      Evaluar
+                    </button>
+                  )}
                   <button
                     onClick={() => consultarUno(c.contrato)}
                     disabled={cargando || loading}

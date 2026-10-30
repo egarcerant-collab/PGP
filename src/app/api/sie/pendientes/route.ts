@@ -11,12 +11,19 @@ import { getDrive, readJson, deleteJson, listFiles, getSubfolder, ROOT_FOLDER_ID
 
 const SIE_RIPS_FOLDER = 'sie_rips';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const filtroContrato = searchParams.get('contrato'); // e.g. PGP-44001-2026-05-SM
+
     const drive = getDrive();
     const folder = await getSubfolder(drive, ROOT_FOLDER_ID, SIE_RIPS_FOLDER);
     const todos = await listFiles(drive, folder);
-    const pendientes = todos.filter(f => f.name.startsWith('pending_'));
+    let pendientes = todos.filter(f => f.name.startsWith('pending_'));
+
+    if (filtroContrato) {
+      pendientes = pendientes.filter(f => f.name.includes(filtroContrato));
+    }
 
     const archivos = await Promise.all(
       pendientes.map(async (f) => {
@@ -35,12 +42,19 @@ export async function GET() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const filtroContrato = searchParams.get('contrato');
+
     const drive = getDrive();
     const folder = await getSubfolder(drive, ROOT_FOLDER_ID, SIE_RIPS_FOLDER);
     const todos = await listFiles(drive, folder);
-    const pendientes = todos.filter(f => f.name.startsWith('pending_'));
+    let pendientes = todos.filter(f => f.name.startsWith('pending_'));
+
+    if (filtroContrato) {
+      pendientes = pendientes.filter(f => f.name.includes(filtroContrato));
+    }
 
     await Promise.all(pendientes.map(f => deleteJson(drive, folder, f.name)));
 

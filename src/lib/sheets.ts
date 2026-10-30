@@ -74,8 +74,8 @@ export const fetchSheetData = async <T extends object>(url: string): Promise<T[]
     const gidMatch = url.match(/[#&]gid=(\d+)/);
     const gid = gidMatch ? gidMatch[1] : '0';
     
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`;
-    
+    const csvUrl = `/api/sheets-proxy?url=${encodeURIComponent(url)}`;
+
     const response = await fetch(csvUrl);
     if (!response.ok) {
         throw new Error(`Error obteniendo Google Sheet: ${response.statusText}. Asegúrese de que la hoja de cálculo sea pública ('Publicar en la web').`);

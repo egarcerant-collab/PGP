@@ -345,6 +345,7 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
 
   // Archivos pendientes descargados del SIE
   const [sieArchivos, setSieArchivos] = useState<Array<{ filename: string; contenido: unknown }>>([]);
+  const [sieContrato, setSieContrato] = useState<string>('');
   const [cargandoSie, setCargandoSie] = useState(false);
 
   const filesByMonth = useMemo(() => {
@@ -390,45 +391,41 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
   }, [isClient, handleLoadProviders]);
 
   // Verificar archivos RIPS pendientes del SIE al montar
-  // Si viene de "▶ Evaluar" (sessionStorage sie_evaluar), filtra por NIT/meses
+  // Si viene de "▶ Evaluar" (sessionStorage sie_evaluar), filtra por contrato
   useEffect(() => {
     if (!isClient) return;
-    let nitFiltro = '';
+    let contratoFiltro = '';
     let mesesFiltro: string[] = [];
     let prestadorFiltro = '';
     try {
       const stored = sessionStorage.getItem('sie_evaluar');
       if (stored) {
         const parsed = JSON.parse(stored);
-        nitFiltro = (parsed.nit ?? '').replace(/\D/g, '');
+        contratoFiltro = parsed.contrato ?? '';
         mesesFiltro = parsed.meses ?? [];
         prestadorFiltro = parsed.prestador ?? '';
         sessionStorage.removeItem('sie_evaluar');
       }
     } catch {}
 
-    fetch('/api/sie/pendientes')
+    // Usar filtro por contrato si viene del monitoreo, o listar todos
+    const url = contratoFiltro
+      ? `/api/sie/pendientes?contrato=${encodeURIComponent(contratoFiltro)}`
+      : '/api/sie/pendientes';
+
+    fetch(url)
       .then(r => r.json())
       .then(data => {
         if (!data.archivos?.length) return;
-        if (nitFiltro) {
-          // Filtrar por NIT y meses específicos del prestador seleccionado
-          const filtrados = data.archivos.filter((a: any) => {
-            const fname = (a.filename ?? '').toLowerCase();
-            const matchNit = fname.includes(nitFiltro) || (a.contenido?.numeroContrato ?? '').includes(nitFiltro);
-            const matchMes = !mesesFiltro.length || mesesFiltro.some(m => fname.includes(m.replace('-', '')));
-            return matchNit || matchMes;
-          });
-          if (filtrados.length) {
-            setSieArchivos(filtrados);
-            toast({ title: `${filtrados.length} RIPS de ${prestadorFiltro || 'SIE'} listos`, description: `Meses: ${mesesFiltro.map(m => m.slice(5)).join(', ') || 'todos'}` });
-          } else {
-            setSieArchivos(data.archivos);
-            toast({ title: `${data.archivos.length} RIPS del SIE disponibles`, description: 'No se encontraron filtros exactos — mostrando todos.' });
-          }
-        } else {
-          setSieArchivos(data.archivos);
-        }
+        setSieArchivos(data.archivos);
+        if (contratoFiltro) setSieContrato(contratoFiltro);
+        const mesesLabel = mesesFiltro.length
+          ? `Meses: ${mesesFiltro.map(m => m.slice(5)).join(', ')}`
+          : `${data.archivos.length} archivo(s)`;
+        toast({
+          title: `${data.archivos.length} RIPS de ${prestadorFiltro || 'SIE'} listos`,
+          description: mesesLabel,
+        });
       })
       .catch(() => {});
   }, [isClient, toast]);
@@ -527,16 +524,20 @@ export default function JsonAnalyzerPage({ setExecutionData, setJsonPrestadorCod
         )
       );
       handleFileLoad(fileObjects);
-      // Marcar como procesados en Drive
-      await fetch('/api/sie/pendientes', { method: 'DELETE' });
+      // Marcar como procesados en Drive (solo del contrato actual si está definido)
+      const deleteUrl = sieContrato
+        ? `/api/sie/pendientes?contrato=${encodeURIComponent(sieContrato)}`
+        : '/api/sie/pendientes';
+      await fetch(deleteUrl, { method: 'DELETE' });
       setSieArchivos([]);
+      setSieContrato('');
       toast({ title: `${fileObjects.length} archivo(s) RIPS del SIE cargados`, description: 'Procesando datos...' });
     } catch (e: any) {
       toast({ title: 'Error al cargar desde SIE', description: e.message, variant: 'destructive' });
     } finally {
       setCargandoSie(false);
     }
-  }, [sieArchivos, handleFileLoad, toast]);
+  }, [sieArchivos, sieContrato, handleFileLoad, toast]);
 
   useEffect(() => {
     const allUsersCombined = files.flatMap(file => file.jsonData?.usuarios || []);
