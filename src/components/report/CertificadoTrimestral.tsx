@@ -660,12 +660,15 @@ export default function CertificadoTrimestral({
         if (value === 0) {
           // Fallback 2: informe MENSUAL de ese mes en el historial (ej. informe 036 ABRIL)
           const prestador = selectedPrestador?.PRESTADOR || '';
+          const prestadorNit = String(selectedPrestador?.NIT || '').trim();
           const mensualInf = [...historial]
-            .filter((h: any) =>
-              h.prestador === prestador &&
-              (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
-              (h.periodo || '').toUpperCase() === monthName
-            )
+            .filter((h: any) => {
+              const hNit = String(h.nit || '').trim();
+              const matchesPrestador = (prestadorNit && hNit) ? hNit === prestadorNit : h.prestador === prestador;
+              return matchesPrestador &&
+                (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+                (h.periodo || '').toUpperCase() === monthName;
+            })
             .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
           if (mensualInf) {
             // Preferir el mesData guardado del MENSUAL (valor RIPS base sin inesperadas)
@@ -904,21 +907,19 @@ export default function CertificadoTrimestral({
           { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
           {
             table: {
-              widths: ['*', 110, 110, 60],
+              widths: ['*', 100, 95, 80, 52],
               body: [
                 [
                   { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                   { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                   { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                  { text: 'CUPS INESPERADOS', bold: true, fontSize: 7, fillColor: '#fef9c3', alignment: 'right' },
                   { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                 ],
                 ...mesData.map((m, i) => {
-                  // Las inesperadas se suman al último mes (mes de cierre del período)
-                  const isLast = i === mesData.length - 1;
-                  const safeVal   = isFinite(m.value)             ? m.value             : 0;
-                  const safeInesp = isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0;
-                  const valMes = isLast ? safeVal + safeInesp : safeVal;
-                  const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
+                  const safeVal = isFinite(m.value) ? m.value : 0;
+                  // % ejecución por mes usa solo RIPS (inesperadas van en fila total)
+                  const pct = monthlyNT > 0 ? (safeVal / monthlyNT) * 100 : 0;
                   const ok = pct >= 90 && pct <= 110;
                   const high = pct > 110;
                   const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
@@ -926,14 +927,20 @@ export default function CertificadoTrimestral({
                   return [
                     { text: m.name, fontSize: 7, fillColor: rowFill },
                     { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
-                    { text: fmt(valMes), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                    { text: fmt(safeVal), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                    { text: '–', fontSize: 7, alignment: 'center', fillColor: '#fffde7', color: '#a3a3a3' },
                     { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
                   ];
                 }),
                 [
                   { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
                   { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                  { text: fmt(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  { text: fmt(totalEjecutado), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  {
+                    text: valorCupsInesperadas > 0 ? fmt(valorCupsInesperadas) : '–',
+                    bold: true, fontSize: 7, alignment: 'right', fillColor: '#fef08a',
+                    color: valorCupsInesperadas > 0 ? '#713f12' : '#a3a3a3',
+                  },
                   {
                     text: `${(monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
                     bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
@@ -2156,8 +2163,8 @@ export default function CertificadoTrimestral({
 
                         // Meses ya cubiertos por informes existentes
                         const mesesCubiertos = new Set<string>(infs.flatMap((i: any) => periodoToYM(i.periodo || '')));
-                        // Meses con RIPS en SIE para este NIT
-                        const mesesSie: string[] = sieMesesPorNit[nit] ?? [];
+                        // Meses con RIPS en SIE para este NIT — filtrar solo año 2026
+                        const mesesSie: string[] = (sieMesesPorNit[nit] ?? []).filter(m => m.startsWith('2026-'));
                         // Diferencia: tienen RIPS pero no tienen informe aún
                         const mesesParaEvaluar = mesesSie.filter(m => !mesesCubiertos.has(m));
 
