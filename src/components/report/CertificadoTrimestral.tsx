@@ -905,53 +905,52 @@ export default function CertificadoTrimestral({
 
           // ══ TABLA % EJECUCIÓN MENSUAL ══
           { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
-          {
-            table: {
-              widths: ['*', 100, 95, 80, 52],
-              body: [
-                [
-                  { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
-                  { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
-                  { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
-                  { text: 'CUPS INESPERADOS', bold: true, fontSize: 7, fillColor: '#fef9c3', alignment: 'right' },
-                  { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+          (() => {
+            const hayInesp = valorCupsInesperadas > 0;
+            const buildRow = (m: { name: string; value: number }, _i: number) => {
+              const safeVal = isFinite(m.value) ? m.value : 0;
+              const pct = monthlyNT > 0 ? (safeVal / monthlyNT) * 100 : 0;
+              const ok = pct >= 90 && pct <= 110;
+              const high = pct > 110;
+              const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
+              const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
+              const base = [
+                { text: m.name, fontSize: 7, fillColor: rowFill },
+                { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
+                { text: fmt(safeVal), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+              ];
+              if (hayInesp) base.push({ text: '–', fontSize: 7, alignment: 'center' as const, fillColor: '#fffde7', color: '#a3a3a3' } as never);
+              base.push({ text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center' as const, bold: true, color: pctColor, fillColor: rowFill } as never);
+              return base;
+            };
+            const totPct = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0;
+            const totColor = totPct >= 90 && totPct <= 110 ? '#15803d' : totPct > 110 ? '#1d4ed8' : '#b91c1c';
+            const totalRow: any[] = [
+              { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
+              { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+              { text: fmt(hayInesp ? totalEjecutado : totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+            ];
+            if (hayInesp) totalRow.push({ text: fmt(valorCupsInesperadas), bold: true, fontSize: 7, alignment: 'right', fillColor: '#fef08a', color: '#713f12' });
+            totalRow.push({ text: `${totPct.toFixed(1)}%`, bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe', color: totColor });
+            return {
+              table: {
+                widths: hayInesp ? ['*', 100, 90, 82, 52] : ['*', 110, 110, 60],
+                body: [
+                  [
+                    { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                    { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                    { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                    ...(hayInesp ? [{ text: 'CUPS INESPERADOS', bold: true, fontSize: 7, fillColor: '#fef9c3', alignment: 'right' }] : []),
+                    { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                  ],
+                  ...mesData.map(buildRow),
+                  totalRow,
                 ],
-                ...mesData.map((m, i) => {
-                  const safeVal = isFinite(m.value) ? m.value : 0;
-                  // % ejecución por mes usa solo RIPS (inesperadas van en fila total)
-                  const pct = monthlyNT > 0 ? (safeVal / monthlyNT) * 100 : 0;
-                  const ok = pct >= 90 && pct <= 110;
-                  const high = pct > 110;
-                  const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
-                  const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
-                  return [
-                    { text: m.name, fontSize: 7, fillColor: rowFill },
-                    { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
-                    { text: fmt(safeVal), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
-                    { text: '–', fontSize: 7, alignment: 'center', fillColor: '#fffde7', color: '#a3a3a3' },
-                    { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
-                  ];
-                }),
-                [
-                  { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
-                  { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                  { text: fmt(totalEjecutado), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                  {
-                    text: valorCupsInesperadas > 0 ? fmt(valorCupsInesperadas) : '–',
-                    bold: true, fontSize: 7, alignment: 'right', fillColor: '#fef08a',
-                    color: valorCupsInesperadas > 0 ? '#713f12' : '#a3a3a3',
-                  },
-                  {
-                    text: `${(monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
-                    bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
-                    color: (() => { const p = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
-                  },
-                ],
-              ],
-            },
-            layout: 'lightHorizontalLines',
-            margin: [0, 0, 0, 4],
-          },
+              },
+              layout: 'lightHorizontalLines',
+              margin: [0, 0, 0, 4],
+            };
+          })(),
 
           // ══════════════════════
           //       PÁGINA 2
