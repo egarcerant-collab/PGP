@@ -90,6 +90,27 @@ export async function writeJson(drive: DriveClient, folderId: string, name: stri
   }
 }
 
+/** Guarda un buffer binario o texto arbitrario (e.g. archivo plano RIPS) */
+export async function writeBuffer(
+  drive: DriveClient,
+  folderId: string,
+  name: string,
+  buffer: Buffer,
+  mimeType = 'application/octet-stream',
+): Promise<void> {
+  const body = Readable.from([buffer]);
+  const eid = await findId(drive, folderId, name);
+  if (eid) {
+    await drive.files.update({ fileId: eid, media: { mimeType, body } });
+  } else {
+    await drive.files.create({
+      requestBody: { name, parents: [folderId], mimeType },
+      media: { mimeType, body },
+      fields: 'id',
+    });
+  }
+}
+
 export async function deleteJson(drive: DriveClient, folderId: string, name: string): Promise<boolean> {
   const id = await findId(drive, folderId, name);
   if (!id) return false;

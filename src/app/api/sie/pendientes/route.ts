@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { getDrive, readJson, deleteJson, listFiles, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
 
-const SIE_RIPS_FOLDER = 'sie_rips';
+const SIE_RIPS_FOLDER = 'RIPS Descargados';
 
 export async function GET(request: Request) {
   try {

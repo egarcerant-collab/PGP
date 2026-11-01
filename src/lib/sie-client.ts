@@ -362,3 +362,173 @@ export class SieClient {
 export function getSieClient(): SieClient {
   return new SieClient();
 }
+
+/**
+ * Extrae meses de cobertura de un "Archivo Plano" RIPS (Res. 3374).
+ * Los años de servicio son >= 2024, excluyendo fechas de nacimiento (décadas anteriores).
+ */
+export function extractMesesFromArchivoPlano(contenido: string): string[] {
+  const meses = new Set<string>();
+  for (const m of contenido.matchAll(/\b(20(?:2[4-9]|\d{2}))-(\d{2})-\d{2}\b/g)) {
+    meses.add(`${m[1]}-${m[2]}`);
+  }
+  return [...meses].sort();
+}
+
+/**
+ * Detecta si un buffer es un archivo plano RIPS (Res. 3374) basado en marcadores de sección.
+ */
+export function isArchivoPlanoRips(content: Buffer): boolean {
+  const sample = content.slice(0, 500).toString('latin1');
+  return /ARCHIVO-USUARIOS|ARCHIVO-CONSULTA|ARCHIVO-URGENCIAS|ARCHIVO-HOSPITALIZACION/i.test(sample);
+}
+
+/**
+ * Convierte un Archivo Plano RIPS (Res. 3374) en un JSON estructurado compatible con el analizador.
+ * Genera el array `usuarios` en formato Res. 2275 para que el analizador pueda procesarlo.
+ */
+export function parsearArchivoPlano(content: Buffer, meta: { contrato: string; radicacion: string; fechaRecepcion: string }) {
+  const text = content.toString('latin1');
+  const meses = extractMesesFromArchivoPlano(text);
+
+  // ── Extraer secciones del archivo plano ──────────────────────────────────────
+  const sections: Record<string, string[]> = {};
+  let currentSection = '';
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim().replace(/\|$/, '').trim();
+    const secMatch = line.match(/----\s*(ARCHIVO-[\w-]+)\s*----/i);
+    if (secMatch) {
+      currentSection = secMatch[1].toUpperCase();
+      if (!sections[currentSection]) sections[currentSection] = [];
+      continue;
+    }
+    if (currentSection && line && !line.startsWith('*') && line.includes(',')) {
+      sections[currentSection].push(line);
+    }
+  }
+
+  const secciones: Record<string, number> = {};
+  for (const [k, v] of Object.entries(sections)) secciones[k.replace('ARCHIVO-', '')] = v.length;
+
+  // ── Parsear pacientes (USUARIOS) ──────────────────────────────────────────────
+  // Formato: tipo_doc,num_doc,tipo_usuario,fecha_nac,sexo,dep_res,mun_res,tipo_afil,zona,mun_aten
+  const pacienteMap = new Map<string, {
+    tipoDocumentoIdentificacion: string;
+    numDocumentoIdentificacion: string;
+    fechaNacimiento?: string;
+    sexo?: string;
+    consultas: unknown[];
+    procedimientos: unknown[];
+    hospitalizacion: unknown[];
+    medicamentos: unknown[];
+    otrosServicios: unknown[];
+  }>();
+
+  const tiposDoc = new Set(['CC','TI','CE','RC','PA','PE','CD','MS','AS','NV']);
+  for (const line of sections['ARCHIVO-USUARIOS'] ?? []) {
+    const c = line.split(',');
+    if (c.length >= 2 && tiposDoc.has(c[0].trim())) {
+      const key = `${c[0].trim()}-${c[1].trim()}`;
+      if (!pacienteMap.has(key)) {
+        pacienteMap.set(key, {
+          tipoDocumentoIdentificacion: c[0].trim(),
+          numDocumentoIdentificacion: c[1].trim(),
+          fechaNacimiento: c[3]?.trim() || undefined,
+          sexo: c[4]?.trim() || undefined,
+          consultas: [], procedimientos: [], hospitalizacion: [], medicamentos: [], otrosServicios: [],
+        });
+      }
+    }
+  }
+
+  // ── Helper: obtener o crear paciente ─────────────────────────────────────────
+  const getPaciente = (tipo: string, doc: string) => {
+    const key = `${tipo}-${doc}`;
+    if (!pacienteMap.has(key)) {
+      pacienteMap.set(key, { tipoDocumentoIdentificacion: tipo, numDocumentoIdentificacion: doc, consultas: [], procedimientos: [], hospitalizacion: [], medicamentos: [], otrosServicios: [] });
+    }
+    return pacienteMap.get(key)!;
+  };
+
+  // ── Parsear CONSULTAS ─────────────────────────────────────────────────────────
+  // Cols: factura, tipo_doc, num_doc, nit_prestador, fecha_consulta, ?, cod_cups, tipo_aten, finalidad, ...
+  const consultasKey = Object.keys(sections).find(k => k.includes('CONSULTA')) ?? 'ARCHIVO-CONSULTAS';
+  for (const line of sections[consultasKey] ?? []) {
+    const c = line.split(',');
+    if (c.length < 7) continue;
+    const tipo = c[1]?.trim(); const doc = c[2]?.trim();
+    if (!tipo || !doc || !tiposDoc.has(tipo)) continue;
+    const fecha = c[4]?.trim().split(' ')[0] ?? '';
+    const pac = getPaciente(tipo, doc);
+    pac.consultas.push({
+      codPrestador: c[3]?.trim() ?? '',
+      fechaInicioAtencion: fecha,
+      codServicio: c[6]?.trim() ?? '',
+      vrServicio: parseFloat(c[19]?.trim() ?? '0') || 0,
+      consecutivo: c[c.length - 2]?.trim() ?? '',
+    });
+  }
+
+  // ── Parsear PROCEDIMIENTOS ────────────────────────────────────────────────────
+  const procKey = Object.keys(sections).find(k => k.includes('PROCEDIMIENTO')) ?? 'ARCHIVO-PROCEDIMIENTOS';
+  for (const line of sections[procKey] ?? []) {
+    const c = line.split(',');
+    if (c.length < 7) continue;
+    const tipo = c[1]?.trim(); const doc = c[2]?.trim();
+    if (!tipo || !doc || !tiposDoc.has(tipo)) continue;
+    const fecha = c[4]?.trim().split(' ')[0] ?? '';
+    const pac = getPaciente(tipo, doc);
+    pac.procedimientos.push({
+      codPrestador: c[3]?.trim() ?? '',
+      fechaInicioAtencion: fecha,
+      idServicio: c[7]?.trim() ?? '',
+      vrServicio: parseFloat(c[18]?.trim() ?? '0') || 0,
+    });
+  }
+
+  // ── Parsear HOSPITALIZACION ───────────────────────────────────────────────────
+  const hospKey = Object.keys(sections).find(k => k.includes('HOSPITALIZACION')) ?? 'ARCHIVO-HOSPITALIZACION';
+  for (const line of sections[hospKey] ?? []) {
+    const c = line.split(',');
+    if (c.length < 6) continue;
+    const tipo = c[1]?.trim(); const doc = c[2]?.trim();
+    if (!tipo || !doc || !tiposDoc.has(tipo)) continue;
+    const fecha = c[4]?.trim().split(' ')[0] ?? '';
+    const pac = getPaciente(tipo, doc);
+    pac.hospitalizacion.push({
+      codPrestador: c[3]?.trim() ?? '',
+      fechaInicioAtencion: fecha,
+      vrServicio: parseFloat(c[20]?.trim() ?? '0') || 0,
+    });
+  }
+
+  // ── Construir array usuarios compatible con Res. 2275 ─────────────────────────
+  const codPrestador = meta.contrato.match(/^PGP-(\d+)-/)?.[1]
+    ? `${meta.contrato.match(/^PGP-(\d+)-/)![1]}` : '';
+
+  const usuarios = [...pacienteMap.values()].map(p => ({
+    tipoDocumentoIdentificacion: p.tipoDocumentoIdentificacion,
+    numDocumentoIdentificacion: p.numDocumentoIdentificacion,
+    fechaNacimiento: p.fechaNacimiento,
+    sexo: p.sexo,
+    servicios: {
+      consultas: p.consultas,
+      procedimientos: p.procedimientos,
+      hospitalizacion: p.hospitalizacion,
+      medicamentos: p.medicamentos,
+      otrosServicios: p.otrosServicios,
+    },
+  }));
+
+  return {
+    formato: 'archivo_plano_rips_3374',
+    numDocumentoIdObligado: codPrestador,
+    ...meta,
+    mesesCobertura: meses,
+    secciones,
+    totalRegistros: Object.values(secciones).reduce((a, b) => a + b, 0),
+    // Array de usuarios en formato compatible con Res. 2275 para el analizador
+    usuarios,
+    contenidoBruto: text.slice(0, 5_000),
+  };
+}

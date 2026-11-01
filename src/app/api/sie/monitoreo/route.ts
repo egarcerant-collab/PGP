@@ -4,9 +4,11 @@
  */
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/get-current-user';
-import { getSieClient } from '@/lib/sie-client';
+import { getSieClient, isArchivoPlanoRips, parsearArchivoPlano } from '@/lib/sie-client';
 import { CONTRATOS_PGP } from '@/lib/contratos-pgp';
-import { getDrive, readJson, writeJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, readJson, writeJson, writeBuffer, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+
+const CARPETA_RIPS = 'RIPS Descargados';
 
 const MONITOREO_FILE = 'sie_monitoreo.json';
 
@@ -195,15 +197,32 @@ export async function POST(request: Request) {
           let mesesDeArchivos = new Set<string>(mesesPrevios);
           try {
             const archivos = await sieClient.descargarRipsDeUltimaConsulta(rips.length);
-            const sieFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'sie_rips');
+            const sieFolder = await getSubfolder(drive, ROOT_FOLDER_ID, CARPETA_RIPS);
             for (const archivo of archivos) {
-              let contenido: unknown = null;
-              try { contenido = JSON.parse(archivo.content.toString('utf-8')); } catch { /* no JSON */ }
-              // Extraer meses de prestación de este RIPS
-              extractMesesFromRips(contenido).forEach(m => mesesDeArchivos.add(m));
-              // Guardar pending para carga automática en JsonAnalyzerPage
-              const nombre = `pending_${contrato.contrato}_${archivo.filename}`;
-              await writeJson(drive, sieFolder, nombre, contenido ?? {});
+              const rec = rips.find(r => r.recepcionId === archivo.recepcionId) ?? rips[0];
+              if (isArchivoPlanoRips(archivo.content)) {
+                // Formato plano Res. 3374 — parsear y guardar como JSON estructurado
+                const parsed = parsearArchivoPlano(archivo.content, {
+                  contrato: contrato.contrato,
+                  radicacion: rec?.numeroRadicacion ?? archivo.recepcionId,
+                  fechaRecepcion: rec?.fechaRecepcion ?? '',
+                });
+                parsed.mesesCobertura.forEach(m => mesesDeArchivos.add(m));
+                const nombre = `pending_${contrato.contrato}_${rec?.numeroRadicacion ?? archivo.recepcionId}.json`;
+                await writeJson(drive, sieFolder, nombre, parsed);
+                // También guardar el TXT original para referencia
+                const nombreTxt = `rips_${contrato.contrato}_${rec?.numeroRadicacion ?? archivo.recepcionId}.txt`;
+                await writeBuffer(drive, sieFolder, nombreTxt, archivo.content, 'text/plain');
+              } else {
+                // Intentar parsear como JSON (formato Res. 2275)
+                let contenidoJson: unknown = null;
+                try { contenidoJson = JSON.parse(archivo.content.toString('utf-8')); } catch { /* no JSON */ }
+                if (contenidoJson) {
+                  extractMesesFromRips(contenidoJson).forEach(m => mesesDeArchivos.add(m));
+                  const nombre = `pending_${contrato.contrato}_${archivo.filename}`;
+                  await writeJson(drive, sieFolder, nombre, contenidoJson);
+                }
+              }
             }
             nuevoEstado.archivosDescargados = archivos.length;
           } catch { /* no crítico */ }

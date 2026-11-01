@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSieClient } from '@/lib/sie-client';
-import { getDrive, writeJson, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, writeJson, writeBuffer, getSubfolder, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { isArchivoPlanoRips, parsearArchivoPlano } from '@/lib/sie-client';
 
 /**
  * GET /api/sie/descargar?contrato=PGP-XXXX&rows=0,2,3&guardar=1
@@ -50,17 +51,25 @@ export async function GET(req: NextRequest) {
     // 3. Enriquecer con metadata
     const archivos = archivosDescargados.map((a, i) => {
       const rec = resultados[i];
+      const rawStr = a.content.toString('utf-8');
       let parsedJson: unknown = null;
-      try { parsedJson = JSON.parse(a.content.toString('utf-8')); } catch { /* no JSON */ }
+      let primerLinea = '';
+      try { parsedJson = JSON.parse(rawStr); } catch {
+        // No es JSON — puede ser TXT archivo plano o ZIP
+        primerLinea = rawStr.slice(0, 300).replace(/\r?\n/g, '|');
+      }
       return {
         rowIndex: i,
         filename: a.filename,
         sizeBytes: a.content.length,
+        contentType: a.contentType,
         recepcionId: rec?.recepcionId ?? a.recepcionId,
         estado: rec?.estado ?? '',
         fechaRecepcion: rec?.fechaRecepcion ?? '',
         numeroRadicacion: rec?.numeroRadicacion ?? '',
         contenido: parsedJson,
+        // Para archivos TXT: primeras líneas para diagnóstico
+        primerLinea: parsedJson ? undefined : primerLinea,
       };
     });
 
@@ -68,11 +77,22 @@ export async function GET(req: NextRequest) {
     if (guardarEnDrive) {
       try {
         const drive = getDrive();
-        const sieFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'sie_rips');
-        for (const archivo of archivos) {
-          if (archivo.contenido) {
-            const nombre = `pending_${contrato}_${archivo.filename}`;
-            await writeJson(drive, sieFolder, nombre, archivo.contenido);
+        const sieFolder = await getSubfolder(drive, ROOT_FOLDER_ID, 'RIPS Descargados');
+        for (const a of archivosDescargados) {
+          const rec = resultados.find(r => r.recepcionId === a.recepcionId) ?? resultados[0];
+          if (isArchivoPlanoRips(a.content)) {
+            const parsed = parsearArchivoPlano(a.content, {
+              contrato: contrato!,
+              radicacion: rec?.numeroRadicacion ?? a.recepcionId,
+              fechaRecepcion: rec?.fechaRecepcion ?? '',
+            });
+            const nombre = `pending_${contrato}_${rec?.numeroRadicacion ?? a.recepcionId}.json`;
+            await writeJson(drive, sieFolder, nombre, parsed);
+            const nombreTxt = `rips_${contrato}_${rec?.numeroRadicacion ?? a.recepcionId}.txt`;
+            await writeBuffer(drive, sieFolder, nombreTxt, a.content, 'text/plain');
+          } else if (a.contentType.includes('json') || a.contentType.includes('zip')) {
+            const nombre = `pending_${contrato}_${a.filename}`;
+            await writeJson(drive, sieFolder, nombre, JSON.parse(a.content.toString('utf-8')));
           }
         }
       } catch { /* no crítico — el analizador igual recibe los datos */ }
