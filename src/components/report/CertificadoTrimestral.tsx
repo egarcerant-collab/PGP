@@ -738,7 +738,7 @@ export default function CertificadoTrimestral({
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG1?.descontar || 0;
+      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || _lsG1?.descontar || 0;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -1446,43 +1446,8 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // Recalcular descontar/reconocer/valorFinal con lógica correcta:
-    // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
-    // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
-    const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
-    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG3?.descontar || inf.descontar || 0;
-    const descontarR = descontarEjecucionFR + descontarGlosaFR;
-    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
-    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
-    const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    // Sin pgpData activo (historial): leer descontar canónico (>0 tiene prioridad sobre 0)
-    // reconocer y valorFinal siempre se recomputan para ser consistentes con descontar
-    const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
-    const descontar = hasActiveGlosaFR ? descontarR
-      : (inf.descontar > 0 ? inf.descontar : ((pd as any).descontar > 0 ? (pd as any).descontar : descontarR));
-    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
-    const ejecutadoNetoEff  = Math.max(0, totalEjecutadoFinal - descontarGlosaEff);
-    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
-    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
-    const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
-      || inf.comentariosGlosa
-      || (pd as any).comentariosGlosa
-      || '';
-
-    // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
-    // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
-    const showSv = inf.showSupervisor !== undefined
-      ? Boolean(inf.showSupervisor)
-      : (showSvFromRecord !== false);
-
-    // ── Fechas reales del período evaluado (no las del contrato completo) ──
-    const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
-
-    const cantInespNum = parseInt(cantCupsIn) || 0;
-
-    // Corregir valores por mes usando totalEjecutado de informes MENSUALES del grupo
-    // totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
+    // ── Corregir valores por mes ANTES de calcular descontar ──
+    // gi.totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
     const MONTHS_FULL_PDF = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const TIPO_PRIO_PDF: Record<string, number> = { TRIMESTRAL: 0, BIMESTRAL: 1, MENSUAL: 2 };
     const corrValMap: Record<string, number> = {};
@@ -1514,6 +1479,42 @@ export default function CertificadoTrimestral({
     const hasMonthlyInesp = mdCorrected.some((m: any) => m.inesperados > 0);
     // valCupsIn ya está incluido en totalEjecutado cuando hay corrección mensual
     const valCupsInFinal = hasCorrected ? 0 : valCupsIn;
+
+    // totalEjFinalCorr: suma de valores mensuales corregidos (ya incluyen inesperadas por mes)
+    const totalEjFinalCorr = hasCorrected
+      ? mdCorrected.reduce((sum: number, m: any) => sum + (isFinite(m.value) ? m.value : 0), 0)
+      : totalEjecutadoFinal;
+
+    // ── Cálculo DESCONTAR / RECONOCER ──
+    // Glosa = solo pgpData/localStorage; NUNCA inf.descontar (valor histórico contaminado).
+    const descontarEjecucionFR = totalEjFinalCorr < minPeriodo ? minPeriodo - totalEjFinalCorr : 0;
+    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || _lsG3?.descontar || 0;
+    const descontarR = descontarEjecucionFR + descontarGlosaFR;
+    const ejecutadoNetoFR = Math.max(0, totalEjFinalCorr - descontarGlosaFR);
+    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
+    const valorFinalR = ntPeriodo - descontarR + reconocerR;
+    const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
+    const descontar = descontarR;
+    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
+    const ejecutadoNetoEff  = Math.max(0, totalEjFinalCorr - descontarGlosaEff);
+    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
+    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
+    const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
+      || inf.comentariosGlosa
+      || (pd as any).comentariosGlosa
+      || '';
+
+    // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
+    // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
+    const showSv = inf.showSupervisor !== undefined
+      ? Boolean(inf.showSupervisor)
+      : (showSvFromRecord !== false);
+
+    // ── Fechas reales del período evaluado (no las del contrato completo) ──
+    const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
+
+    const cantInespNum = parseInt(cantCupsIn) || 0;
 
     const labels = mdCorrected.map((m: any) => m.name);
 
@@ -1606,7 +1607,7 @@ export default function CertificadoTrimestral({
 
         // ══ NARRATIVA 2 ══
         { text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valCupsIn > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtNL(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmtL(valCupsIn)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`, style: 'p' },
-        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${effectivePeriodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
+        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${effectivePeriodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjFinalCorr)}${(hasMonthlyInesp || valCupsIn > 0) ? ` (incluye ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
 
         // ══ GRÁFICA 2 ══
         { text: cantInespNum > 0 ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS' : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
@@ -1647,15 +1648,15 @@ export default function CertificadoTrimestral({
               [
                 { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
                 { text: fmtL(monthlyNT * mdCorrected.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                { text: fmtL(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                { text: fmtL(totalEjFinalCorr), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                 ...(hasMonthlyInesp ? [{
                   text: fmtL(mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0)),
                   bold: true, fontSize: 7, alignment: 'right', fillColor: '#fdf4ff', color: '#7c3aed',
                 }] : []),
                 {
-                  text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
+                  text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjFinalCorr / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
                   bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
-                  color: (() => { const p = monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                  color: (() => { const p = monthlyNT * mdCorrected.length > 0 ? (totalEjFinalCorr / (monthlyNT * mdCorrected.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
                 },
               ],
             ],
@@ -1677,9 +1678,9 @@ export default function CertificadoTrimestral({
               [{ text: `VALOR DE ${effectiveMonths} MES${effectiveMonths > 1 ? 'ES' : ''}   ${fmtL(effectiveNtPeriodoFull)}`, ...CS, bold: true }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{ text: `% MAXIMO PERMITIDO 110%   ${fmtL(maxPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{
-                text: valCupsIn > 0
-                  ? `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)} (incl. ${fmtL(valCupsIn)} tec. inesperadas)`
-                  : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
+                text: (hasMonthlyInesp || valCupsIn > 0)
+                  ? `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjFinalCorr)} (incl. ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} tec. inesperadas)`
+                  : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjFinalCorr)}`,
                 ...CS, bold: true, fillColor: '#f0fdf4',
               }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               ...(descontar > 0 ? [[
@@ -1758,9 +1759,9 @@ export default function CertificadoTrimestral({
 
         // ══════════════════════ PÁGINA 3 ══════════════════════
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
-        { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
-        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
-        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${effectivePeriodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${effectivePeriodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
+        { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjFinalCorr)}${(hasMonthlyInesp || valCupsIn > 0) ? ` (incluye ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
+        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjFinalCorr)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${effectivePeriodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjFinalCorr)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${effectivePeriodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
 
         // Tabla resumen final
         {
@@ -1781,7 +1782,7 @@ export default function CertificadoTrimestral({
         { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 3] },
 
         // Narrativa CUPS
-        { text: `La ejecución de los códigos CUPS durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
+        { text: `La ejecución de los códigos CUPS durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjFinalCorr)} en valores ejecutados${(hasMonthlyInesp || valCupsIn > 0) ? ` (de los cuales ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
 
         // ══ NOTA ACLARATORIA — solo desde agosto en adelante ══
         ...(showNotaAclaratoria ? [{
