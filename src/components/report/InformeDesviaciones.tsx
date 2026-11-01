@@ -656,34 +656,52 @@ export default function InformeDesviaciones({ comparisonSummary, pgpData, execut
     const handleCupClick = (cupInfo: DeviatedCupInfo) => {
         const details: any[] = [];
         executionDataByMonth.forEach((monthData) => {
-            monthData.rawJsonData.usuarios?.forEach((user: any) => {
-                const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
-                const processServices = (services: any[], codeField: string, type: string, valueField: string = 'vrServicio', unitValueField?: string, qtyField?: string) => {
-                    if (!services) return;
-                    services.forEach((service: any) => {
-                        if (service[codeField] === cupInfo.cup) {
-                            let serviceValue = 0;
-                            if (unitValueField && qtyField) {
-                                serviceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
-                            } else {
-                                serviceValue = getNumericValue(service[valueField]);
+            if (monthData.rawJsonData) {
+                monthData.rawJsonData.usuarios?.forEach((user: any) => {
+                    const userId = `${user.tipoDocumentoIdentificacion}-${user.numDocumentoIdentificacion}`;
+                    const processServices = (services: any[], codeField: string, type: string, valueField: string = 'vrServicio', unitValueField?: string, qtyField?: string) => {
+                        if (!services) return;
+                        services.forEach((service: any) => {
+                            if (service[codeField] === cupInfo.cup) {
+                                let serviceValue = 0;
+                                if (unitValueField && qtyField) {
+                                    serviceValue = getNumericValue(service[unitValueField]) * getNumericValue(service[qtyField]);
+                                } else {
+                                    serviceValue = getNumericValue(service[valueField]);
+                                }
+                                details.push({
+                                    tipoServicio: type,
+                                    idUsuario: userId,
+                                    fechaAtencion: service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
+                                    diagnosticoPrincipal: service.codDiagnosticoPrincipal,
+                                    valorServicio: serviceValue,
+                                });
                             }
-
-                            details.push({
-                                tipoServicio: type,
-                                idUsuario: userId,
-                                fechaAtencion: service.fechaInicioAtencion ? new Date(service.fechaInicioAtencion).toLocaleDateString() : 'N/A',
-                                diagnosticoPrincipal: service.codDiagnosticoPrincipal,
-                                valorServicio: serviceValue,
-                            });
-                        }
+                        });
+                    };
+                    processServices(user.servicios?.consultas, 'codConsulta', 'Consulta');
+                    processServices(user.servicios?.procedimientos, 'codProcedimiento', 'Procedimiento');
+                    processServices(user.servicios?.medicamentos, 'codTecnologiaSalud', 'Medicamento', undefined, 'vrUnitarioMedicamento', 'cantidadMedicamento');
+                    processServices(user.servicios?.otrosServicios, 'codTecnologiaSalud', 'Otro Servicio', 'vrServicio', undefined, 'cantidadOS');
+                });
+            } else {
+                // Fallback cuando rawJsonData no está disponible (informe cargado desde Supabase):
+                // reconstruir detalles aproximados a partir de cupCounts que sí se serializa.
+                const cupData = monthData.cupCounts.get(cupInfo.cup);
+                if (cupData) {
+                    const topDiag = [...cupData.diagnoses.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'N/A';
+                    const avgValue = cupData.uniqueUsers.size > 0 ? cupData.totalValue / cupData.uniqueUsers.size : 0;
+                    cupData.uniqueUsers.forEach(userId => {
+                        details.push({
+                            tipoServicio: cupData.type,
+                            idUsuario: userId,
+                            fechaAtencion: 'N/D',
+                            diagnosticoPrincipal: topDiag,
+                            valorServicio: avgValue,
+                        });
                     });
-                };
-                processServices(user.servicios?.consultas, 'codConsulta', 'Consulta');
-                processServices(user.servicios?.procedimientos, 'codProcedimiento', 'Procedimiento');
-                processServices(user.servicios?.medicamentos, 'codTecnologiaSalud', 'Medicamento', undefined, 'vrUnitarioMedicamento', 'cantidadMedicamento');
-                processServices(user.servicios?.otrosServicios, 'codTecnologiaSalud', 'Otro Servicio', 'vrServicio', undefined, 'cantidadOS');
-            });
+                }
+            }
         });
         setExecutionDetails(details);
         setSelectedCup(cupInfo);
