@@ -738,6 +738,10 @@ export default function CertificadoTrimestral({
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+      // ⚠️ PROTEGIDO: NO agregar initialInforme?.descontar aquí.
+      // inf.descontar en Supabase mezcla glosas reales con descuentos por ejecución históricos
+      // (ej. Bonnadona inf-059 tenía $723M guardados como "glosa" cuando en realidad era
+      // subejecución de un cálculo anterior incorrecto). Fuentes válidas: pgpData y localStorage.
       const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || _lsG1?.descontar || 0;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
@@ -1446,6 +1450,17 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // ⚠️  BLOQUE PROTEGIDO — NO MODIFICAR SIN REVISIÓN TÉCNICA
+    // ORDEN OBLIGATORIO: corrValMap → totalEjFinalCorr → descontar.
+    // Razón: pd.totalEjecutadoFinal es el snapshot guardado en Supabase y puede
+    // estar desactualizado (ej. Bonnadona inf-059 tenía $426M en lugar de $944M
+    // porque los meses MAYO y JUNIO se cargaron después de crear el trimestral).
+    // totalEjFinalCorr recalcula sumando gi.totalEjecutado de cada informe mensual
+    // actual, que ya incluye RIPS + inesperadas — ese es el valor correcto.
+    // Si se mueve este bloque DESPUÉS del cálculo de descontar, el resultado será
+    // un falso descuento por subejecución (potencialmente cientos de millones de pesos).
+    // ══════════════════════════════════════════════════════════════════════════
     // ── Corregir valores por mes ANTES de calcular descontar ──
     // gi.totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
     const MONTHS_FULL_PDF = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
@@ -1486,7 +1501,11 @@ export default function CertificadoTrimestral({
       : totalEjecutadoFinal;
 
     // ── Cálculo DESCONTAR / RECONOCER ──
-    // Glosa = solo pgpData/localStorage; NUNCA inf.descontar (valor histórico contaminado).
+    // ⚠️ PROTEGIDO: descontarGlosaFR NO debe incluir inf.descontar ni pd.descontar.
+    // El campo descontar de Supabase mezcla descuentos por ejecución (calculados
+    // automáticamente) con glosas reales de auditoría. Usar ese valor como "glosa"
+    // duplica el descuento: una vez como ejecución (ya restado en descontarEjecucionFR)
+    // y otra vez como auditoría. Fuentes válidas: solo pgpData y localStorage.
     const descontarEjecucionFR = totalEjFinalCorr < minPeriodo ? minPeriodo - totalEjFinalCorr : 0;
     const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
     const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || _lsG3?.descontar || 0;
