@@ -121,7 +121,15 @@ export async function POST(request: Request) {
     // Si se especifica un número explícito (restauración), úsalo aunque no coincida por prestador+periodo
     if (body.numero) {
       const numIdx = informes.findIndex(r => r.numero === body.numero);
-      const entry = { ...base, numero: body.numero, fecha: body.fecha || new Date().toISOString().slice(0, 10) };
+      // Preservar campos críticos del registro existente (glosaAuditoria, comentariosGlosa, actas)
+      const existing = numIdx !== -1 ? informes[numIdx] : {};
+      const entry = {
+        ...existing,
+        ...base,
+        pdf_data: { ...(existing.pdf_data || {}), ...base.pdf_data },
+        numero: body.numero,
+        fecha: body.fecha || new Date().toISOString().slice(0, 10),
+      };
       if (numIdx !== -1) {
         informes[numIdx] = entry;
       } else {
@@ -132,7 +140,13 @@ export async function POST(request: Request) {
     }
 
     if (dupIdx !== -1) {
-      informes[dupIdx] = { ...informes[dupIdx], ...base, fecha: new Date().toISOString().slice(0, 10) };
+      // Preservar glosaAuditoria, ajustesGlosa y otros campos agregados después del guardado inicial
+      informes[dupIdx] = {
+        ...informes[dupIdx],
+        ...base,
+        pdf_data: { ...(informes[dupIdx].pdf_data || {}), ...base.pdf_data },
+        fecha: new Date().toISOString().slice(0, 10),
+      };
       await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
       return NextResponse.json({ success: true, numero: informes[dupIdx].numero, updated: true });
     }
