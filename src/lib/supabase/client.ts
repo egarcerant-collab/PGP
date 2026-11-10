@@ -1,8 +1,6 @@
-import { createBrowserClient } from '@supabase/ssr';
+// Supabase deshabilitado — la app usa exclusivamente Google Drive.
+// Este módulo está bloqueado para evitar uso accidental.
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fvrgfqxohacipmnmqyef.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ezUmThavYstyax693c7ZmA_jda4yXNA';
-
-export function createSupabaseClient() {
-  return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export function createSupabaseClient(): never {
+  throw new Error('Supabase deshabilitado. Usar gdrive.ts para acceso a datos.');
 }
