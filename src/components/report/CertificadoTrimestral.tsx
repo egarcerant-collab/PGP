@@ -1438,16 +1438,32 @@ export default function CertificadoTrimestral({
     const fmtNL = (v: number) => new Intl.NumberFormat('es-CO').format(Math.round(v));
 
     const {
-      mesData: md, monthlyNT, fechaInicio, fechaFin,
+      mesData: md, fechaInicio, fechaFin,
       supervisorName: svName, showSupervisor: showSvFromRecord,
-      advanceMonths, adv80, totalAdv,
-      ntPeriodoFull, ntPeriodo, minPeriodo, maxPeriodo, lastMonthPay,
+      advanceMonths,
       notaAdicional: notaAd, notaEjecucionFinanciera: notaEF,
       valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
       periodoLabel, periodType: pt, empresa, nit: empresaNit,
       municipio, depto, contratoNum, periodo, n, expectedMonths,
       totalEjecutadoFinal, totalCups,
     } = pd;
+
+    // NT y bandas: leer desde Sheet actual para corregir registros guardados con columna renombrada en 2026
+    const _vcmFR = selectedPrestador
+      ? parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO'])
+      : 0;
+    const monthlyNT: number = _vcmFR > 0 ? _vcmFR : (pd.monthlyNT || 0);
+    const _nFR = Number(n) || (md as any[]).length || 1;
+    const _expFR = Number(expectedMonths) || _nFR;
+    const ntPeriodo: number = monthlyNT * _nFR;
+    const ntPeriodoFull: number = monthlyNT * _expFR;
+    const _fiFR = selectedPrestador ? parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']) : 0;
+    const _fsFR = selectedPrestador ? parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']) : 0;
+    const minPeriodo: number = _fiFR > 0 ? _fiFR * _nFR : ntPeriodo * 0.9;
+    const maxPeriodo: number = _fsFR > 0 ? _fsFR * _nFR : ntPeriodo * 1.1;
+    const adv80: number = monthlyNT * 0.8;
+    const totalAdv: number = adv80 * (Number(advanceMonths) || 0);
+    const lastMonthPay: number = ntPeriodoFull - totalAdv;
 
     // Corregir período según mesData real (snapshot puede tener trimestral aunque sea mensual)
     const _mdArr = (md as any[]) || [];
