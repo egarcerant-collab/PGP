@@ -41,6 +41,6 @@ export function actualizarGlosa(informe: Record<string, any>, glosa: number) {
   return {
     descontar,
     valor_final: valorFinal,
-    pdf_data: { ...pd, glosaAuditoria: glosa, descontar, valorFinal },
+    pdf_data: { ...pd, glosaAuditoria: glosa, descontarGlosa: glosa, descontar, valorFinal },
   };
 }
