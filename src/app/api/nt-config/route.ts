@@ -46,8 +46,8 @@ export async function POST(request: Request) {
       nota: String(body.nota || '').trim(),
     };
 
-    if (!entry.nit || !entry.mesInicio || !entry.mesFin || entry.nt <= 0) {
-      return NextResponse.json({ message: 'Faltan campos requeridos (nit, mesInicio, mesFin, nt)' }, { status: 400 });
+    if (!entry.mesInicio || !entry.mesFin || entry.nt <= 0) {
+      return NextResponse.json({ message: 'Faltan campos requeridos (mesInicio, mesFin, nt)' }, { status: 400 });
     }
 
     const idx = configs.findIndex(c => c.id === entry.id);

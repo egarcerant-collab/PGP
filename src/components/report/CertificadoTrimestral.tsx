@@ -480,9 +480,14 @@ export default function CertificadoTrimestral({
   const loadHistorial = async () => {
     setLoadingHistorial(true);
     try {
-      const r = await fetch('/api/informes');
-      const d = await r.json();
-      setHistorial(d.informes || []);
+      const [rInf, rNt] = await Promise.all([
+        fetch('/api/informes'),
+        fetch('/api/nt-config'),
+      ]);
+      const dInf = await rInf.json();
+      const dNt = await rNt.json();
+      setHistorial(dInf.informes || []);
+      setNtConfigs(dNt.configs || []);
     } finally {
       setLoadingHistorial(false);
     }
