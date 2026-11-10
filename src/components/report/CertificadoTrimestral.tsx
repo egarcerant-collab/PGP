@@ -980,7 +980,7 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   { text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmt(ntPeriodoFull)}`, ...CS, bold: true },
-                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right' },
+                  { text: descontarEjecucion > 0 ? fmt(descontarEjecucion) : '$ -', ...CS, alignment: 'right' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right' },
                 ],
                 [
@@ -990,14 +990,12 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   {
-                    // TOTAL EJECUTADO incluye inesperadas en el valor mostrado
-                    // pero el descuento se calcula sobre RIPS puro
                     text: valorCupsInesperadas > 0
                       ? `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)} (incl. ${fmt(valorCupsInesperadas)} tec. inesperadas)`
                       : `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`,
                     ...CS, bold: true, fillColor: '#f0fdf4',
                   },
-                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
+                  { text: descontarEjecucion > 0 ? fmt(descontarEjecucion) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontarEjecucion > 0 ? '#b91c1c' : '#374151' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
                 ],
               ],
@@ -1727,9 +1725,14 @@ export default function CertificadoTrimestral({
                   : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjFinalCorr)}`,
                 ...CS, bold: true, fillColor: '#f0fdf4',
               }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
-              ...(descontar > 0 ? [[
+              ...(descontarEjecucionFR > 0 ? [[
+                { text: 'DESCUENTO POR SUBEJECUCIÓN (50%)', ...CS, bold: true, color: '#b91c1c' },
+                { text: fmtL(descontarEjecucionFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: '$ -', ...CS, alignment: 'right' },
+              ]] : []),
+              ...(descontarGlosaFR > 0 ? [[
                 { text: 'VALOR DESCONTADO POR GLOSA', ...CS, bold: true, color: '#b91c1c' },
-                { text: fmtL(descontar), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: fmtL(descontarGlosaFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
                 { text: '$ -', ...CS, alignment: 'right' },
               ]] : []),
               ...(reconocer > 0 ? [[
