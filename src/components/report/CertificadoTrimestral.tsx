@@ -1302,6 +1302,8 @@ export default function CertificadoTrimestral({
         n,
         expectedMonths,
         descontar,
+        descontarGlosa: descontarGlosaR,
+        descontarEjecucion: descontarEjecucionR,
         reconocer,
         valorFinal,
         totalEjecutadoFinal,
@@ -2429,7 +2431,7 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold">{inf.descontar > 0 ? <span className="text-red-600">{fmtCOP2(inf.descontar)}</span> : <span className="text-muted-foreground text-[10px]">—</span>}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold">{(inf.pdfData?.descontarGlosa || 0) > 0 ? <span className="text-red-600">{fmtCOP2(inf.pdfData.descontarGlosa)}</span> : <span className="text-muted-foreground text-[10px]">—</span>}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
