@@ -1342,6 +1342,7 @@ export default function CertificadoTrimestral({
 
   // Genera PDF completo desde los datos guardados en el Registro (idéntico a handleGenerate)
   const handleGenerateFromRecord = useCallback(async (inf: any) => {
+    try {
     const logoBase64 = await loadLogoBase64();
     const pd = inf.pdfData;
 
@@ -1761,7 +1762,11 @@ export default function CertificadoTrimestral({
     };
 
     pdfMake.createPdf(docDef).download(`Certificado_${inf.numero}_${empresa.replace(/\s+/g, '_')}.pdf`);
-  }, [selectedPrestadorGroup]);
+    } catch (e: any) {
+      toast({ title: 'Error al generar PDF', description: String(e?.message || e || 'Error desconocido'), variant: 'destructive' });
+      console.error('[handleGenerateFromRecord] Error:', e);
+    }
+  }, [selectedPrestadorGroup, toast]);
 
   const hasData = !!comparisonSummary && !!pgpData && months.length > 0;
 
