@@ -15,7 +15,8 @@ export interface PrestadorInfo {
   'FECHA FIN DE CONTRATO'?: string;
   MESES?: string;
   'FRANJA DE RIESGO INFERIOR (90%)'?: string;
-  'VALOR CONTRATO'?: string;
+  'VALOR CONTRATO'?: string;           // nombre 2025
+  'VALOR CONTRATO MENSUAL'?: string;   // nombre 2026
   'FRANJA DE RIESGO SUPERIOR (110%)'?: string;
   [key: string]: any;
 }

@@ -604,14 +604,15 @@ export default function CertificadoTrimestral({
       // ── Datos del Sheet de prestadores ──
       // VALOR CONTRATO, FRANJA INFERIOR y FRANJA SUPERIOR son valores MENSUALES
       // (UPC × población del periodo). MESES indica duración del contrato (12, 11…)
-      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad hacia atrás)
+      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO']);
       const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
       const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
       const fechaInicio          = String(selectedPrestador['FECHA INICIO DE CONTRATO'] || '01/01/2025').trim();
       const fechaFin             = String(selectedPrestador['FECHA FIN DE CONTRATO']   || '31/12/2025').trim();
 
       // NT mensual: usa Sheet si existe; si no, usa el valor calculado desde la NT
-      // pgpData.notaTecnica.valor3m = suma de 'costo evento mes' = valor mensual
+      // ⚠️ La columna se llama 'VALOR CONTRATO MENSUAL' en 2026 (renombrada desde 'VALOR CONTRATO' en 2025)
       const monthlyNT = valorContratoMensual > 0
         ? valorContratoMensual
         : pgpData.notaTecnica.valor3m; // ya es mensual
@@ -1005,6 +1006,12 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
+          // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
+          ...(descontarEjecucion > 0 ? [{
+            text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmt(minPeriodo - totalEjecutadoFinal)} (mínimo ${fmt(minPeriodo)} − ejecutado ${fmt(totalEjecutadoFinal)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmt(descontarEjecucion)}.`,
+            fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
+          }] : []),
+
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
           {
@@ -1273,7 +1280,8 @@ export default function CertificadoTrimestral({
       const selectedGroup = periodGroups[selectedPeriodIndex] ?? periodGroups[0];
       const n = selectedGroup?.months.length || 0;
 
-      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO']);
+      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad hacia atrás)
+      const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO']);
       const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
       const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
       const fechaInicio = String(selectedPrestador['FECHA INICIO DE CONTRATO'] || '01/01/2025').trim();
@@ -1718,6 +1726,12 @@ export default function CertificadoTrimestral({
           layout: 'lightHorizontalLines',
           margin: [0, 0, 0, 4],
         },
+
+        // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
+        ...(descontarEjecucionFR > 0 ? [{
+          text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmtL(minPeriodo - totalEjFinalCorr)} (mínimo ${fmtL(minPeriodo)} − ejecutado ${fmtL(totalEjFinalCorr)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmtL(descontarEjecucionFR)}.`,
+          fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
+        }] : []),
 
         // Pagos anticipados
         { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
