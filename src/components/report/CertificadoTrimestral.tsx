@@ -1402,27 +1402,17 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // Recalcular descontar/reconocer/valorFinal con lógica correcta:
-    // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
-    // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
     // Subejecución: 50% del valor que faltó para llegar al mínimo 90% (modelo PGP)
     const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) * 0.5 : 0;
     const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    // Glosa: SOLO lo ingresado en módulo Descuentos y Ajustes (localStorage) o snapshot guardado
-    const descontarGlosaFR     = _lsG3?.descontar || inf.descontar || 0;
-    const descontarR = descontarEjecucionFR + descontarGlosaFR;
-    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
-    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
-    const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    // Sin pgpData activo (historial): leer descontar canónico (>0 tiene prioridad sobre 0)
-    // reconocer y valorFinal siempre se recomputan para ser consistentes con descontar
-    const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
-    const descontar = hasActiveGlosaFR ? descontarR
-      : (inf.descontar > 0 ? inf.descontar : ((pd as any).descontar > 0 ? (pd as any).descontar : descontarR));
-    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
+    // Glosa: SOLO módulo Descuentos y Ajustes (localStorage) o campo descontarGlosa del snapshot
+    // NUNCA inf.descontar (que es el total incluye subejecución de registros anteriores)
+    const descontarGlosaFR = _lsG3?.descontar || inf.pdfData?.descontarGlosa || 0;
+    const descontar = descontarEjecucionFR + descontarGlosaFR;
+    const descontarGlosaEff = descontarGlosaFR;
     const ejecutadoNetoEff  = Math.max(0, totalEjecutadoFinal - descontarGlosaEff);
-    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
-    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
+    const reconocer  = ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0;
+    const valorFinal = ntPeriodo - descontar + reconocer;
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
@@ -1640,9 +1630,14 @@ export default function CertificadoTrimestral({
                   : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
                 ...CS, bold: true, fillColor: '#f0fdf4',
               }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
-              ...(descontar > 0 ? [[
+              ...(descontarEjecucionFR > 0 ? [[
+                { text: 'DESCUENTO POR SUBEJECUCIÓN (50%)', ...CS, bold: true, color: '#b91c1c' },
+                { text: fmtL(descontarEjecucionFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: '$ -', ...CS, alignment: 'right' },
+              ]] : []),
+              ...(descontarGlosaFR > 0 ? [[
                 { text: 'VALOR DESCONTADO POR GLOSA', ...CS, bold: true, color: '#b91c1c' },
-                { text: fmtL(descontar), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: fmtL(descontarGlosaFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
                 { text: '$ -', ...CS, alignment: 'right' },
               ]] : []),
               ...(reconocer > 0 ? [[
