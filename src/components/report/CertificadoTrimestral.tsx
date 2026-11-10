@@ -492,9 +492,12 @@ export default function CertificadoTrimestral({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadHistorial(); }, []);
 
-  useEffect(() => {
+  const reloadNtConfigs = () => {
     fetch('/api/nt-config').then(r => r.json()).then(d => setNtConfigs(d.configs || [])).catch(() => {});
-  }, []);
+  };
+  useEffect(() => { reloadNtConfigs(); }, []);
+  // Recargar configs cada vez que el usuario abre el modal del historial
+  useEffect(() => { if (selectedPrestadorGroup) reloadNtConfigs(); }, [selectedPrestadorGroup]);
 
   const handleDeleteConfirm = async () => {
     if (pwInput !== '123456') {
@@ -1857,13 +1860,6 @@ export default function CertificadoTrimestral({
             <Input value={contrato} onChange={e => setContrato(e.target.value)} placeholder="Ej: 44847_03_PGP" />
           </div>
         </div>
-
-        {/* NT por Período — configuración de overrides cuando hay reestructuración mid-year */}
-        <NtConfigPanel
-          defaultNit={String(selectedPrestador?.NIT || selectedPrestador?.nit || '')}
-          defaultPrestador={String(selectedPrestador?.PRESTADOR || '')}
-          defaultContrato={contrato}
-        />
 
         {/* CUPS / Tecnologías Inesperadas — editable directamente aquí */}
         <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-2">

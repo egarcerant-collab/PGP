@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
+import NtConfigPanel from '@/components/report/NtConfigPanel';
 import Papa from 'papaparse';
 import {
   Upload, FileSpreadsheet, Plus, RefreshCw, Check,
@@ -199,6 +200,12 @@ export default function NotaTecnicaValidator({ pgpData, onUpdateNt, prestadorNam
           </div>
         </div>
       </div>
+
+      {/* Configuración NT por Período */}
+      <NtConfigPanel
+        defaultNit={prestadorId || ''}
+        defaultPrestador={prestadorName || ''}
+      />
 
       {/* Upload zone */}
       <div className="rounded-xl border border-border bg-card shadow-sm p-5 space-y-4">

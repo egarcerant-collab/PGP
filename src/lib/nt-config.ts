@@ -36,7 +36,9 @@ export function getNtForMonth(
   const nitClean = nit.replace(/\D/g, '');
   const match = configs.find(c => {
     if (c.vigencia !== vigencia) return false;
-    if (c.nit.replace(/\D/g, '') !== nitClean) return false;
+    // Si el config no tiene NIT, aplica a cualquier prestador (wildcard)
+    const cNit = c.nit.replace(/\D/g, '');
+    if (cNit && cNit !== nitClean) return false;
     const start = monthIndex(c.mesInicio);
     const end = monthIndex(c.mesFin);
     return mesIdx >= start && mesIdx <= end;
