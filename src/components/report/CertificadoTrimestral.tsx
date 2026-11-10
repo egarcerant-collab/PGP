@@ -2223,9 +2223,13 @@ export default function CertificadoTrimestral({
           for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
             const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
-            // NT mensual = ntPeriodo / meses del tipo (1=mensual, 2=bimensual, 3=trimestral)
-            // NO aplicar heurística valorFinal: valorFinal bajo por subejecución ≠ NT trimestral
-            const rawNt = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : (isFinite(inf.valorFinal) ? inf.valorFinal : 0);
+            // NT real = valorFinal + descontar - reconocer (recupera el NT original independiente del campo guardado)
+            // Esto corrige casos donde ntPeriodo fue guardado con n incorrecto (ej. trimestral en informe mensual)
+            const ntFromFinancials = (isFinite(inf.valorFinal) && inf.valorFinal > 0)
+              ? inf.valorFinal + (isFinite(inf.descontar) ? inf.descontar : 0) - (isFinite(inf.reconocer) ? inf.reconocer : 0)
+              : 0;
+            const rawNt = ntFromFinancials > 0 ? ntFromFinancials
+              : (isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0) ? inf.ntPeriodo : 0;
             const ntPerMonth = rawNt / tipoN;
             const periodoN = months.length || 1;
             const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
