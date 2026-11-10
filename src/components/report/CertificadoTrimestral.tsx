@@ -1005,6 +1005,12 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
+          // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
+          ...(descontarEjecucion > 0 ? [{
+            text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmt(minPeriodo - totalEjecutadoFinal)} (mínimo ${fmt(minPeriodo)} − ejecutado ${fmt(totalEjecutadoFinal)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmt(descontarEjecucion)}.`,
+            fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
+          }] : []),
+
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
           {
@@ -1718,6 +1724,12 @@ export default function CertificadoTrimestral({
           layout: 'lightHorizontalLines',
           margin: [0, 0, 0, 4],
         },
+
+        // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
+        ...(descontarEjecucionFR > 0 ? [{
+          text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmtL(minPeriodo - totalEjFinalCorr)} (mínimo ${fmtL(minPeriodo)} − ejecutado ${fmtL(totalEjFinalCorr)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmtL(descontarEjecucionFR)}.`,
+          fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
+        }] : []),
 
         // Pagos anticipados
         { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
