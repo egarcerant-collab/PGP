@@ -740,11 +740,9 @@ export default function CertificadoTrimestral({
       // Subejecución: descuento = 50% del déficit respecto al mínimo (simétrico al reconocimiento)
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? 0.50 * (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // ⚠️ PROTEGIDO: NO agregar initialInforme?.descontar aquí.
-      // inf.descontar en Supabase mezcla glosas reales con descuentos por ejecución históricos
-      // (ej. Bonnadona inf-059 tenía $723M guardados como "glosa" cuando en realidad era
-      // subejecución de un cálculo anterior incorrecto). Fuentes válidas: pgpData y localStorage.
-      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || _lsG1?.descontar || 0;
+      // Glosa de auditoría: ÚNICA fuente válida es el módulo Descuentos y Ajustes (localStorage).
+      // pgpData.notaTecnica.descuentoAplicado es un cálculo del Validador NT, no una glosa real.
+      const descontarGlosa = _lsG1?.descontar || 0;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -1313,7 +1311,7 @@ export default function CertificadoTrimestral({
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? 0.50 * (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG2?.descontar || 0;
+      const descontarGlosaR     = _lsG2?.descontar || 0;
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
@@ -1531,7 +1529,7 @@ export default function CertificadoTrimestral({
     // y otra vez como auditoría. Fuentes válidas: solo pgpData y localStorage.
     const descontarEjecucionFR = totalEjFinalCorr < minPeriodo ? 0.50 * (minPeriodo - totalEjFinalCorr) : 0;
     const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || _lsG3?.descontar || 0;
+    const descontarGlosaFR     = _lsG3?.descontar || 0;
     const descontarR = descontarEjecucionFR + descontarGlosaFR;
     const ejecutadoNetoFR = Math.max(0, totalEjFinalCorr - descontarGlosaFR);
     const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
