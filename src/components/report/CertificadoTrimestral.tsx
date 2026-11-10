@@ -2246,12 +2246,28 @@ export default function CertificadoTrimestral({
           const infsSorted = [...selectedPrestadorGroup.infs].sort((a: any, b: any) =>
             (TIPO_PRIO[(a.tipoPeriodo || '').toUpperCase()] || 0) - (TIPO_PRIO[(b.tipoPeriodo || '').toUpperCase()] || 0)
           );
+          // Pre-calcular NT mensual de TRIMESTRAL por trimestre (siempre almacena ntPeriodo = 3×mensual, correcto)
+          const quarterlyNT: Record<number, number> = {};
+          for (const inf of infsSorted) {
+            if ((inf.tipoPeriodo || '').toUpperCase() !== 'TRIMESTRAL') continue;
+            const ms = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
+            const nt3 = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : 0;
+            if (nt3 <= 0 || ms.length === 0) continue;
+            const qIdx = Math.floor(MONTHS_FULL.indexOf(ms[0]) / 3);
+            quarterlyNT[qIdx] = nt3 / 3; // NT mensual correcto del trimestre
+          }
           for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
             const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
             const rawNt = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : (isFinite(inf.valorFinal) ? inf.valorFinal : 0);
-            // NT mensual = ntPeriodo / número de meses del periodo (cada informe tiene su propio NT)
-            const ntPerMonth = rawNt / tipoN;
+            let ntPerMonth = rawNt / tipoN;
+            // Algunos informes MENSUAL tienen ntPeriodo guardado como 3× el valor mensual (bug histórico).
+            // Si existe un TRIMESTRAL del mismo trimestre y el valor mensual calculado es >1.5× el de referencia, corregir.
+            if (tipoN === 1 && months.length === 1) {
+              const qIdx = Math.floor(MONTHS_FULL.indexOf(months[0]) / 3);
+              const ref = quarterlyNT[qIdx];
+              if (ref && ntPerMonth > ref * 1.5) ntPerMonth = ref;
+            }
             const periodoN = months.length || 1;
             const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
             for (const month of months) {
