@@ -289,41 +289,6 @@ async function loadLogoBase64(): Promise<string> {
   });
 }
 
-function calcInfTotals(inf: any, allInfs: any[]) {
-  const esFusion = inf.tipoPeriodo === 'TRIMESTRAL' || inf.tipoPeriodo === 'BIMENSUAL';
-  const mensuals = esFusion
-    ? allInfs.filter((i: any) => i.tipoPeriodo === 'MENSUAL' && i.numero !== inf.numero)
-    : [];
-  const usandoSuma = mensuals.length > 0;
-  const inesperadasEfectivas = usandoSuma
-    ? mensuals.reduce((s: number, i: any) => s + (i.pdfData?.valorCupsInesperadas || 0), 0)
-    : (inf.pdfData?.valorCupsInesperadas || 0);
-  const ripsEfectivo = usandoSuma
-    ? mensuals.reduce((s: number, i: any) => s + Math.max(0, (i.totalEjecutado || 0) - (i.pdfData?.valorCupsInesperadas || 0)), 0)
-    : Math.max(0, (inf.totalEjecutado || 0) - (inf.pdfData?.valorCupsInesperadas || 0));
-  const cantCupsEfectiva = usandoSuma
-    ? mensuals.reduce((s: number, i: any) => s + (Number(i.pdfData?.cantidadCupsInesperadas) || 0), 0)
-    : (Number(inf.pdfData?.cantidadCupsInesperadas) || 0);
-  const totalRealEfectivo = ripsEfectivo + inesperadasEfectivas;
-  // Descontar = (110%*NT − totalReal) / 2 cuando se suma desde mensuales
-  const nt = inf.ntPeriodo || 0;
-  const descontarEfectivo = usandoSuma && nt > 0
-    ? Math.max(0, (nt * 1.1 - totalRealEfectivo) / 2)
-    : null;
-  const valorFinalEfectivo = usandoSuma && nt > 0
-    ? nt - (descontarEfectivo ?? 0) + (inf.reconocer || 0)
-    : null;
-  return {
-    totalRealEfectivo,
-    inesperadasEfectivas,
-    cantCupsEfectiva,
-    ripsEfectivo,
-    usandoSuma,
-    descontarEfectivo,
-    valorFinalEfectivo,
-  };
-}
-
 export default function CertificadoTrimestral({
   comparisonSummary, pgpData, selectedPrestador, executionDataByMonth, onSaveAudit, userName, initialResponsable, initialInforme,
 }: CertificadoTrimestralProps) {
@@ -612,7 +577,7 @@ export default function CertificadoTrimestral({
       const fechaFin             = String(selectedPrestador['FECHA FIN DE CONTRATO']   || '31/12/2025').trim();
 
       // NT mensual: usa Sheet si existe; si no, usa el valor calculado desde la NT
-      // ⚠️ La columna se llama 'VALOR CONTRATO MENSUAL' en 2026 (renombrada desde 'VALOR CONTRATO' en 2025)
+      // pgpData.notaTecnica.valor3m = suma de 'costo evento mes' = valor mensual
       const monthlyNT = valorContratoMensual > 0
         ? valorContratoMensual
         : pgpData.notaTecnica.valor3m; // ya es mensual
@@ -661,15 +626,12 @@ export default function CertificadoTrimestral({
         if (value === 0) {
           // Fallback 2: informe MENSUAL de ese mes en el historial (ej. informe 036 ABRIL)
           const prestador = selectedPrestador?.PRESTADOR || '';
-          const prestadorNit = String(selectedPrestador?.NIT || '').trim();
           const mensualInf = [...historial]
-            .filter((h: any) => {
-              const hNit = String(h.nit || '').trim();
-              const matchesPrestador = (prestadorNit && hNit) ? hNit === prestadorNit : h.prestador === prestador;
-              return matchesPrestador &&
-                (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
-                (h.periodo || '').toUpperCase() === monthName;
-            })
+            .filter((h: any) =>
+              h.prestador === prestador &&
+              (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+              (h.periodo || '').toUpperCase() === monthName
+            )
             .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
           if (mensualInf) {
             // Preferir el mesData guardado del MENSUAL (valor RIPS base sin inesperadas)
@@ -737,12 +699,9 @@ export default function CertificadoTrimestral({
       // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
       // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
-      // Subejecución: descuento = 50% del déficit respecto al mínimo (simétrico al reconocimiento)
-      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? 0.50 * (minPeriodo - totalEjecutadoFinal) : 0;
+      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // Glosa de auditoría: ÚNICA fuente válida es el módulo Descuentos y Ajustes (localStorage).
-      // pgpData.notaTecnica.descuentoAplicado es un cálculo del Validador NT, no una glosa real.
-      const descontarGlosa = _lsG1?.descontar || 0;
+      const descontarGlosa = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG1?.descontar || 0;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -909,52 +868,49 @@ export default function CertificadoTrimestral({
 
           // ══ TABLA % EJECUCIÓN MENSUAL ══
           { text: 'PORCENTAJE DE EJECUCIÓN MENSUAL FRENTE A LA NOTA TÉCNICA', style: 'chartLabel', margin: [0, 4, 0, 2] },
-          (() => {
-            const hayInesp = valorCupsInesperadas > 0;
-            const buildRow = (m: { name: string; value: number }, _i: number) => {
-              const safeVal = isFinite(m.value) ? m.value : 0;
-              const pct = monthlyNT > 0 ? (safeVal / monthlyNT) * 100 : 0;
-              const ok = pct >= 90 && pct <= 110;
-              const high = pct > 110;
-              const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
-              const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
-              const base = [
-                { text: m.name, fontSize: 7, fillColor: rowFill },
-                { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
-                { text: fmt(safeVal), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
-              ];
-              if (hayInesp) base.push({ text: '–', fontSize: 7, alignment: 'center' as const, fillColor: '#fffde7', color: '#a3a3a3' } as never);
-              base.push({ text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center' as const, bold: true, color: pctColor, fillColor: rowFill } as never);
-              return base;
-            };
-            const totPct = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0;
-            const totColor = totPct >= 90 && totPct <= 110 ? '#15803d' : totPct > 110 ? '#1d4ed8' : '#b91c1c';
-            const totalRow: any[] = [
-              { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
-              { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-              { text: fmt(hayInesp ? totalEjecutado : totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-            ];
-            if (hayInesp) totalRow.push({ text: fmt(valorCupsInesperadas), bold: true, fontSize: 7, alignment: 'right', fillColor: '#fef08a', color: '#713f12' });
-            totalRow.push({ text: `${totPct.toFixed(1)}%`, bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe', color: totColor });
-            return {
-              table: {
-                widths: hayInesp ? ['*', 100, 90, 82, 52] : ['*', 110, 110, 60],
-                body: [
-                  [
-                    { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
-                    { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
-                    { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
-                    ...(hayInesp ? [{ text: 'CUPS INESPERADOS', bold: true, fontSize: 7, fillColor: '#fef9c3', alignment: 'right' }] : []),
-                    { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
-                  ],
-                  ...mesData.map(buildRow),
-                  totalRow,
+          {
+            table: {
+              widths: ['*', 110, 110, 60],
+              body: [
+                [
+                  { text: 'MES', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
+                  { text: 'VALOR ESPERADO (NT)', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                  { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
+                  { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                 ],
-              },
-              layout: 'lightHorizontalLines',
-              margin: [0, 0, 0, 4],
-            };
-          })(),
+                ...mesData.map((m, i) => {
+                  // Las inesperadas se suman al último mes (mes de cierre del período)
+                  const isLast = i === mesData.length - 1;
+                  const safeVal   = isFinite(m.value)             ? m.value             : 0;
+                  const safeInesp = isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0;
+                  const valMes = isLast ? safeVal + safeInesp : safeVal;
+                  const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
+                  const ok = pct >= 90 && pct <= 110;
+                  const high = pct > 110;
+                  const pctColor = ok ? '#15803d' : high ? '#1d4ed8' : '#b91c1c';
+                  const rowFill = ok ? '#f0fdf4' : high ? '#eff6ff' : '#fff1f2';
+                  return [
+                    { text: m.name, fontSize: 7, fillColor: rowFill },
+                    { text: fmt(monthlyNT), fontSize: 7, alignment: 'right', fillColor: rowFill },
+                    { text: fmt(valMes), fontSize: 7, alignment: 'right', fillColor: rowFill, bold: true },
+                    { text: `${pct.toFixed(1)}%`, fontSize: 7.5, alignment: 'center', bold: true, color: pctColor, fillColor: rowFill },
+                  ];
+                }),
+                [
+                  { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
+                  { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  { text: fmt(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  {
+                    text: `${(monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
+                    bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
+                    color: (() => { const p = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                  },
+                ],
+              ],
+            },
+            layout: 'lightHorizontalLines',
+            margin: [0, 0, 0, 4],
+          },
 
           // ══════════════════════
           //       PÁGINA 2
@@ -978,7 +934,7 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   { text: `VALOR DE ${expectedMonths} MES${expectedMonths > 1 ? 'ES' : ''}   ${fmt(ntPeriodoFull)}`, ...CS, bold: true },
-                  { text: descontarEjecucion > 0 ? fmt(descontarEjecucion) : '$ -', ...CS, alignment: 'right' },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right' },
                 ],
                 [
@@ -988,12 +944,14 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   {
+                    // TOTAL EJECUTADO incluye inesperadas en el valor mostrado
+                    // pero el descuento se calcula sobre RIPS puro
                     text: valorCupsInesperadas > 0
                       ? `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)} (incl. ${fmt(valorCupsInesperadas)} tec. inesperadas)`
                       : `TOTAL EJECUTADO DEL ${periodoLabel.toUpperCase()}   ${fmt(totalEjecutadoFinal)}`,
                     ...CS, bold: true, fillColor: '#f0fdf4',
                   },
-                  { text: descontarEjecucion > 0 ? fmt(descontarEjecucion) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontarEjecucion > 0 ? '#b91c1c' : '#374151' },
+                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
                 ],
               ],
@@ -1001,12 +959,6 @@ export default function CertificadoTrimestral({
             layout: 'lightHorizontalLines',
             margin: [0, 0, 0, 4],
           },
-
-          // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
-          ...(descontarEjecucion > 0 ? [{
-            text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmt(minPeriodo - totalEjecutadoFinal)} (mínimo ${fmt(minPeriodo)} − ejecutado ${fmt(totalEjecutadoFinal)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmt(descontarEjecucion)}.`,
-            fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
-          }] : []),
 
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -1177,7 +1129,7 @@ export default function CertificadoTrimestral({
               ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' +
                 mesData.slice(0, advanceMonths).map(m => `${m.name} (equivalente a ${fmt(adv80)})`).join(' y ') +
                 `. Para el mes de ${mesData[mesData.length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${periodoLabel.toLowerCase()}, con un valor equivalente a ${fmt(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmt(totalAdv)}.`
-              : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmt(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmt(maxPeriodo)}), generando una sobrejecución de ${fmt(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmt(reconocer)}, sin valor a descontar ($0,00). En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmt(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución equivalente al ${(((minPeriodo - totalEjecutadoFinal) / ntPeriodo) * 100).toFixed(1)}% por debajo del mínimo contractual del 90% (${fmt(minPeriodo)}). Conforme al modelo PGP, el valor a descontar corresponde al 50% del déficit respecto al mínimo, equivalente a ${fmt(descontar)}, sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}`}.`,
+              : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmt(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmt(maxPeriodo)}), generando una sobrejecución de ${fmt(totalEjecutadoFinal - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmt(reconocer)}, sin valor a descontar ($0,00). En consecuencia, el valor estimado final del ${periodoLabel.toLowerCase()} asciende a ${fmt(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmt(descontar)} por ejecución inferior al mínimo del 90% (${fmt(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${periodoLabel.toLowerCase()} corresponde a ${fmt(valorFinal)}`}.`,
             style: 'p',
           },
 
@@ -1309,9 +1261,9 @@ export default function CertificadoTrimestral({
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
-      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? 0.50 * (minPeriodo - totalEjecutadoFinal) : 0;
+      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      const descontarGlosaR     = _lsG2?.descontar || 0;
+      const descontarGlosaR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG2?.descontar || 0;
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
@@ -1434,32 +1386,16 @@ export default function CertificadoTrimestral({
     const fmtNL = (v: number) => new Intl.NumberFormat('es-CO').format(Math.round(v));
 
     const {
-      mesData: md, fechaInicio, fechaFin,
+      mesData: md, monthlyNT, fechaInicio, fechaFin,
       supervisorName: svName, showSupervisor: showSvFromRecord,
-      advanceMonths,
+      advanceMonths, adv80, totalAdv,
+      ntPeriodoFull, ntPeriodo, minPeriodo, maxPeriodo, lastMonthPay,
       notaAdicional: notaAd, notaEjecucionFinanciera: notaEF,
       valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
       periodoLabel, periodType: pt, empresa, nit: empresaNit,
       municipio, depto, contratoNum, periodo, n, expectedMonths,
       totalEjecutadoFinal, totalCups,
     } = pd;
-
-    // NT y bandas: leer desde Sheet actual para corregir registros guardados con columna renombrada en 2026
-    const _vcmFR = selectedPrestador
-      ? parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO'])
-      : 0;
-    const monthlyNT: number = _vcmFR > 0 ? _vcmFR : (pd.monthlyNT || 0);
-    const _nFR = Number(n) || (md as any[]).length || 1;
-    const _expFR = Number(expectedMonths) || _nFR;
-    const ntPeriodo: number = monthlyNT * _nFR;
-    const ntPeriodoFull: number = monthlyNT * _expFR;
-    const _fiFR = selectedPrestador ? parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']) : 0;
-    const _fsFR = selectedPrestador ? parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']) : 0;
-    const minPeriodo: number = _fiFR > 0 ? _fiFR * _nFR : ntPeriodo * 0.9;
-    const maxPeriodo: number = _fsFR > 0 ? _fsFR * _nFR : ntPeriodo * 1.1;
-    const adv80: number = monthlyNT * 0.8;
-    const totalAdv: number = adv80 * (Number(advanceMonths) || 0);
-    const lastMonthPay: number = ntPeriodoFull - totalAdv;
 
     // Corregir período según mesData real (snapshot puede tener trimestral aunque sea mensual)
     const _mdArr = (md as any[]) || [];
@@ -1471,19 +1407,43 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // ⚠️  BLOQUE PROTEGIDO — NO MODIFICAR SIN REVISIÓN TÉCNICA
-    // ORDEN OBLIGATORIO: corrValMap → totalEjFinalCorr → descontar.
-    // Razón: pd.totalEjecutadoFinal es el snapshot guardado en Supabase y puede
-    // estar desactualizado (ej. Bonnadona inf-059 tenía $426M en lugar de $944M
-    // porque los meses MAYO y JUNIO se cargaron después de crear el trimestral).
-    // totalEjFinalCorr recalcula sumando gi.totalEjecutado de cada informe mensual
-    // actual, que ya incluye RIPS + inesperadas — ese es el valor correcto.
-    // Si se mueve este bloque DESPUÉS del cálculo de descontar, el resultado será
-    // un falso descuento por subejecución (potencialmente cientos de millones de pesos).
-    // ══════════════════════════════════════════════════════════════════════════
-    // ── Corregir valores por mes ANTES de calcular descontar ──
-    // gi.totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
+    // Recalcular descontar/reconocer/valorFinal con lógica correcta:
+    // comparación usa SOLO RIPS (sin inesperadas); inesperadas se reconocen por separado.
+    // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
+    const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? minPeriodo - totalEjecutadoFinal : 0;
+    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const descontarGlosaFR     = pgpData?.notaTecnica?.descuentoAplicado || initialInforme?.descontar || _lsG3?.descontar || inf.descontar || 0;
+    const descontarR = descontarEjecucionFR + descontarGlosaFR;
+    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
+    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
+    const valorFinalR = ntPeriodo - descontarR + reconocerR;
+    // Sin pgpData activo (historial): leer descontar canónico (>0 tiene prioridad sobre 0)
+    // reconocer y valorFinal siempre se recomputan para ser consistentes con descontar
+    const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
+    const descontar = hasActiveGlosaFR ? descontarR
+      : (inf.descontar > 0 ? inf.descontar : ((pd as any).descontar > 0 ? (pd as any).descontar : descontarR));
+    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
+    const ejecutadoNetoEff  = Math.max(0, totalEjecutadoFinal - descontarGlosaEff);
+    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
+    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
+    const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
+      || inf.comentariosGlosa
+      || (pd as any).comentariosGlosa
+      || '';
+
+    // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
+    // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
+    const showSv = inf.showSupervisor !== undefined
+      ? Boolean(inf.showSupervisor)
+      : (showSvFromRecord !== false);
+
+    // ── Fechas reales del período evaluado (no las del contrato completo) ──
+    const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
+
+    const cantInespNum = parseInt(cantCupsIn) || 0;
+
+    // Corregir valores por mes usando totalEjecutado de informes MENSUALES del grupo
+    // totalEjecutado ya incluye inesperadas; mesData.value solo tiene RIPS
     const MONTHS_FULL_PDF = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const TIPO_PRIO_PDF: Record<string, number> = { TRIMESTRAL: 0, BIMESTRAL: 1, MENSUAL: 2 };
     const corrValMap: Record<string, number> = {};
@@ -1515,46 +1475,6 @@ export default function CertificadoTrimestral({
     const hasMonthlyInesp = mdCorrected.some((m: any) => m.inesperados > 0);
     // valCupsIn ya está incluido en totalEjecutado cuando hay corrección mensual
     const valCupsInFinal = hasCorrected ? 0 : valCupsIn;
-
-    // totalEjFinalCorr: suma de valores mensuales corregidos (ya incluyen inesperadas por mes)
-    const totalEjFinalCorr = hasCorrected
-      ? mdCorrected.reduce((sum: number, m: any) => sum + (isFinite(m.value) ? m.value : 0), 0)
-      : totalEjecutadoFinal;
-
-    // ── Cálculo DESCONTAR / RECONOCER ──
-    // ⚠️ PROTEGIDO: descontarGlosaFR NO debe incluir inf.descontar ni pd.descontar.
-    // El campo descontar de Supabase mezcla descuentos por ejecución (calculados
-    // automáticamente) con glosas reales de auditoría. Usar ese valor como "glosa"
-    // duplica el descuento: una vez como ejecución (ya restado en descontarEjecucionFR)
-    // y otra vez como auditoría. Fuentes válidas: solo pgpData y localStorage.
-    const descontarEjecucionFR = totalEjFinalCorr < minPeriodo ? 0.50 * (minPeriodo - totalEjFinalCorr) : 0;
-    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    const descontarGlosaFR     = _lsG3?.descontar || 0;
-    const descontarR = descontarEjecucionFR + descontarGlosaFR;
-    const ejecutadoNetoFR = Math.max(0, totalEjFinalCorr - descontarGlosaFR);
-    const reconocerR = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
-    const valorFinalR = ntPeriodo - descontarR + reconocerR;
-    const hasActiveGlosaFR = pgpData?.notaTecnica?.descuentoAplicado != null;
-    const descontar = descontarR;
-    const descontarGlosaEff = Math.max(0, descontar - descontarEjecucionFR);
-    const ejecutadoNetoEff  = Math.max(0, totalEjFinalCorr - descontarGlosaEff);
-    const reconocer  = hasActiveGlosaFR ? reconocerR  : (ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0);
-    const valorFinal = hasActiveGlosaFR ? valorFinalR : (ntPeriodo - descontar + reconocer);
-    const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
-      || inf.comentariosGlosa
-      || (pd as any).comentariosGlosa
-      || '';
-
-    // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
-    // sobre el del snapshot pdf_data (puede estar desactualizado si el usuario lo editó)
-    const showSv = inf.showSupervisor !== undefined
-      ? Boolean(inf.showSupervisor)
-      : (showSvFromRecord !== false);
-
-    // ── Fechas reales del período evaluado (no las del contrato completo) ──
-    const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(md as any[], fechaInicio);
-
-    const cantInespNum = parseInt(cantCupsIn) || 0;
 
     const labels = mdCorrected.map((m: any) => m.name);
 
@@ -1647,7 +1567,7 @@ export default function CertificadoTrimestral({
 
         // ══ NARRATIVA 2 ══
         { text: `La ejecución de los espacios correspondientes a los códigos CUPS, representados en el gráfico, evidencia el comportamiento financiero y operativo de las notas técnicas derivadas de los contratos suscritos entre Dusakawi EPSI y los prestadores de servicios de salud. Estos códigos, que agrupan los procedimientos y tratamientos médicos realizados durante el período de análisis, constituyen un componente fundamental en el cumplimiento de las obligaciones contractuales y en la trazabilidad de la prestación de servicios. Su adecuada aplicación garantiza la consistencia entre la facturación, la ejecución presupuestal y los registros contables vinculados al proceso de compensación.${valCupsIn > 0 ? ` Durante el período se identificaron CUPS / Tecnologías Inesperadas${cantInespNum > 0 ? ` (${fmtNL(cantInespNum)} códigos)` : ''} con un valor consolidado de ${fmtL(valCupsIn)}, representados en la franja naranja del gráfico anterior, los cuales son incorporados al total ejecutado para efectos del cálculo financiero del período.` : ''}`, style: 'p' },
-        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${effectivePeriodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjFinalCorr)}${(hasMonthlyInesp || valCupsIn > 0) ? ` (incluye ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
+        { text: `El análisis reflejado en el gráfico permite observar la evolución mensual de la ejecución en términos de valor y volumen de actividades. ${detalleValor} Esta tendencia muestra una ejecución sostenida y controlada, sustentada en la revisión técnica de los reportes mensuales y en la validación de los soportes asociados a los servicios contratados. El consolidado del ${effectivePeriodoLabel.toLowerCase()}, equivalente a ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} de CUPS / Tecnologías Inesperadas)` : ''}, evidencia la correspondencia entre las actividades ejecutadas y los valores registrados, permitiendo establecer una trazabilidad clara entre las fases de prestación, registro y validación.`, style: 'p', margin: [0, 0, 0, 4] },
 
         // ══ GRÁFICA 2 ══
         { text: cantInespNum > 0 ? 'GRÁFICO 2. CONSOLIDADO DE ACTIVIDADES CUPS — INCLUYE ACTIVIDADES INESPERADAS' : 'GRÁFICO 2. CONSOLIDO DE EJECUCIÓN DE CUPS EMPLEADOS EN EL REPORTE', style: 'chartLabel' },
@@ -1688,15 +1608,15 @@ export default function CertificadoTrimestral({
               [
                 { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
                 { text: fmtL(monthlyNT * mdCorrected.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                { text: fmtL(totalEjFinalCorr), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                { text: fmtL(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                 ...(hasMonthlyInesp ? [{
                   text: fmtL(mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0)),
                   bold: true, fontSize: 7, alignment: 'right', fillColor: '#fdf4ff', color: '#7c3aed',
                 }] : []),
                 {
-                  text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjFinalCorr / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
+                  text: `${(monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0).toFixed(1)}%`,
                   bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
-                  color: (() => { const p = monthlyNT * mdCorrected.length > 0 ? (totalEjFinalCorr / (monthlyNT * mdCorrected.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                  color: (() => { const p = monthlyNT * mdCorrected.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mdCorrected.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
                 },
               ],
             ],
@@ -1718,19 +1638,14 @@ export default function CertificadoTrimestral({
               [{ text: `VALOR DE ${effectiveMonths} MES${effectiveMonths > 1 ? 'ES' : ''}   ${fmtL(effectiveNtPeriodoFull)}`, ...CS, bold: true }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{ text: `% MAXIMO PERMITIDO 110%   ${fmtL(maxPeriodo)}`, ...CS }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
               [{
-                text: (hasMonthlyInesp || valCupsIn > 0)
-                  ? `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjFinalCorr)} (incl. ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} tec. inesperadas)`
-                  : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjFinalCorr)}`,
+                text: valCupsIn > 0
+                  ? `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)} (incl. ${fmtL(valCupsIn)} tec. inesperadas)`
+                  : `TOTAL EJECUTADO DEL ${effectivePeriodoLabel.toUpperCase()}   ${fmtL(totalEjecutadoFinal)}`,
                 ...CS, bold: true, fillColor: '#f0fdf4',
               }, { text: '$ -', ...CS, alignment: 'right' }, { text: '$ -', ...CS, alignment: 'right' }],
-              ...(descontarEjecucionFR > 0 ? [[
-                { text: 'DESCUENTO POR SUBEJECUCIÓN (50%)', ...CS, bold: true, color: '#b91c1c' },
-                { text: fmtL(descontarEjecucionFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
-                { text: '$ -', ...CS, alignment: 'right' },
-              ]] : []),
-              ...(descontarGlosaFR > 0 ? [[
+              ...(descontar > 0 ? [[
                 { text: 'VALOR DESCONTADO POR GLOSA', ...CS, bold: true, color: '#b91c1c' },
-                { text: fmtL(descontarGlosaFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: fmtL(descontar), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
                 { text: '$ -', ...CS, alignment: 'right' },
               ]] : []),
               ...(reconocer > 0 ? [[
@@ -1743,12 +1658,6 @@ export default function CertificadoTrimestral({
           layout: 'lightHorizontalLines',
           margin: [0, 0, 0, 4],
         },
-
-        // Nota aclaratoria 50% subejecución (solo cuando hay descuento por ejecución)
-        ...(descontarEjecucionFR > 0 ? [{
-          text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmtL(minPeriodo - totalEjFinalCorr)} (mínimo ${fmtL(minPeriodo)} − ejecutado ${fmtL(totalEjFinalCorr)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmtL(descontarEjecucionFR)}.`,
-          fontSize: 6.5, italics: true, alignment: 'justify', margin: [0, 0, 0, 6], color: '#7f1d1d',
-        }] : []),
 
         // Pagos anticipados
         { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -1810,9 +1719,9 @@ export default function CertificadoTrimestral({
 
         // ══════════════════════ PÁGINA 3 ══════════════════════
         { text: '3. ANÁLISIS FINANCIERO DEL PERÍODO', style: 'sectionHead', decoration: 'underline', margin: [0, 4, 0, 4] },
-        { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjFinalCorr)}${(hasMonthlyInesp || valCupsIn > 0) ? ` (incluye ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
-        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjFinalCorr)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
-        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${effectivePeriodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjFinalCorr)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${effectivePeriodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución equivalente al ${(((minPeriodo - totalEjFinalCorr) / ntPeriodo) * 100).toFixed(1)}% por debajo del mínimo contractual del 90% (${fmtL(minPeriodo)}). Conforme al modelo PGP, el valor a descontar corresponde al 50% del déficit respecto al mínimo, equivalente a ${fmtL(descontar)}, sin valor a reconocer ($0,00). El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
+        { text: `Durante el período comprendido entre ${fechaInicioPeriodo} y ${fechaFinPeriodo}, se ha realizado un seguimiento riguroso al cumplimiento de los términos acordados en el contrato ${contratoNum}, garantizando los estándares requeridos en la prestación de servicios de salud a la población afiliada en ${municipio}, ${depto}. Durante los últimos ${n} ${n === 1 ? 'mes' : 'meses'}, se ha contabilizado un total ejecutado de ${fmtL(totalEjecutadoFinal)}${valCupsIn > 0 ? ` (incluye ${fmtL(valCupsIn)} correspondientes a CUPS / Tecnologías Inesperadas)` : ''} en relación con el periodo señalado de ${periodo}. Este resultado es reflejo de una gestión eficiente, de un acompañamiento continuo y de mecanismos de control implementados de forma sistemática para asegurar el cumplimiento de los compromisos establecidos por las partes.`, style: 'p' },
+        { text: `En lo que respecta a los aspectos financieros, el valor total de ${fmtL(totalEjecutadoFinal)} ha sido calculado, registrado y conciliado mes a mes: ${mdCorrected.map((m: any) => `en ${m.name} se registró un valor ejecutado de ${fmtL(m.value)} correspondiente a ${fmtNL(m.cups)} actividades en salud`).join('; ')}${valCupsInFinal > 0 ? `; adicionalmente se incluye un valor de ${fmtL(valCupsInFinal)} por concepto de CUPS / Tecnologías Inesperadas` : ''}. Estos montos representan los servicios efectivamente prestados por la IPS en el marco del contrato, y han sido objeto de verificación documental, validación operativa y conciliación administrativa. La franja de riesgo contractual establece un mínimo del 90% equivalente a ${fmtL(minPeriodo)} y un máximo del 110% equivalente a ${fmtL(maxPeriodo)}.`, style: 'p' },
+        { text: `Como consecuencia de lo anterior, se procedió a programar los pagos conforme a lo estipulado contractualmente${advanceMonths > 0 ? ': se aprobó un pago anticipado equivalente al 80% del valor mensual durante los meses de ' + (md as any[]).slice(0, advanceMonths).map((m: any) => `${m.name} (equivalente a ${fmtL(adv80)})`).join(' y ') + `. Para el mes de ${(md as any[])[(md as any[]).length - 1]?.name || 'cierre'}, se proyectó el pago del saldo pendiente del ${effectivePeriodoLabel.toLowerCase()}, con un valor equivalente a ${fmtL(Math.max(0, valorFinal - totalAdv))}, completando así el acumulado de anticipos de ${fmtL(totalAdv)}.` : '.'} En función de lo previsto contractualmente, ${reconocer > 0 ? `el valor ejecutado de ${fmtL(totalEjecutadoFinal)} supera el límite máximo reconocible del 110% (${fmtL(maxPeriodo)}), generando una sobrejecución neta de ${fmtL(ejecutadoNetoFR - maxPeriodo)}. Conforme al modelo de Pago Global Prospectivo (PGP), únicamente se reconoce el 50% de dicha sobrejecución, equivalente a ${fmtL(reconocer)}${descontarGlosaFR > 0 ? `, con descuento por glosa de auditoría de ${fmtL(descontarGlosaFR)}` : ', sin valor a descontar ($0,00)'}. En consecuencia, el valor estimado final del ${effectivePeriodoLabel.toLowerCase()} asciende a ${fmtL(valorFinal)}` : descontar > 0 ? `se evidencia una subejecución que genera un valor a descontar de ${fmtL(descontar)} por ejecución inferior al mínimo del 90% (${fmtL(minPeriodo)}), sin valor a reconocer ($0,00). El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}` : `la ejecución se ubica dentro de la franja de riesgo contractual (90%–110%), sin valores a descontar ni a reconocer. El valor estimado final del ${effectivePeriodoLabel.toLowerCase()} corresponde a ${fmtL(valorFinal)}`}.`, style: 'p' },
 
         // Tabla resumen final
         {
@@ -1833,7 +1742,7 @@ export default function CertificadoTrimestral({
         { text: `Finalmente, el total reconocido por valor de ${fmtL(valorFinal)} ha sido determinado teniendo en cuenta los valores efectivamente ejecutados, los descuentos aplicados, las retenciones legales y demás ajustes pertinentes. Este proceso garantiza una administración financiera eficaz, una compensación adecuada para todas las partes y refuerza el compromiso con la calidad, la legalidad y la transparencia institucional. El contrato ${contratoNum} se ejecuta con estricto apego a las cláusulas pactadas, al cronograma acordado y a los indicadores de desempeño establecidos, garantizando que la prestación de servicios de salud se realice con excelencia, oportunidad y pertinencia en favor de la población afiliada de ${municipio}, departamento de ${depto}.`, style: 'p', margin: [0, 0, 0, 3] },
 
         // Narrativa CUPS
-        { text: `La ejecución de los códigos CUPS durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjFinalCorr)} en valores ejecutados${(hasMonthlyInesp || valCupsIn > 0) ? ` (de los cuales ${fmtL(hasMonthlyInesp ? mdCorrected.reduce((s: number, m: any) => s + (m.inesperados || 0), 0) : valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
+        { text: `La ejecución de los códigos CUPS durante el ${effectivePeriodoLabel.toLowerCase()} de ${periodo} evidencia la trazabilidad técnica y financiera de los contratos entre Dusakawi EPSI y ${empresa}. ${(md as any[]).map((m: any) => `En el mes de ${m.name} se documentaron ${fmtNL(m.cups)} CUPS con un consolidado financiero de ${fmtL(m.value)}`).join('; ')}. El consolidado del período totaliza ${fmtNL(totalCups)} actividades en salud y ${fmtL(totalEjecutadoFinal)} en valores ejecutados${valCupsIn > 0 ? ` (de los cuales ${fmtL(valCupsIn)} corresponden a CUPS / Tecnologías Inesperadas)` : ''}, reflejando la correspondencia entre las actividades reportadas y los recursos financieros comprometidos en el marco contractual.`, style: 'p', margin: [0, 0, 0, 8] },
 
         // ══ NOTA ACLARATORIA — solo desde agosto en adelante ══
         ...(showNotaAclaratoria ? [{
@@ -2214,8 +2123,8 @@ export default function CertificadoTrimestral({
 
                         // Meses ya cubiertos por informes existentes
                         const mesesCubiertos = new Set<string>(infs.flatMap((i: any) => periodoToYM(i.periodo || '')));
-                        // Meses con RIPS en SIE para este NIT — filtrar solo año 2026
-                        const mesesSie: string[] = (sieMesesPorNit[nit] ?? []).filter(m => m.startsWith('2026-'));
+                        // Meses con RIPS en SIE para este NIT
+                        const mesesSie: string[] = sieMesesPorNit[nit] ?? [];
                         // Diferencia: tienen RIPS pero no tienen informe aún
                         const mesesParaEvaluar = mesesSie.filter(m => !mesesCubiertos.has(m));
 
@@ -2543,37 +2452,31 @@ export default function CertificadoTrimestral({
                           </tr>
                         </thead>
                         <tbody>
-                          {trim.infs.map((inf: any) => {
-                            const { totalRealEfectivo, inesperadasEfectivas, cantCupsEfectiva, ripsEfectivo, usandoSuma, descontarEfectivo, valorFinalEfectivo } = calcInfTotals(inf, trim.infs);
-                            return (
+                          {trim.infs.map((inf: any) => (
                             <tr key={inf.numero} className="border-t border-border/40 hover:bg-muted/20">
                               <td className="px-3 py-1.5 font-mono font-bold text-blue-700">{inf.numero}</td>
                               <td className="px-3 py-1.5 font-medium max-w-[120px] truncate" title={inf.periodo}>{inf.periodo}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.tipoPeriodo}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-blue-700">
-                                {fmtCOP2(ripsEfectivo)}
-                                {usandoSuma && <span className="block text-[9px] text-blue-400">Σ meses</span>}
+                                {fmtCOP2((inf.totalEjecutado || 0) - (inf.pdfData?.valorCupsInesperadas || 0))}
                               </td>
                               <td className="px-3 py-1.5 text-right text-purple-700">
-                                {inesperadasEfectivas > 0 ? (
-                                  <span className="font-semibold">{fmtCOP2(inesperadasEfectivas)}</span>
+                                {inf.pdfData?.valorCupsInesperadas > 0 ? (
+                                  <span className="font-semibold">{fmtCOP2(inf.pdfData.valorCupsInesperadas)}</span>
                                 ) : <span className="text-muted-foreground text-[10px]">—</span>}
-                                {cantCupsEfectiva > 0 && (
-                                  <span className="block text-[10px] text-purple-500">{cantCupsEfectiva} CUPS</span>
+                                {inf.pdfData?.cantidadCupsInesperadas > 0 && (
+                                  <span className="block text-[10px] text-purple-500">{inf.pdfData.cantidadCupsInesperadas} CUPS</span>
                                 )}
                               </td>
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
-                                {fmtCOP2(totalRealEfectivo)}
-                                {usandoSuma && <span className="block text-[9px] text-emerald-400">Σ meses</span>}
+                                {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
                               {/* Descuento por meta (<90% NT) */}
                               <td className="px-3 py-1.5 text-right font-semibold">
                                 {(() => {
-                                  const dm = descontarEfectivo !== null
-                                    ? descontarEfectivo
-                                    : (inf.descontarMeta ?? (inf.glosaAuditoria == null && inf.descontar > 0 ? inf.descontar : 0));
+                                  const dm = inf.descontarMeta ?? (inf.glosaAuditoria == null && inf.descontar > 0 ? inf.descontar : 0);
                                   return dm > 0
-                                    ? <span className="text-orange-600">{fmtCOP2(dm)}{usandoSuma && <span className="block text-[9px] text-orange-400">(110%-Σ)/2</span>}</span>
+                                    ? <span className="text-orange-600">{fmtCOP2(dm)}</span>
                                     : <span className="text-muted-foreground text-[10px]">—</span>;
                                 })()}
                               </td>
@@ -2583,10 +2486,7 @@ export default function CertificadoTrimestral({
                                   ? <span className="text-red-600">{fmtCOP2(inf.glosaAuditoria)}</span>
                                   : <span className="text-muted-foreground text-[10px]">—</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">
-                                {fmtCOP2(valorFinalEfectivo !== null ? valorFinalEfectivo : inf.valorFinal)}
-                                {usandoSuma && valorFinalEfectivo !== null && <span className="block text-[9px] text-green-500">Σ meses</span>}
-                              </td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
                               {/* Acta Inesperados */}
@@ -2656,8 +2556,7 @@ export default function CertificadoTrimestral({
                                 </div>
                               </td>
                             </tr>
-                            );
-                          })}
+                          ))}
                         </tbody>
                       </table>
                       </div>
