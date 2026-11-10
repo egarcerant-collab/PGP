@@ -309,8 +309,6 @@ export default function CertificadoTrimestral({
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [selectedPrestadorGroup, setSelectedPrestadorGroup] = useState<{ name: string; infs: any[] } | null>(null);
-  // SIE: meses cargados por NIT
-  const [sieMesesPorNit, setSieMesesPorNit] = useState<Record<string, string[]>>({});
   // { [numero]: trimIdx } — override manual del trimestre para un informe
   const [modalTrimOverrides, setModalTrimOverrides] = useState<Record<string, number>>({});
   const [reopenInf, setReopenInf] = useState<any | null>(null);
@@ -487,21 +485,6 @@ export default function CertificadoTrimestral({
     }
   };
 
-  // Carga meses disponibles del SIE por NIT
-  useEffect(() => {
-    fetch('/api/sie/monitoreo')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d?.estados) return;
-        const map: Record<string, string[]> = {};
-        for (const e of d.estados) {
-          if (e.nit && e.mesesCargados?.length) map[e.nit] = e.mesesCargados;
-        }
-        setSieMesesPorNit(map);
-      })
-      .catch(() => {});
-  }, []);
-
   // Auto-carga el registro al montar el componente
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadHistorial(); }, []);
@@ -569,7 +552,7 @@ export default function CertificadoTrimestral({
       // ── Datos del Sheet de prestadores ──
       // VALOR CONTRATO, FRANJA INFERIOR y FRANJA SUPERIOR son valores MENSUALES
       // (UPC × población del periodo). MESES indica duración del contrato (12, 11…)
-      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad hacia atrás)
+      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad)
       const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO']);
       const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
       const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
@@ -1228,7 +1211,7 @@ export default function CertificadoTrimestral({
       const selectedGroup = periodGroups[selectedPeriodIndex] ?? periodGroups[0];
       const n = selectedGroup?.months.length || 0;
 
-      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad hacia atrás)
+      // 'VALOR CONTRATO MENSUAL' en 2026; 'VALOR CONTRATO' en 2025 (compatibilidad)
       const valorContratoMensual = parseCurrencyField(selectedPrestador['VALOR CONTRATO MENSUAL'] || selectedPrestador['VALOR CONTRATO']);
       const franjaInf90Mensual   = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO INFERIOR (90%)']);
       const franjaSup110Mensual  = parseCurrencyField(selectedPrestador['FRANJA DE RIESGO SUPERIOR (110%)']);
@@ -2085,20 +2068,11 @@ export default function CertificadoTrimestral({
               <p className="text-xs text-muted-foreground">No hay informes guardados aún.</p>
             )}
             {historial.length > 0 && (() => {
-              const MESES_ES: Record<string, number> = { ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12 };
-              const MES_NOMBRE: Record<number, string> = { 1:'ENE',2:'FEB',3:'MAR',4:'ABR',5:'MAY',6:'JUN',7:'JUL',8:'AGO',9:'SEP',10:'OCT',11:'NOV',12:'DIC' };
-
-              // Convierte periodo "ENERO-FEBRERO-MARZO" → ["2026-01","2026-02","2026-03"]
-              const periodoToYM = (periodo: string, year = 2026) =>
-                (periodo || '').split('-').flatMap((p: string) => {
-                  const n = MESES_ES[p.trim().toUpperCase()];
-                  return n ? [`${year}-${String(n).padStart(2,'0')}`] : [];
-                });
-
+              const fmtCOP = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
               // Agrupar por prestador
-              const grupos = historial.reduce((acc: Record<string, { displayName: string; nit: string; infs: any[] }>, inf: any) => {
+              const grupos = historial.reduce((acc: Record<string, { displayName: string; infs: any[] }>, inf: any) => {
                 const key = (inf.prestador || '—').trim().toUpperCase();
-                if (!acc[key]) acc[key] = { displayName: (inf.prestador || '—').trim(), nit: inf.nit || '', infs: [] };
+                if (!acc[key]) acc[key] = { displayName: (inf.prestador || '—').trim(), infs: [] };
                 acc[key].infs.push(inf);
                 return acc;
               }, {});
@@ -2111,23 +2085,14 @@ export default function CertificadoTrimestral({
                         <th className="px-3 py-2 text-left font-semibold w-6"></th>
                         <th className="px-3 py-2 text-left font-semibold">Prestador</th>
                         <th className="px-3 py-2 text-left font-semibold">Meses auditados</th>
-                        <th className="px-3 py-2 text-left font-semibold text-orange-600">Listos para evaluar</th>
                         <th className="px-3 py-2 text-center font-semibold"># Inf.</th>
                         <th className="px-3 py-2 text-left font-semibold">Auditor(es)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {Object.entries(grupos).map(([key, grupo]: [string, any]) => {
-                        const { displayName, nit, infs } = grupo;
+                        const { displayName, infs } = grupo;
                         const auditores = [...new Set(infs.map((i: any) => i.responsable).filter(Boolean))].join(', ');
-
-                        // Meses ya cubiertos por informes existentes
-                        const mesesCubiertos = new Set<string>(infs.flatMap((i: any) => periodoToYM(i.periodo || '')));
-                        // Meses con RIPS en SIE para este NIT
-                        const mesesSie: string[] = sieMesesPorNit[nit] ?? [];
-                        // Diferencia: tienen RIPS pero no tienen informe aún
-                        const mesesParaEvaluar = mesesSie.filter(m => !mesesCubiertos.has(m));
-
                         return (
                           <tr
                             key={`g-${key}`}
@@ -2138,13 +2103,22 @@ export default function CertificadoTrimestral({
                             <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={displayName}>{displayName}</td>
                             <td className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
-                                {[...infs].sort((a: any, b: any) => { const mA=Math.min(...(a.periodo||"").split("-").filter(Boolean).map((p:string)=>MESES_ES[p.toUpperCase()]??99)); const mB=Math.min(...(b.periodo||"").split("-").filter(Boolean).map((p:string)=>MESES_ES[p.toUpperCase()]??99)); return mA-mB; }).map((i: any) => {
+                                {[...infs].sort((a: any, b: any) => { const MO: Record<string, number> = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12}; const mA=Math.min(...(a.periodo||"").split("-").filter(Boolean).map((p:string)=>MO[p.toUpperCase()]??99)); const mB=Math.min(...(b.periodo||"").split("-").filter(Boolean).map((p:string)=>MO[p.toUpperCase()]??99)); return mA-mB; }).map((i: any) => {
+                                  const MESES: Record<string, number> = { ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12 };
                                   const partes = (i.periodo || '').split('-').filter(Boolean);
                                   const esTrimestre = partes.length >= 3;
                                   const esBimestre = partes.length === 2;
-                                  const minMes = Math.min(...partes.map((p: string) => MESES_ES[p.toUpperCase()] ?? 99));
-                                  const badgeCls = esTrimestre ? 'bg-violet-100 text-violet-800 border-violet-200' : esBimestre ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-green-100 text-green-800 border-green-200';
-                                  const label = esTrimestre ? `Trimestre ${Math.ceil(minMes/3)}` : esBimestre ? `Bimestre ${Math.ceil(minMes/2)}` : i.periodo;
+                                  const minMes = Math.min(...partes.map((p: string) => MESES[p.toUpperCase()] ?? 99));
+                                  const badgeCls = esTrimestre
+                                    ? 'bg-violet-100 text-violet-800 border-violet-200'
+                                    : esBimestre
+                                    ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                    : 'bg-green-100 text-green-800 border-green-200';
+                                  const label = esTrimestre
+                                    ? `Trimestre ${Math.ceil(minMes / 3)}`
+                                    : esBimestre
+                                    ? `Bimestre ${Math.ceil(minMes / 2)}`
+                                    : i.periodo;
                                   return (
                                     <span key={i.numero} className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap border ${badgeCls}`}>
                                       {label}
@@ -2153,39 +2127,6 @@ export default function CertificadoTrimestral({
                                 })}
                               </div>
                             </td>
-
-                            {/* Columna: meses listos para evaluar */}
-                            <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                              {mesesParaEvaluar.length > 0 ? (
-                                <div className="flex flex-wrap items-center gap-1">
-                                  {mesesParaEvaluar.map(m => {
-                                    const [, mo] = m.split('-');
-                                    return (
-                                      <span key={m} className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap border bg-orange-100 text-orange-800 border-orange-300">
-                                        {MES_NOMBRE[+mo] ?? mo}
-                                      </span>
-                                    );
-                                  })}
-                                  <button
-                                    className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-orange-500 hover:bg-orange-600 text-white transition-colors"
-                                    title={`Evaluar ${mesesParaEvaluar.join(', ')}`}
-                                    onClick={() => {
-                                      // Navegar al analizador con los meses disponibles pre-cargados desde SIE
-                                      window.dispatchEvent(new CustomEvent('sie:evaluar', {
-                                        detail: { nit, prestador: displayName, meses: mesesParaEvaluar }
-                                      }));
-                                    }}
-                                  >
-                                    ▶ Evaluar
-                                  </button>
-                                </div>
-                              ) : mesesSie.length > 0 ? (
-                                <span className="text-[10px] text-green-600 font-medium">✓ Al día</span>
-                              ) : (
-                                <span className="text-[10px] text-slate-300">Sin RIPS</span>
-                              )}
-                            </td>
-
                             <td className="px-3 py-2 text-center font-bold text-blue-700">{infs.length}</td>
                             <td className="px-3 py-2 text-blue-700 truncate max-w-[160px]" title={auditores}>{auditores || '—'}</td>
                           </tr>
@@ -2441,8 +2382,7 @@ export default function CertificadoTrimestral({
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Ejecutado</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-purple-700">Inesperados</th>
                             <th className="px-3 py-1.5 text-right font-semibold text-emerald-700">Total Real</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-orange-600">Desc. meta</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-red-600">Glosa auditoría</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-red-600">Valor glosado</th>
                             <th className="px-3 py-1.5 text-right font-semibold">Valor Final</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Auditor</th>
                             <th className="px-3 py-1.5 text-left font-semibold">Fecha</th>
@@ -2471,21 +2411,7 @@ export default function CertificadoTrimestral({
                               <td className="px-3 py-1.5 text-right font-bold text-emerald-700">
                                 {fmtCOP2(inf.totalEjecutado || 0)}
                               </td>
-                              {/* Descuento por meta (<90% NT) */}
-                              <td className="px-3 py-1.5 text-right font-semibold">
-                                {(() => {
-                                  const dm = inf.descontarMeta ?? (inf.glosaAuditoria == null && inf.descontar > 0 ? inf.descontar : 0);
-                                  return dm > 0
-                                    ? <span className="text-orange-600">{fmtCOP2(dm)}</span>
-                                    : <span className="text-muted-foreground text-[10px]">—</span>;
-                                })()}
-                              </td>
-                              {/* Glosa solo del proceso de auditoría RIPS */}
-                              <td className="px-3 py-1.5 text-right font-semibold">
-                                {inf.glosaAuditoria > 0
-                                  ? <span className="text-red-600">{fmtCOP2(inf.glosaAuditoria)}</span>
-                                  : <span className="text-muted-foreground text-[10px]">—</span>}
-                              </td>
+                              <td className="px-3 py-1.5 text-right font-semibold">{inf.descontar > 0 ? <span className="text-red-600">{fmtCOP2(inf.descontar)}</span> : <span className="text-muted-foreground text-[10px]">—</span>}</td>
                               <td className="px-3 py-1.5 text-right font-semibold text-green-700">{fmtCOP2(inf.valorFinal)}</td>
                               <td className="px-3 py-1.5 text-blue-700 truncate max-w-[120px]" title={inf.responsable}>{inf.responsable || '—'}</td>
                               <td className="px-3 py-1.5 text-muted-foreground">{inf.fecha}</td>
