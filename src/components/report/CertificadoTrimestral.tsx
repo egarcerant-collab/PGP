@@ -13,7 +13,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
-import { getNtPeriodo, type NtConfigEntry } from "@/lib/nt-config";
+import { getNtPeriodo, getNtForMonth, type NtConfigEntry } from "@/lib/nt-config";
 import NtConfigPanel from "./NtConfigPanel";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -2282,6 +2282,14 @@ export default function CertificadoTrimestral({
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
+          // Aplicar overrides de NT por período si existen configuraciones
+          const nitChart = String(selectedPrestadorGroup.infs[0]?.nit || '').trim();
+          const vigenciaChart = new Date().getFullYear();
+          for (const month of Object.keys(monthlyMap)) {
+            const overrideNt = getNtForMonth(ntConfigs, nitChart, month, vigenciaChart, monthlyMap[month].nt);
+            monthlyMap[month] = { ...monthlyMap[month], nt: overrideNt };
+          }
+
           const chartData = MONTHS_FULL
             .filter(m => monthlyMap[m])
             .map(m => ({ mes: m.substring(0,3), full: m, nt: Math.round(monthlyMap[m].nt), ejecutado: Math.round(monthlyMap[m].ejecutado) }));
