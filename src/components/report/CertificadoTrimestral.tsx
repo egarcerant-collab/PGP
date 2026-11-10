@@ -682,8 +682,8 @@ export default function CertificadoTrimestral({
       // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
       // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
-      // Subejecución: 50% del valor que faltó para llegar al mínimo 90% (modelo PGP)
-      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) * 0.5 : 0;
+      // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
+      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Glosa: SOLO lo ingresado en módulo Descuentos y Ajustes (localStorage)
       const descontarGlosa = _lsG1?.descontar || 0;
@@ -945,11 +945,6 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
-          // Nota aclaratoria cuando hay subejecución
-          ...(descontarEjecucion > 0 ? [{
-            text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmt(minPeriodo - totalEjecutadoFinal)} (mínimo ${fmt(minPeriodo)} − ejecutado ${fmt(totalEjecutadoFinal)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmt(descontarEjecucion)}.`,
-            fontSize: 7, italics: true, color: '#6b7280', margin: [0, 0, 0, 4],
-          }] : []),
 
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -1252,8 +1247,8 @@ export default function CertificadoTrimestral({
       const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
-      // Subejecución: 50% del valor que faltó para llegar al mínimo 90% (modelo PGP)
-      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) * 0.5 : 0;
+      // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
+      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Glosa: SOLO lo ingresado en módulo Descuentos y Ajustes (localStorage)
       const descontarGlosaR     = _lsG2?.descontar || 0;
@@ -1402,17 +1397,17 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // Subejecución: 50% del valor que faltó para llegar al mínimo 90% (modelo PGP)
-    const descontarEjecucionFR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) * 0.5 : 0;
-    const _lsG3 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit || selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    // Glosa: SOLO módulo Descuentos y Ajustes (localStorage) o campo descontarGlosa del snapshot
-    // NUNCA inf.descontar (que es el total incluye subejecución de registros anteriores)
-    const descontarGlosaFR = _lsG3?.descontar || inf.pdfData?.descontarGlosa || 0;
-    const descontar = descontarEjecucionFR + descontarGlosaFR;
-    const descontarGlosaEff = descontarGlosaFR;
-    const ejecutadoNetoEff  = Math.max(0, totalEjecutadoFinal - descontarGlosaEff);
-    const reconocer  = ejecutadoNetoEff > maxPeriodo ? 0.50 * (ejecutadoNetoEff - maxPeriodo) : 0;
-    const valorFinal = ntPeriodo - descontar + reconocer;
+    // Usar valores guardados del snapshot pdfData para preservar los cálculos originales
+    // Si el snapshot tiene descontar/reconocer/valorFinal guardados, usarlos directamente
+    const descontar = isFinite(pd.descontar) && pd.descontar >= 0 ? pd.descontar
+      : (totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0);
+    const reconocer = isFinite(pd.reconocer) && pd.reconocer >= 0 ? pd.reconocer
+      : (totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0);
+    const valorFinal = isFinite(pd.valorFinal) && pd.valorFinal > 0 ? pd.valorFinal
+      : (ntPeriodo - descontar + reconocer);
+    // Glosa separada para mostrar en tabla (backward compat: si no existe en snapshot usar 0)
+    const descontarGlosaFR = pd.descontarGlosa || 0;
+    const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
@@ -1651,11 +1646,6 @@ export default function CertificadoTrimestral({
           margin: [0, 0, 0, 4],
         },
 
-        // Nota aclaratoria cuando hay subejecución
-        ...(descontarEjecucionFR > 0 ? [{
-          text: `Nota aclaratoria: El descuento por subejecución corresponde al 50% del déficit respecto al mínimo contractual del 90%. Déficit calculado: ${fmtL(minPeriodo - totalEjecutadoFinal)} (mínimo ${fmtL(minPeriodo)} − ejecutado ${fmtL(totalEjecutadoFinal)}). Conforme al modelo PGP, el descuento aplicado es el 50% de dicho déficit: ${fmtL(descontarEjecucionFR)}.`,
-          fontSize: 7, italics: true, color: '#6b7280', margin: [0, 0, 0, 4],
-        }] : []),
 
         // Pagos anticipados
         { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -2245,9 +2235,11 @@ export default function CertificadoTrimestral({
               const mesEntry = Array.isArray(inf.pdfData?.mesData)
                 ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
                 : null;
-              // Para el gráfico usar el valor real del mes (mesData.value = RIPS del mes específico)
-              // NO dividir totalEjecutado/3 (da promedio, no el valor real de cada mes)
-              const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+              // Para MENSUAL: usar totalEjecutado (incluye RIPS + inesperados, el valor real del mes)
+              // Para TRIMESTRAL/BIMENSUAL: usar mesEntry.value (RIPS por mes del snapshot)
+              const mesVal = (months.length === 1 && isFinite(inf.totalEjecutado) && inf.totalEjecutado > 0)
+                ? inf.totalEjecutado
+                : (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
                 : (isFinite(inf.totalEjecutado) && inf.totalEjecutado > 0)
                 ? inf.totalEjecutado / periodoN
