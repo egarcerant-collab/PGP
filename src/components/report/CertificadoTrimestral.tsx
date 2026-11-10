@@ -2246,23 +2246,12 @@ export default function CertificadoTrimestral({
           const infsSorted = [...selectedPrestadorGroup.infs].sort((a: any, b: any) =>
             (TIPO_PRIO[(a.tipoPeriodo || '').toUpperCase()] || 0) - (TIPO_PRIO[(b.tipoPeriodo || '').toUpperCase()] || 0)
           );
-          // NT mensual de referencia = mínimo de (ntPeriodo / tipoN) entre todos los informes.
-          // Corrige informes MENSUAL donde ntPeriodo fue guardado como valor trimestral (3×):
-          // los valores erróneos son múltiplos del mensual, así que min() siempre da el NT mensual real.
-          const allNtPerMonth = infsSorted
-            .map((inf: any) => {
-              const tn = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || 1;
-              const nt = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : 0;
-              return nt > 0 ? nt / tn : 0;
-            })
-            .filter((v: number) => v > 0);
-          const monthlyNtRef = allNtPerMonth.length > 0 ? Math.min(...allNtPerMonth) : 0;
           for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
             const tipoN = TIPO_MESES[(inf.tipoPeriodo || '').toUpperCase()] || months.length || 1;
             const rawNt = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : (isFinite(inf.valorFinal) ? inf.valorFinal : 0);
-            // Usar la referencia mensual normalizada; si no hay referencia, dividir por tipoN
-            const ntPerMonth = monthlyNtRef > 0 ? monthlyNtRef : rawNt / tipoN;
+            // NT mensual = ntPeriodo / número de meses del periodo (cada informe tiene su propio NT)
+            const ntPerMonth = rawNt / tipoN;
             const periodoN = months.length || 1;
             const prio = TIPO_PRIO[(inf.tipoPeriodo || '').toUpperCase()] ?? 0;
             for (const month of months) {
