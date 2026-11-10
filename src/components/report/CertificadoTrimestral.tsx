@@ -13,6 +13,8 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
+import { getNtPeriodo, type NtConfigEntry } from "@/lib/nt-config";
+import NtConfigPanel from "./NtConfigPanel";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell,
@@ -306,6 +308,7 @@ export default function CertificadoTrimestral({
   const [savedNum, setSavedNum] = useState<string | null>(null);
   const [isSavingAudit, setIsSavingAudit] = useState(false);
 
+  const [ntConfigs, setNtConfigs] = useState<NtConfigEntry[]>([]);
   const [historial, setHistorial] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [selectedPrestadorGroup, setSelectedPrestadorGroup] = useState<{ name: string; infs: any[] } | null>(null);
@@ -489,6 +492,10 @@ export default function CertificadoTrimestral({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadHistorial(); }, []);
 
+  useEffect(() => {
+    fetch('/api/nt-config').then(r => r.json()).then(d => setNtConfigs(d.configs || [])).catch(() => {});
+  }, []);
+
   const handleDeleteConfirm = async () => {
     if (pwInput !== '123456') {
       setPwError(true);
@@ -565,7 +572,10 @@ export default function CertificadoTrimestral({
         ? valorContratoMensual
         : pgpData.notaTecnica.valor3m; // ya es mensual
 
-      const ntPeriodo = monthlyNT * n;
+      const nitForNT = String(selectedPrestador.NIT || '').trim();
+      const monthNames = selectedGroup.months.map(m => MONTH_ES[m.month] || m.month.toUpperCase());
+      const vigencia = new Date().getFullYear();
+      const ntPeriodo = getNtPeriodo(ntConfigs, nitForNT, monthNames, vigencia, monthlyNT);
 
       // Franjas del periodo = franja mensual × número de meses del periodo
       const minPeriodo = franjaInf90Mensual > 0
@@ -581,7 +591,9 @@ export default function CertificadoTrimestral({
       // el pago de liquidación ocurre en el mes de cierre del trimestre
       // Para BIMENSUAL o MENSUAL: sólo el primer mes es anticipo
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
-      const ntPeriodoFull = monthlyNT * expectedMonths;          // NT del periodo completo
+      const ntPeriodoFull = monthNames.length >= expectedMonths
+        ? getNtPeriodo(ntConfigs, nitForNT, monthNames.slice(0, expectedMonths), vigencia, monthlyNT)
+        : monthlyNT * expectedMonths;          // NT del periodo completo
       const advanceMonths = periodType === 'trimestral' ? n      // todos los meses cargados son anticipo
                           : periodType === 'bimensual'  ? Math.max(0, n - 1)
                           : 0;
@@ -1845,6 +1857,13 @@ export default function CertificadoTrimestral({
             <Input value={contrato} onChange={e => setContrato(e.target.value)} placeholder="Ej: 44847_03_PGP" />
           </div>
         </div>
+
+        {/* NT por Período — configuración de overrides cuando hay reestructuración mid-year */}
+        <NtConfigPanel
+          defaultNit={String(selectedPrestador?.NIT || selectedPrestador?.nit || '')}
+          defaultPrestador={String(selectedPrestador?.PRESTADOR || '')}
+          defaultContrato={contrato}
+        />
 
         {/* CUPS / Tecnologías Inesperadas — editable directamente aquí */}
         <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 space-y-2">
