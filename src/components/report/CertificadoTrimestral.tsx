@@ -2248,12 +2248,12 @@ export default function CertificadoTrimestral({
               const mesEntry = Array.isArray(inf.pdfData?.mesData)
                 ? inf.pdfData.mesData.find((d: any) => (d.name || '').toUpperCase() === month)
                 : null;
-              // totalEjecutado ya contiene el valor final (RIPS + inesperadas si las hubo)
-              // mesData.value solo tiene RIPS → NO usarlo como base para evitar omitir inesperadas
-              const mesVal = (isFinite(inf.totalEjecutado) && inf.totalEjecutado > 0)
-                ? inf.totalEjecutado / periodoN
-                : (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
+              // Para el gráfico usar el valor real del mes (mesData.value = RIPS del mes específico)
+              // NO dividir totalEjecutado/3 (da promedio, no el valor real de cada mes)
+              const mesVal = (mesEntry?.value && isFinite(mesEntry.value) && mesEntry.value > 0)
                 ? mesEntry.value
+                : (isFinite(inf.totalEjecutado) && inf.totalEjecutado > 0)
+                ? inf.totalEjecutado / periodoN
                 : 0;
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
