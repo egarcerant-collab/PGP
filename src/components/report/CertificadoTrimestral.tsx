@@ -1409,6 +1409,7 @@ export default function CertificadoTrimestral({
     // Glosa separada para mostrar en tabla (backward compat: si no existe en snapshot usar 0)
     const descontarGlosaFR = pd.descontarGlosa || 0;
     const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
+    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
