@@ -1257,7 +1257,7 @@ export default function CertificadoTrimestral({
       const prestadorName2 = String(selectedPrestador.PRESTADOR || '').trim();
       const monthNames2 = (selectedGroup?.months || []).map(m => MONTH_ES[m.month] || m.month.toUpperCase());
       const vigencia2 = new Date().getFullYear();
-      const ntPeriodo  = getNtPeriodo(liveConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT, prestadorName2);
+      const ntPeriodo  = getNtPeriodo(ntConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT, prestadorName2);
 
       const minPeriodo = franjaInf90Mensual > 0 ? franjaInf90Mensual * n : ntPeriodo * 0.9;
       const maxPeriodo = franjaSup110Mensual > 0 ? franjaSup110Mensual * n : ntPeriodo * 1.1;
@@ -1265,7 +1265,7 @@ export default function CertificadoTrimestral({
       const adv80 = monthlyNT * 0.8;
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
       const ntPeriodoFull  = monthNames2.length >= expectedMonths
-        ? getNtPeriodo(liveConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT, prestadorName2)
+        ? getNtPeriodo(ntConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT, prestadorName2)
         : monthlyNT * expectedMonths;
       const advanceMonths  = periodType === 'trimestral' ? n : periodType === 'bimensual' ? Math.max(0, n - 1) : 0;
       const totalAdv       = adv80 * advanceMonths;
