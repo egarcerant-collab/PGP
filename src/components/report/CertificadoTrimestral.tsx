@@ -560,6 +560,16 @@ export default function CertificadoTrimestral({
     if (!selectedGroup || !pgpData || !selectedPrestador) return;
     setIsGenerating(true);
     toast({ title: 'Generando certificado...', description: 'Construyendo el documento.' });
+    // Asegurar configs NT cargados antes de calcular (pueden estar vacíos si no se abrió historial)
+    let liveConfigs = ntConfigs;
+    if (liveConfigs.length === 0) {
+      try {
+        const r = await fetch('/api/nt-config');
+        const d = await r.json();
+        liveConfigs = d.configs || [];
+        setNtConfigs(liveConfigs);
+      } catch {}
+    }
     const logoBase64 = await loadLogoBase64();
     try {
       const n = selectedGroup.months.length;
@@ -583,7 +593,7 @@ export default function CertificadoTrimestral({
       const nitForNT = String(selectedPrestador.NIT || '').trim();
       const monthNames = selectedGroup.months.map(m => MONTH_ES[m.month] || m.month.toUpperCase());
       const vigencia = new Date().getFullYear();
-      const ntPeriodo = getNtPeriodo(ntConfigs, nitForNT, monthNames, vigencia, monthlyNT);
+      const ntPeriodo = getNtPeriodo(liveConfigs, nitForNT, monthNames, vigencia, monthlyNT);
 
       // Franjas del periodo = franja mensual × número de meses del periodo
       const minPeriodo = franjaInf90Mensual > 0
@@ -600,7 +610,7 @@ export default function CertificadoTrimestral({
       // Para BIMENSUAL o MENSUAL: sólo el primer mes es anticipo
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
       const ntPeriodoFull = monthNames.length >= expectedMonths
-        ? getNtPeriodo(ntConfigs, nitForNT, monthNames.slice(0, expectedMonths), vigencia, monthlyNT)
+        ? getNtPeriodo(liveConfigs, nitForNT, monthNames.slice(0, expectedMonths), vigencia, monthlyNT)
         : monthlyNT * expectedMonths;          // NT del periodo completo
       const advanceMonths = periodType === 'trimestral' ? n      // todos los meses cargados son anticipo
                           : periodType === 'bimensual'  ? Math.max(0, n - 1)
@@ -1242,14 +1252,19 @@ export default function CertificadoTrimestral({
       const fechaFin    = String(selectedPrestador['FECHA FIN DE CONTRATO']    || '31/12/2025').trim();
 
       const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
-      const ntPeriodo  = monthlyNT * n;
+      const nitForNT2 = String(selectedPrestador.NIT || '').trim();
+      const monthNames2 = (selectedGroup?.months || []).map(m => MONTH_ES[m.month] || m.month.toUpperCase());
+      const vigencia2 = new Date().getFullYear();
+      const ntPeriodo  = getNtPeriodo(liveConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT);
 
       const minPeriodo = franjaInf90Mensual > 0 ? franjaInf90Mensual * n : ntPeriodo * 0.9;
       const maxPeriodo = franjaSup110Mensual > 0 ? franjaSup110Mensual * n : ntPeriodo * 1.1;
 
       const adv80 = monthlyNT * 0.8;
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
-      const ntPeriodoFull  = monthlyNT * expectedMonths;
+      const ntPeriodoFull  = monthNames2.length >= expectedMonths
+        ? getNtPeriodo(liveConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT)
+        : monthlyNT * expectedMonths;
       const advanceMonths  = periodType === 'trimestral' ? n : periodType === 'bimensual' ? Math.max(0, n - 1) : 0;
       const totalAdv       = adv80 * advanceMonths;
       const lastMonthPay   = ntPeriodoFull - totalAdv;
