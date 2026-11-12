@@ -73,8 +73,8 @@ export default function NtConfigPanel({ defaultNit = "", defaultPrestador = "", 
 
   const handleSave = async () => {
     const nt = parseCOP(form.nt);
-    if (!form.nit || !form.mesInicio || !form.mesFin || nt <= 0) {
-      toast({ title: "Completa NIT, meses y valor NT", variant: "destructive" });
+    if (!form.mesInicio || !form.mesFin || nt <= 0) {
+      toast({ title: "Completa meses y valor NT", variant: "destructive" });
       return;
     }
     setSaving(true);

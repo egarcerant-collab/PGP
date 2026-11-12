@@ -66,4 +66,5 @@ export function getNtPeriodo(
   );
 }
 
-export const MONTH_NAMES = MONTHS;
+export { MONTHS as MONTH_NAMES };
+export { monthIndex };

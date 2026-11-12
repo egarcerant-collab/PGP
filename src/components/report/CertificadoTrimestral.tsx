@@ -13,7 +13,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
-import { getNtPeriodo, getNtForMonth, type NtConfigEntry } from "@/lib/nt-config";
+import { getNtPeriodo, getNtForMonth, monthIndex as ntMonthIndex, type NtConfigEntry } from "@/lib/nt-config";
 import NtConfigPanel from "./NtConfigPanel";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -2296,12 +2296,35 @@ export default function CertificadoTrimestral({
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
-          // Aplicar overrides de NT por período si existen configuraciones
-          const nitChart = String(selectedPrestadorGroup.infs[0]?.nit || '').trim();
+          // Aplicar overrides de NT — 3 estrategias: NIT → nombre → wildcard
+          const nitChart = String(
+            (selectedPrestadorGroup.infs as any[]).find((i) => i.nit && String(i.nit).trim())?.nit || ''
+          ).replace(/\D/g, '').slice(0, 9);
+          const nameChart = (selectedPrestadorGroup.name || '').toUpperCase().trim();
           const vigenciaChart = new Date().getFullYear();
           for (const month of Object.keys(monthlyMap)) {
-            const overrideNt = getNtForMonth(ntConfigs, nitChart, month, vigenciaChart, monthlyMap[month].nt);
-            monthlyMap[month] = { ...monthlyMap[month], nt: overrideNt };
+            // 1. Match por NIT (9 dígitos normalizados)
+            if (nitChart) {
+              const byNit = getNtForMonth(ntConfigs, nitChart, month, vigenciaChart, -1);
+              if (byNit !== -1) { monthlyMap[month] = { ...monthlyMap[month], nt: byNit }; continue; }
+            }
+            // 2. Match por nombre de prestador
+            const mesIdx = ntMonthIndex(month);
+            const byName = ntConfigs.find(c => {
+              if (c.vigencia !== vigenciaChart) return false;
+              const cP = (c.prestador || '').toUpperCase().trim();
+              if (!cP || cP.length < 4) return false;
+              const prefix = cP.slice(0, Math.min(cP.length, 10));
+              if (!nameChart.includes(prefix) && !cP.startsWith(nameChart.slice(0, 10))) return false;
+              return mesIdx >= ntMonthIndex(c.mesInicio) && mesIdx <= ntMonthIndex(c.mesFin);
+            });
+            if (byName) { monthlyMap[month] = { ...monthlyMap[month], nt: byName.nt }; continue; }
+            // 3. Wildcard (nit vacío en config)
+            const byWild = getNtForMonth(
+              ntConfigs.filter(c => !c.nit.replace(/\D/g, '')),
+              '', month, vigenciaChart, -1
+            );
+            if (byWild !== -1) { monthlyMap[month] = { ...monthlyMap[month], nt: byWild }; }
           }
 
           const chartData = MONTHS_FULL
