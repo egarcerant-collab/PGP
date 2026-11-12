@@ -33,11 +33,13 @@ export function getNtForMonth(
   const mesIdx = monthIndex(mes);
   if (mesIdx === -1) return fallback;
 
-  const nitClean = nit.replace(/\D/g, '');
+  // Normalizar a los primeros 9 dígitos (NIT sin dígito de verificación)
+  // Evita mismatch entre "9009869415" (con DV) y "900986941" (sin DV)
+  const nitClean = nit.replace(/\D/g, '').slice(0, 9);
   const match = configs.find(c => {
     if (c.vigencia !== vigencia) return false;
     // Si el config no tiene NIT, aplica a cualquier prestador (wildcard)
-    const cNit = c.nit.replace(/\D/g, '');
+    const cNit = c.nit.replace(/\D/g, '').slice(0, 9);
     if (cNit && cNit !== nitClean) return false;
     const start = monthIndex(c.mesInicio);
     const end = monthIndex(c.mesFin);
