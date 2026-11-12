@@ -2128,7 +2128,15 @@ export default function CertificadoTrimestral({
                           <tr
                             key={`g-${key}`}
                             className="border-t border-border bg-blue-50/60 hover:bg-blue-100/80 cursor-pointer select-none"
-                            onClick={() => setSelectedPrestadorGroup({ name: displayName, infs: infs as any[] })}
+                            onClick={async () => {
+                              // Cargar configs frescos ANTES de abrir el modal para que el override aplique en el primer render
+                              try {
+                                const r = await fetch('/api/nt-config');
+                                const d = await r.json();
+                                setNtConfigs(d.configs || []);
+                              } catch {}
+                              setSelectedPrestadorGroup({ name: displayName, infs: infs as any[] });
+                            }}
                           >
                             <td className="px-3 py-2 text-center text-blue-400 font-bold">↗</td>
                             <td className="px-3 py-2 font-semibold text-slate-800 max-w-[200px] truncate" title={displayName}>{displayName}</td>
