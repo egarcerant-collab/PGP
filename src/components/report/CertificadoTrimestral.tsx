@@ -560,15 +560,15 @@ export default function CertificadoTrimestral({
     if (!selectedGroup || !pgpData || !selectedPrestador) return;
     setIsGenerating(true);
     toast({ title: 'Generando certificado...', description: 'Construyendo el documento.' });
-    // Asegurar configs NT cargados antes de calcular (pueden estar vacíos si no se abrió historial)
-    let liveConfigs = ntConfigs;
-    if (liveConfigs.length === 0) {
-      try {
-        const r = await fetch('/api/nt-config');
-        const d = await r.json();
-        liveConfigs = d.configs || [];
-        setNtConfigs(liveConfigs);
-      } catch {}
+    // Siempre cargar configs frescos desde la API para garantizar que el NT override esté actualizado
+    let liveConfigs: NtConfigEntry[] = [];
+    try {
+      const r = await fetch('/api/nt-config');
+      const d = await r.json();
+      liveConfigs = d.configs || [];
+      setNtConfigs(liveConfigs);
+    } catch {
+      liveConfigs = ntConfigs;
     }
     const logoBase64 = await loadLogoBase64();
     try {
