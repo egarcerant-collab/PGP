@@ -13,7 +13,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MonthlyFinancialSummary } from "../pgp-search/FinancialMatrix";
 import type { Prestador } from "../pgp-search/PgPsearchForm";
 import { CIUDAD_DEPARTAMENTO, parseCurrencyField } from "@/lib/sheets";
-import { getNtPeriodo, getNtForMonth, monthIndex as ntMonthIndex, type NtConfigEntry } from "@/lib/nt-config";
+import { getNtPeriodo, getNtForMonth, type NtConfigEntry } from "@/lib/nt-config";
 import NtConfigPanel from "./NtConfigPanel";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -591,9 +591,10 @@ export default function CertificadoTrimestral({
         : pgpData.notaTecnica.valor3m; // ya es mensual
 
       const nitForNT = String(selectedPrestador.NIT || '').trim();
+      const prestadorNameForNT = String(selectedPrestador.PRESTADOR || '').trim();
       const monthNames = selectedGroup.months.map(m => MONTH_ES[m.month] || m.month.toUpperCase());
       const vigencia = new Date().getFullYear();
-      const ntPeriodo = getNtPeriodo(liveConfigs, nitForNT, monthNames, vigencia, monthlyNT);
+      const ntPeriodo = getNtPeriodo(liveConfigs, nitForNT, monthNames, vigencia, monthlyNT, prestadorNameForNT);
 
       // Franjas del periodo = franja mensual × número de meses del periodo
       const minPeriodo = franjaInf90Mensual > 0
@@ -610,7 +611,7 @@ export default function CertificadoTrimestral({
       // Para BIMENSUAL o MENSUAL: sólo el primer mes es anticipo
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
       const ntPeriodoFull = monthNames.length >= expectedMonths
-        ? getNtPeriodo(liveConfigs, nitForNT, monthNames.slice(0, expectedMonths), vigencia, monthlyNT)
+        ? getNtPeriodo(liveConfigs, nitForNT, monthNames.slice(0, expectedMonths), vigencia, monthlyNT, prestadorNameForNT)
         : monthlyNT * expectedMonths;          // NT del periodo completo
       const advanceMonths = periodType === 'trimestral' ? n      // todos los meses cargados son anticipo
                           : periodType === 'bimensual'  ? Math.max(0, n - 1)
@@ -1253,9 +1254,10 @@ export default function CertificadoTrimestral({
 
       const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
       const nitForNT2 = String(selectedPrestador.NIT || '').trim();
+      const prestadorName2 = String(selectedPrestador.PRESTADOR || '').trim();
       const monthNames2 = (selectedGroup?.months || []).map(m => MONTH_ES[m.month] || m.month.toUpperCase());
       const vigencia2 = new Date().getFullYear();
-      const ntPeriodo  = getNtPeriodo(liveConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT);
+      const ntPeriodo  = getNtPeriodo(liveConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT, prestadorName2);
 
       const minPeriodo = franjaInf90Mensual > 0 ? franjaInf90Mensual * n : ntPeriodo * 0.9;
       const maxPeriodo = franjaSup110Mensual > 0 ? franjaSup110Mensual * n : ntPeriodo * 1.1;
@@ -1263,7 +1265,7 @@ export default function CertificadoTrimestral({
       const adv80 = monthlyNT * 0.8;
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
       const ntPeriodoFull  = monthNames2.length >= expectedMonths
-        ? getNtPeriodo(liveConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT)
+        ? getNtPeriodo(liveConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT, prestadorName2)
         : monthlyNT * expectedMonths;
       const advanceMonths  = periodType === 'trimestral' ? n : periodType === 'bimensual' ? Math.max(0, n - 1) : 0;
       const totalAdv       = adv80 * advanceMonths;
@@ -2311,35 +2313,15 @@ export default function CertificadoTrimestral({
               monthlyMap[month] = { nt: ntPerMonth, ejecutado: mesVal, prio };
             }
           }
-          // Aplicar overrides de NT — 3 estrategias: NIT → nombre → wildcard
+          // Aplicar overrides de NT (NIT → nombre → wildcard, via getNtForMonth)
           const nitChart = String(
             (selectedPrestadorGroup.infs as any[]).find((i) => i.nit && String(i.nit).trim())?.nit || ''
-          ).replace(/\D/g, '').slice(0, 9);
-          const nameChart = (selectedPrestadorGroup.name || '').toUpperCase().trim();
+          ).trim();
+          const nameChart = selectedPrestadorGroup.name || '';
           const vigenciaChart = new Date().getFullYear();
           for (const month of Object.keys(monthlyMap)) {
-            // 1. Match por NIT (9 dígitos normalizados)
-            if (nitChart) {
-              const byNit = getNtForMonth(ntConfigs, nitChart, month, vigenciaChart, -1);
-              if (byNit !== -1) { monthlyMap[month] = { ...monthlyMap[month], nt: byNit }; continue; }
-            }
-            // 2. Match por nombre de prestador
-            const mesIdx = ntMonthIndex(month);
-            const byName = ntConfigs.find(c => {
-              if (c.vigencia !== vigenciaChart) return false;
-              const cP = (c.prestador || '').toUpperCase().trim();
-              if (!cP || cP.length < 4) return false;
-              const prefix = cP.slice(0, Math.min(cP.length, 10));
-              if (!nameChart.includes(prefix) && !cP.startsWith(nameChart.slice(0, 10))) return false;
-              return mesIdx >= ntMonthIndex(c.mesInicio) && mesIdx <= ntMonthIndex(c.mesFin);
-            });
-            if (byName) { monthlyMap[month] = { ...monthlyMap[month], nt: byName.nt }; continue; }
-            // 3. Wildcard (nit vacío en config)
-            const byWild = getNtForMonth(
-              ntConfigs.filter(c => !c.nit.replace(/\D/g, '')),
-              '', month, vigenciaChart, -1
-            );
-            if (byWild !== -1) { monthlyMap[month] = { ...monthlyMap[month], nt: byWild }; }
+            const overrideNt = getNtForMonth(ntConfigs, nitChart, month, vigenciaChart, monthlyMap[month].nt, nameChart);
+            monthlyMap[month] = { ...monthlyMap[month], nt: overrideNt };
           }
 
           const chartData = MONTHS_FULL

@@ -20,8 +20,10 @@ export function monthIndex(mes: string): number {
 }
 
 /**
- * Dado un NIT, un mes (nombre en mayúsculas) y una vigencia, retorna el NT
- * mensual configurado para ese período. Si no hay configuración, retorna fallback.
+ * Busca NT para un mes usando 3 estrategias en cascada:
+ * 1. Match por NIT (9 dígitos, sin dígito de verificación)
+ * 2. Match por nombre del prestador (si se pasa prestadorName)
+ * 3. Wildcard (config con NIT vacío)
  */
 export function getNtForMonth(
   configs: NtConfigEntry[],
@@ -29,29 +31,50 @@ export function getNtForMonth(
   mes: string,
   vigencia: number,
   fallback: number,
+  prestadorName?: string,
 ): number {
   const mesIdx = monthIndex(mes);
   if (mesIdx === -1) return fallback;
 
-  // Normalizar a los primeros 9 dígitos (NIT sin dígito de verificación)
-  // Evita mismatch entre "9009869415" (con DV) y "900986941" (sin DV)
   const nitClean = nit.replace(/\D/g, '').slice(0, 9);
-  const match = configs.find(c => {
-    if (c.vigencia !== vigencia) return false;
-    // Si el config no tiene NIT, aplica a cualquier prestador (wildcard)
-    const cNit = c.nit.replace(/\D/g, '').slice(0, 9);
-    if (cNit && cNit !== nitClean) return false;
-    const start = monthIndex(c.mesInicio);
-    const end = monthIndex(c.mesFin);
-    return mesIdx >= start && mesIdx <= end;
-  });
+  const nameClean = (prestadorName || '').toUpperCase().trim();
 
-  return match ? match.nt : fallback;
+  const inRange = (c: NtConfigEntry) => {
+    if (c.vigencia !== vigencia) return false;
+    return mesIdx >= monthIndex(c.mesInicio) && mesIdx <= monthIndex(c.mesFin);
+  };
+
+  // 1. Match por NIT exacto (9 dígitos)
+  if (nitClean) {
+    const byNit = configs.find(c => {
+      if (!inRange(c)) return false;
+      return c.nit.replace(/\D/g, '').slice(0, 9) === nitClean;
+    });
+    if (byNit) return byNit.nt;
+  }
+
+  // 2. Match por nombre de prestador
+  if (nameClean.length >= 4) {
+    const byName = configs.find(c => {
+      if (!inRange(c)) return false;
+      const cP = (c.prestador || '').toUpperCase().trim();
+      if (cP.length < 4) return false;
+      const prefix = cP.slice(0, Math.min(cP.length, 10));
+      return nameClean.includes(prefix) || cP.includes(nameClean.slice(0, Math.min(nameClean.length, 10)));
+    });
+    if (byName) return byName.nt;
+  }
+
+  // 3. Wildcard (nit vacío en config)
+  const byWild = configs.find(c => inRange(c) && !c.nit.replace(/\D/g, ''));
+  if (byWild) return byWild.nt;
+
+  return fallback;
 }
 
 /**
- * Dado un grupo de meses, retorna el NT total del período usando overrides.
- * Si para algún mes no hay override, usa monthlyNTFallback.
+ * Suma NT mensual para un grupo de meses usando overrides.
+ * Acepta prestadorName para matching por nombre como fallback.
  */
 export function getNtPeriodo(
   configs: NtConfigEntry[],
@@ -59,9 +82,10 @@ export function getNtPeriodo(
   monthNames: string[],
   vigencia: number,
   monthlyNTFallback: number,
+  prestadorName?: string,
 ): number {
   return monthNames.reduce(
-    (sum, mes) => sum + getNtForMonth(configs, nit, mes, vigencia, monthlyNTFallback),
+    (sum, mes) => sum + getNtForMonth(configs, nit, mes, vigencia, monthlyNTFallback, prestadorName),
     0,
   );
 }
