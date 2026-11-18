@@ -2279,7 +2279,31 @@ export default function CertificadoTrimestral({
             const nt3 = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : 0;
             if (nt3 <= 0 || ms.length === 0) continue;
             const qIdx = Math.floor(MONTHS_FULL.indexOf(ms[0]) / 3);
-            quarterlyNT[qIdx] = nt3 / 3; // NT mensual correcto del trimestre
+            quarterlyNT[qIdx] = nt3 / 3;
+          }
+          // Fallback: si un trimestre no tiene TRIMESTRAL, estimar ref desde MENSUALes correctos del mismo trimestre
+          // Un MENSUAL es "correcto" si su ntPeriodo ≤ el mínimo de los que sí tenemos referencia × 1.5
+          // Heurística: dentro del mismo trimestre, el valor más pequeño es el mensual real.
+          const mensualByQ: Record<number, number[]> = {};
+          for (const inf of infsSorted) {
+            if ((inf.tipoPeriodo || '').toUpperCase() !== 'MENSUAL') continue;
+            const ms = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
+            if (ms.length !== 1) continue;
+            const nt1 = isFinite(inf.ntPeriodo) && inf.ntPeriodo > 0 ? inf.ntPeriodo : 0;
+            if (nt1 <= 0) continue;
+            const qIdx = Math.floor(MONTHS_FULL.indexOf(ms[0]) / 3);
+            if (!mensualByQ[qIdx]) mensualByQ[qIdx] = [];
+            mensualByQ[qIdx].push(nt1);
+          }
+          for (const q of Object.keys(mensualByQ)) {
+            const qi = Number(q);
+            if (quarterlyNT[qi]) continue; // ya tenemos referencia de TRIMESTRAL
+            const vals = mensualByQ[qi];
+            if (vals.length < 2) continue; // necesitamos al menos 2 para detectar outlier
+            const minVal = Math.min(...vals);
+            const maxVal = Math.max(...vals);
+            // Si hay al menos un valor ~3× el mínimo, el mínimo es el NT mensual correcto
+            if (maxVal > minVal * 1.5) quarterlyNT[qi] = minVal;
           }
           for (const inf of infsSorted) {
             const months = (inf.periodo || '').split('-').map((m: string) => m.trim().toUpperCase()).filter((m: string) => MONTHS_FULL.includes(m));
