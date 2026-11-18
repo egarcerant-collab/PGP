@@ -596,13 +596,11 @@ export default function CertificadoTrimestral({
       const vigencia = new Date().getFullYear();
       const ntPeriodo = getNtPeriodo(liveConfigs, nitForNT, monthNames, vigencia, monthlyNT, prestadorNameForNT);
 
-      // Franjas del periodo = franja mensual × número de meses del periodo
-      const minPeriodo = franjaInf90Mensual > 0
-        ? franjaInf90Mensual * n
-        : ntPeriodo * 0.9;
-      const maxPeriodo = franjaSup110Mensual > 0
-        ? franjaSup110Mensual * n
-        : ntPeriodo * 1.1;
+      // Franjas del periodo: siempre 90%/110% del NT real del período.
+      // La columna de franja de la hoja puede tener valores distintos al 90% puro
+      // (ej. franjas de riesgo ajustadas), lo que generaría glosas incorrectas.
+      const minPeriodo = ntPeriodo * 0.9;
+      const maxPeriodo = ntPeriodo * 1.1;
 
       const adv80 = monthlyNT * 0.8;
 
@@ -1259,8 +1257,8 @@ export default function CertificadoTrimestral({
       const vigencia2 = new Date().getFullYear();
       const ntPeriodo  = getNtPeriodo(ntConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT, prestadorName2);
 
-      const minPeriodo = franjaInf90Mensual > 0 ? franjaInf90Mensual * n : ntPeriodo * 0.9;
-      const maxPeriodo = franjaSup110Mensual > 0 ? franjaSup110Mensual * n : ntPeriodo * 1.1;
+      const minPeriodo = ntPeriodo * 0.9;
+      const maxPeriodo = ntPeriodo * 1.1;
 
       const adv80 = monthlyNT * 0.8;
       const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
