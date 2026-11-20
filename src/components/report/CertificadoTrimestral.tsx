@@ -1258,19 +1258,25 @@ export default function CertificadoTrimestral({
       const monthlyNT = valorContratoMensual > 0 ? valorContratoMensual : pgpData!.notaTecnica.valor3m;
       const nitForNT2 = String(selectedPrestador.NIT || '').trim();
       const prestadorName2 = String(selectedPrestador.PRESTADOR || '').trim();
-      const monthNames2 = (selectedGroup?.months || []).map(m => MONTH_ES[m.month] || m.month.toUpperCase());
       const vigencia2 = new Date().getFullYear();
+
+      // Derivar tipo del informe desde su período (guiones), NO desde el estado UI periodType
+      // El UI puede tener periodType='trimestral' aunque se esté guardando un informe MENSUAL
+      const informePeriodoStr2 = selectedGroup?.label || '';
+      const informeDashes2 = (informePeriodoStr2.match(/-/g) || []).length;
+      const informePeriodType2 = informeDashes2 >= 2 ? 'trimestral' : informeDashes2 === 1 ? 'bimensual' : 'mensual';
+      const expectedMonths = informePeriodType2 === 'trimestral' ? 3 : informePeriodType2 === 'bimensual' ? 2 : 1;
+
+      // Usar solo los meses del informe (no todos los del grupo padre)
+      const monthNames2 = (selectedGroup?.months || []).map(m => MONTH_ES[m.month] || m.month.toUpperCase()).slice(0, expectedMonths);
       const ntPeriodo  = getNtPeriodo(ntConfigs, nitForNT2, monthNames2, vigencia2, monthlyNT, prestadorName2);
 
       const minPeriodo = ntPeriodo * 0.9;
       const maxPeriodo = ntPeriodo * 1.1;
 
       const adv80 = monthlyNT * 0.8;
-      const expectedMonths = periodType === 'trimestral' ? 3 : periodType === 'bimensual' ? 2 : 1;
-      const ntPeriodoFull  = monthNames2.length >= expectedMonths
-        ? getNtPeriodo(ntConfigs, nitForNT2, monthNames2.slice(0, expectedMonths), vigencia2, monthlyNT, prestadorName2)
-        : monthlyNT * expectedMonths;
-      const advanceMonths  = periodType === 'trimestral' ? n : periodType === 'bimensual' ? Math.max(0, n - 1) : 0;
+      const ntPeriodoFull  = ntPeriodo;
+      const advanceMonths  = informePeriodType2 === 'trimestral' ? n : informePeriodType2 === 'bimensual' ? Math.max(0, n - 1) : 0;
       const totalAdv       = adv80 * advanceMonths;
       const lastMonthPay   = ntPeriodoFull - totalAdv;
 
@@ -1355,7 +1361,7 @@ export default function CertificadoTrimestral({
           municipio: ciudadRaw,
           departamento: depto,
           periodo: selectedGroup?.label || '',
-          tipoPeriodo: periodType.toUpperCase(),
+          tipoPeriodo: informePeriodType2.toUpperCase(),
           ntPeriodo: ntPeriodoFull,
           totalEjecutado: totalEjecutadoFinal,
           descontar,
