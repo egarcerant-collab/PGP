@@ -1433,18 +1433,19 @@ export default function CertificadoTrimestral({
     const MESES_AGO_PLUS_R = ['AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const showNotaAclaratoria = (periodo as string || '').split('-').map((m: string) => m.trim().toUpperCase()).some((m: string) => MESES_AGO_PLUS_R.includes(m));
 
-    // Usar valores guardados del snapshot pdfData para preservar los cálculos originales
-    // Si el snapshot tiene descontar/reconocer/valorFinal guardados, usarlos directamente
+    // Glosa separada (antes de reconocer para usarla en el cálculo neto)
+    const descontarGlosaFR = pd.descontarGlosa || 0;
+    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
+
+    // Usar valores guardados del snapshot; si no existen, recalcular con reglas vigentes.
+    // reconocer usa ejecutado NETO (bruto - glosa): si la glosa ya absorbió el exceso, no hay reconocimiento.
     const descontar = isFinite(pd.descontar) && pd.descontar >= 0 ? pd.descontar
       : (totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0);
-    const reconocer = isFinite(pd.reconocer) && pd.reconocer >= 0 ? pd.reconocer
-      : (totalEjecutadoFinal > maxPeriodo ? 0.50 * (totalEjecutadoFinal - maxPeriodo) : 0);
-    const valorFinal = isFinite(pd.valorFinal) && pd.valorFinal > 0 ? pd.valorFinal
-      : (ntPeriodo - descontar + reconocer);
-    // Glosa separada para mostrar en tabla (backward compat: si no existe en snapshot usar 0)
-    const descontarGlosaFR = pd.descontarGlosa || 0;
+    const reconocer = isFinite(pd.reconocer) && pd.reconocer >= 0
+      ? (ejecutadoNetoFR > maxPeriodo ? pd.reconocer : 0)   // si neto ≤ 110%, anular reconocer guardado
+      : (ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0);
+    const valorFinal = ntPeriodo - descontar + reconocer;
     const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
-    const ejecutadoNetoFR = Math.max(0, totalEjecutadoFinal - descontarGlosaFR);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
