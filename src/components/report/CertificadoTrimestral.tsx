@@ -968,6 +968,11 @@ export default function CertificadoTrimestral({
                   { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', bold: true, color: descontar > 0 ? '#b91c1c' : '#374151' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', bold: true, color: reconocer > 0 ? '#047857' : '#374151' },
                 ],
+                ...(descontarGlosa > 0 ? [[
+                  { text: `EJECUTADO FINAL (NETO)   ${fmt(ejecutadoNetoCorr)}`, ...CS, bold: true, fillColor: '#eff6ff' },
+                  { text: '$ -', ...CS, alignment: 'right' },
+                  { text: '$ -', ...CS, alignment: 'right' },
+                ]] : []),
               ],
             },
             layout: 'lightHorizontalLines',
@@ -1671,6 +1676,11 @@ export default function CertificadoTrimestral({
               ...(descontarGlosaFR > 0 ? [[
                 { text: 'VALOR DESCONTADO POR GLOSA', ...CS, bold: true, color: '#b91c1c' },
                 { text: fmtL(descontarGlosaFR), ...CS, alignment: 'right', bold: true, color: '#b91c1c' },
+                { text: '$ -', ...CS, alignment: 'right' },
+              ]] : []),
+              ...(descontarGlosaFR > 0 ? [[
+                { text: `EJECUTADO FINAL (NETO)   ${fmtL(ejecutadoNetoFR)}`, ...CS, bold: true, fillColor: '#eff6ff' },
+                { text: '$ -', ...CS, alignment: 'right' },
                 { text: '$ -', ...CS, alignment: 'right' },
               ]] : []),
               ...(reconocer > 0 ? [[
