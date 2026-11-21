@@ -523,16 +523,19 @@ const PgPsearchForm = forwardRef<
     };
   }, [showComparison, selectedPrestador, executionDataByMonth, globalSummary, comparisonSummary, adjustedData, initialAuditData]);
 
-  // Persistir glosa en localStorage para que el certificado la use sin restaurar el informe
+  // Persistir glosa en localStorage para que el certificado la use sin restaurar el informe.
+  // Para períodos combinados (bimensual/trimestral) NO sobrescribir: calcularGlosa agrega todos
+  // los meses y daría un valor inflado vs la glosa mensual ya acordada y guardada.
   useEffect(() => {
     const nit = selectedPrestador?.NIT;
     if (!nit) return;
+    if (executionDataByMonth.size > 1) return;
     const descuento = reportData?.notaTecnica?.descuentoAplicado ?? 0;
     const comentarios = reportData?.notaTecnica?.comentariosGlosa ?? '';
     if (descuento > 0) {
       try { localStorage.setItem(`pgp_glosa_${nit}`, JSON.stringify({ descontar: descuento, comentariosGlosa: comentarios })); } catch {}
     }
-  }, [reportData?.notaTecnica?.descuentoAplicado, reportData?.notaTecnica?.comentariosGlosa, selectedPrestador?.NIT]);
+  }, [reportData?.notaTecnica?.descuentoAplicado, reportData?.notaTecnica?.comentariosGlosa, selectedPrestador?.NIT, executionDataByMonth.size]);
 
   // \u2500\u2500 Descarga consolidada (1 fila por CUPS, suma todos los meses) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleDownloadMatrizComparativa = useCallback(() => {
@@ -950,7 +953,16 @@ const PgPsearchForm = forwardRef<
         </div>
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Resumen Financiero por Mes</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
+          <FinancialMatrix
+            monthlyFinancials={comparisonSummary!.monthlyFinancials}
+            regimenByMonth={regimenTotals?.byMonth}
+            valorCupsInesperadas={valorInesperadasStored}
+            descuentoAplicado={
+              executionDataByMonth.size > 1
+                ? (() => { try { const s = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return s ? (JSON.parse(s)?.descontar ?? 0) : 0; } catch { return 0; } })()
+                : (reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0)
+            }
+          />
         </div>
       </div>
     );
@@ -1056,7 +1068,16 @@ const PgPsearchForm = forwardRef<
         {/* Financial matrix */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-5">
           <h3 className="font-semibold text-sm mb-4">Matriz Financiera Mensual</h3>
-          <FinancialMatrix monthlyFinancials={comparisonSummary!.monthlyFinancials} regimenByMonth={regimenTotals?.byMonth} valorCupsInesperadas={valorInesperadasStored} descuentoAplicado={reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0} />
+          <FinancialMatrix
+            monthlyFinancials={comparisonSummary!.monthlyFinancials}
+            regimenByMonth={regimenTotals?.byMonth}
+            valorCupsInesperadas={valorInesperadasStored}
+            descuentoAplicado={
+              executionDataByMonth.size > 1
+                ? (() => { try { const s = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return s ? (JSON.parse(s)?.descontar ?? 0) : 0; } catch { return 0; } })()
+                : (reportData?.notaTecnica?.descuentoAplicado ?? initialAuditData?.informeRestored?.descontar ?? 0)
+            }
+          />
         </div>
       </div>
     );
