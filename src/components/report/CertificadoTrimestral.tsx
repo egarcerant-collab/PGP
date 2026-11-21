@@ -1452,9 +1452,13 @@ export default function CertificadoTrimestral({
     // reconocer usa ejecutado NETO (bruto - glosa): si la glosa ya absorbió el exceso, no hay reconocimiento.
     const descontar = isFinite(pd.descontar) && pd.descontar >= 0 ? pd.descontar
       : (totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0);
-    const reconocer = isFinite(pd.reconocer) && pd.reconocer >= 0
-      ? (ejecutadoNetoFR > maxPeriodo ? pd.reconocer : 0)   // si neto ≤ 110%, anular reconocer guardado
-      : (ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0);
+    // Cuando hay glosa: SIEMPRE recalcular reconocer desde el neto.
+    // El valor guardado puede estar calculado con el bruto (bug histórico: reconocer = 0.5*(bruto-110%)).
+    // Sin glosa: usar el valor guardado (fue calculado correctamente en su momento).
+    const reconocerRecalc = ejecutadoNetoFR > maxPeriodo ? 0.50 * (ejecutadoNetoFR - maxPeriodo) : 0;
+    const reconocer = descontarGlosaFR > 0
+      ? reconocerRecalc
+      : (isFinite(pd.reconocer) && pd.reconocer >= 0 ? pd.reconocer : reconocerRecalc);
     const valorFinal = ntPeriodo - descontar + reconocer;
     const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
