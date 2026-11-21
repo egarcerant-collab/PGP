@@ -663,6 +663,21 @@ export default function CertificadoTrimestral({
         };
       });
 
+      // Leer glosas mensuales del historial (Drive): permite que el TRIMESTRAL
+      // refleje las glosas acordadas sin depender de localStorage.
+      const _prestadorG = String(selectedPrestador?.PRESTADOR || '').trim();
+      const perMonthGlosa: number[] = mesData.map(m => {
+        const inf = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorG &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === m.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return Number(inf?.pdf_data?.descontarGlosa ?? inf?.pdfData?.descontarGlosa ?? 0);
+      });
+      const totalGlosaFromInformes = perMonthGlosa.reduce((s, g) => s + g, 0);
+
       // ── Fechas reales del período evaluado (no las del contrato completo) ──
       const { fechaInicioPeriodo, fechaFinPeriodo } = calcPeriodDates(mesData, fechaInicio);
 
@@ -714,8 +729,8 @@ export default function CertificadoTrimestral({
       // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
       const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // Glosa: SOLO lo ingresado en módulo Descuentos y Ajustes (localStorage)
-      const descontarGlosa = _lsG1?.descontar || 0;
+      // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
+      const descontarGlosa = _lsG1?.descontar || totalGlosaFromInformes;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -897,7 +912,9 @@ export default function CertificadoTrimestral({
                   const isLast = i === mesData.length - 1;
                   const safeVal   = isFinite(m.value)             ? m.value             : 0;
                   const safeInesp = isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0;
-                  const valMes = isLast ? safeVal + safeInesp : safeVal;
+                  // Mostrar valor neto del mes: bruto - glosa del informe mensual guardado
+                  const monthGlosaTab = perMonthGlosa[i] ?? 0;
+                  const valMes = Math.max(0, (isLast ? safeVal + safeInesp : safeVal) - monthGlosaTab);
                   const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                   const ok = pct >= 90 && pct <= 110;
                   const high = pct > 110;
@@ -913,11 +930,11 @@ export default function CertificadoTrimestral({
                 [
                   { text: 'TOTAL PERÍODO', bold: true, fontSize: 7, fillColor: '#bfdbfe' },
                   { text: fmt(monthlyNT * mesData.length), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
-                  { text: fmt(totalEjecutadoFinal), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
+                  { text: fmt(totalEjecutadoFinal - totalGlosaFromInformes), bold: true, fontSize: 7, alignment: 'right', fillColor: '#bfdbfe' },
                   {
-                    text: `${(monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
+                    text: `${(monthlyNT * mesData.length > 0 ? ((totalEjecutadoFinal - totalGlosaFromInformes) / (monthlyNT * mesData.length)) * 100 : 0).toFixed(1)}%`,
                     bold: true, fontSize: 7.5, alignment: 'center', fillColor: '#bfdbfe',
-                    color: (() => { const p = monthlyNT * mesData.length > 0 ? (totalEjecutadoFinal / (monthlyNT * mesData.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
+                    color: (() => { const p = monthlyNT * mesData.length > 0 ? ((totalEjecutadoFinal - totalGlosaFromInformes) / (monthlyNT * mesData.length)) * 100 : 0; return p >= 90 && p <= 110 ? '#15803d' : p > 110 ? '#1d4ed8' : '#b91c1c'; })(),
                   },
                 ],
               ],
@@ -1294,10 +1311,24 @@ export default function CertificadoTrimestral({
       const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
       // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
       // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
+      // Glosas mensuales del historial (Drive): fallback robusto cuando localStorage está vacío
+      const _prestadorG2 = String(selectedPrestador?.PRESTADOR || '').trim();
+      const perMonthGlosa2: number[] = mesData.map(m => {
+        const inf = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorG2 &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === m.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return Number(inf?.pdf_data?.descontarGlosa ?? inf?.pdfData?.descontarGlosa ?? 0);
+      });
+      const totalGlosaFromInformes2 = perMonthGlosa2.reduce((s, g) => s + g, 0);
+
       const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // Glosa: SOLO lo ingresado en módulo Descuentos y Ajustes (localStorage)
-      const descontarGlosaR     = _lsG2?.descontar || 0;
+      // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
+      const descontarGlosaR     = _lsG2?.descontar || totalGlosaFromInformes2;
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
