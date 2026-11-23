@@ -663,10 +663,30 @@ export default function CertificadoTrimestral({
         };
       });
 
+      // Inesperadas por mes del historial (Valor Real = RIPS + inesperadas del MENSUAL guardado)
+      const _prestadorI = String(selectedPrestador?.PRESTADOR || '').trim();
+      const perMonthInesp: number[] = mesData.map(m => {
+        const inf = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorI &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === m.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return Number(inf?.pdf_data?.valorCupsInesperadas ?? inf?.pdfData?.valorCupsInesperadas ?? inf?.valorCupsInesperadas ?? 0);
+      });
+      const totalHistInesp = perMonthInesp.reduce((s, v) => s + v, 0);
+      const hasHistInesp = totalHistInesp > 0;
+      // Valor Real por mes: RIPS + inesperadas del historial
+      const mesDataReal = mesData.map((m, i) => ({ ...m, value: m.value + (perMonthInesp[i] ?? 0) }));
+
       // Leer glosas mensuales del historial (Drive): permite que el TRIMESTRAL
       // refleje las glosas acordadas sin depender de localStorage.
-      const _prestadorG = String(selectedPrestador?.PRESTADOR || '').trim();
-      const perMonthGlosa: number[] = mesData.map(m => {
+      const _prestadorG = _prestadorI;
+      const perMonthGlosa: number[] = mesDataReal.map((m) => {
+        // Solo aplicar glosa de auditoría cuando la ejecución del mes >= 90% del NT
+        // Para meses con subejecución la glosa no aplica; el DESCONTAR por ejecución ya cubre el faltante
+        if ((isFinite(m.value) ? m.value : 0) < monthlyNT * 0.9) return 0;
         const inf = (historial as any[])
           .filter((h: any) =>
             h.prestador === _prestadorG &&
@@ -699,35 +719,35 @@ export default function CertificadoTrimestral({
       const showNotaAclaratoria = periodo.split('-').map(m => m.trim().toUpperCase()).some(m => MESES_AGO_PLUS.includes(m));
 
       // ── Gráficas ──
-      const labels = mesData.map(m => m.name);
+      const labels = mesDataReal.map(m => m.name);
       const cantInespNum = parseInt(cantidadCupsInesperadas) || 0;
-      // Chart 1: apilado (base + inesperadas) si hay valor de inesperadas
-      const chart1 = valorCupsInesperadas > 0
-        ? drawStackedBarChart(labels, mesData.map(m => m.value), valorCupsInesperadas)
-        : drawBarChart(labels, mesData.map(m => m.value), '#1d4ed8');
-      // Chart 2: apilado (conteo normal + actividades inesperadas) si hay cantidad
+      // Chart 1: apilado UI-inesperadas solo cuando no hay inesperadas del historial por mes
+      const chart1 = (!hasHistInesp && valorCupsInesperadas > 0)
+        ? drawStackedBarChart(labels, mesDataReal.map(m => m.value), valorCupsInesperadas)
+        : drawBarChart(labels, mesDataReal.map(m => m.value), '#1d4ed8');
+      // Chart 2: apilado si hay actividades inesperadas
       const chart2 = cantInespNum > 0
-        ? drawStackedBarChart(labels, mesData.map(m => m.cups), cantInespNum, 490, 95, false, '#15803d')
-        : drawBarChart(labels, mesData.map(m => m.cups), '#15803d');
+        ? drawStackedBarChart(labels, mesDataReal.map(m => m.cups), cantInespNum, 490, 95, false, '#15803d')
+        : drawBarChart(labels, mesDataReal.map(m => m.cups), '#15803d');
 
       // ── Narrativa entre gráficas (valores) ──
-      const detalleValor = mesData.map((m, i) => {
+      const detalleValor = mesDataReal.map((m, i) => {
         if (i === 0) return `En el mes de ${m.name}, se registró un total de ${fmtN(m.cups)} actividades asociadas a CUPS (Códigos Únicos en Salud), con un consolidado en costos equivalente a ${fmt(m.value)}.`;
-        if (i === mesData.length - 1) return `Finalmente, en el mes de ${m.name}, la ejecución alcanzó ${fmtN(m.cups)} actividades, reflejando un costo acumulado de ${fmt(m.value)}.`;
+        if (i === mesDataReal.length - 1) return `Finalmente, en el mes de ${m.name}, la ejecución alcanzó ${fmtN(m.cups)} actividades, reflejando un costo acumulado de ${fmt(m.value)}.`;
         return `Durante el mes de ${m.name}, el comportamiento presentó una variación correspondiente a ${fmtN(m.cups)} actividades, para un total consolidado de ${fmt(m.value)}.`;
       }).join(' ');
 
-      const totalEjecutado = mesData.reduce((a, m) => a + (isFinite(m.value) ? m.value : 0), 0);
-      const totalCups = mesData.reduce((a, m) => a + (isFinite(m.cups) ? m.cups : 0), 0);
-      // Total final = RIPS + inesperadas (para mostrar en tabla y narrativa)
-      const totalEjecutadoFinal = totalEjecutado + (isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0);
+      const totalEjecutado = mesDataReal.reduce((a, m) => a + (isFinite(m.value) ? m.value : 0), 0);
+      const totalCups = mesDataReal.reduce((a, m) => a + (isFinite(m.cups) ? m.cups : 0), 0);
+      // Si hay inesperadas del historial ya en mesDataReal, no duplicar con el campo UI; sino agregar campo UI al último mes
+      const totalEjecutadoFinal = totalEjecutado + (hasHistInesp ? 0 : (isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0));
 
       // ── Cálculo DESCONTAR / RECONOCER ──
-      // La comparación usa TOTAL EJECUTADO (RIPS + inesperadas).
       // Si RIPS + inesperadas >= 90% → sin descuento por ejecución.
       // Las glosas de auditoría (ajuste de cantidades validadas) se suman siempre.
-      // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
-      const descontarEjecucion = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
+      // Subejecución: se descuenta el 50% del déficit respecto al mínimo 90% (modelo PGP)
+      const shortfall = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
+      const descontarEjecucion = shortfall * 0.5;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
       const descontarGlosa = _lsG1?.descontar || totalGlosaFromInformes;
@@ -907,14 +927,13 @@ export default function CertificadoTrimestral({
                   { text: 'VALOR EJECUTADO', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'right' },
                   { text: '% EJECUCIÓN', bold: true, fontSize: 7, fillColor: '#e0e7ff', alignment: 'center' },
                 ],
-                ...mesData.map((m, i) => {
-                  // Las inesperadas se suman al último mes (mes de cierre del período)
-                  const isLast = i === mesData.length - 1;
-                  const safeVal   = isFinite(m.value)             ? m.value             : 0;
-                  const safeInesp = isFinite(valorCupsInesperadas) ? valorCupsInesperadas : 0;
-                  // Mostrar valor neto del mes: bruto - glosa del informe mensual guardado
+                ...mesDataReal.map((m, i) => {
+                  const isLast = i === mesDataReal.length - 1;
+                  const safeVal   = isFinite(m.value) ? m.value : 0;
+                  // Inesperadas UI solo al último mes cuando no hay inesperadas del historial en mesDataReal
+                  const safeInesp = (!hasHistInesp && isLast && isFinite(valorCupsInesperadas)) ? valorCupsInesperadas : 0;
                   const monthGlosaTab = perMonthGlosa[i] ?? 0;
-                  const valMes = Math.max(0, (isLast ? safeVal + safeInesp : safeVal) - monthGlosaTab);
+                  const valMes = Math.max(0, safeVal + safeInesp - monthGlosaTab);
                   const pct = monthlyNT > 0 ? (valMes / monthlyNT) * 100 : 0;
                   const ok = pct >= 90 && pct <= 110;
                   const high = pct > 110;
@@ -996,6 +1015,11 @@ export default function CertificadoTrimestral({
             margin: [0, 0, 0, 4],
           },
 
+          // Nota explicativa del 50% cuando hay subejecución (modelo PGP)
+          ...(shortfall > 0 ? [{
+            text: `El prestador ejecutó el ${((totalEjecutadoFinal / ntPeriodo) * 100).toFixed(1)}% del período, por debajo del mínimo establecido del 90% (${fmt(minPeriodo)}). Conforme al modelo PGP, se descuenta únicamente el 50% del valor no ejecutado: ${fmt(shortfall)} × 50% = ${fmt(descontarEjecucion)}.`,
+            fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#b91c1c',
+          }] : []),
 
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -1306,14 +1330,30 @@ export default function CertificadoTrimestral({
         };
       });
 
-      const totalEjecutado      = mesData.reduce((s, m) => s + m.value, 0);
-      const totalEjecutadoFinal = totalEjecutado + valorCupsInesperadas;
-      const totalCups           = mesData.reduce((a, m) => a + m.cups, 0);
-      // Comparación: RIPS + inesperadas vs bandas (90-110%) + glosas de auditoría
-      // Subejecución: 100% del déficit respecto al mínimo 90% (modelo PGP original)
-      // Glosas mensuales del historial (Drive): fallback robusto cuando localStorage está vacío
-      const _prestadorG2 = String(selectedPrestador?.PRESTADOR || '').trim();
-      const perMonthGlosa2: number[] = mesData.map(m => {
+      // Inesperadas por mes del historial (Valor Real = RIPS + inesperadas del MENSUAL)
+      const _prestadorI2 = String(selectedPrestador?.PRESTADOR || '').trim();
+      const perMonthInesp2: number[] = mesData.map(m => {
+        const inf = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorI2 &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === m.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return Number(inf?.pdf_data?.valorCupsInesperadas ?? inf?.pdfData?.valorCupsInesperadas ?? inf?.valorCupsInesperadas ?? 0);
+      });
+      const totalHistInesp2 = perMonthInesp2.reduce((s, v) => s + v, 0);
+      const hasHistInesp2   = totalHistInesp2 > 0;
+      const mesDataReal2    = mesData.map((m, i) => ({ ...m, value: m.value + (perMonthInesp2[i] ?? 0) }));
+
+      const totalEjecutado      = mesDataReal2.reduce((s, m) => s + m.value, 0);
+      const totalEjecutadoFinal = totalEjecutado + (hasHistInesp2 ? 0 : valorCupsInesperadas);
+      const totalCups           = mesDataReal2.reduce((a, m) => a + m.cups, 0);
+      // Glosas mensuales del historial (Drive): fallback cuando localStorage está vacío
+      // Solo aplicar si el mes tuvo ejecución ≥ 90% del NT (modelo PGP)
+      const _prestadorG2 = _prestadorI2;
+      const perMonthGlosa2: number[] = mesDataReal2.map((m) => {
+        if ((isFinite(m.value) ? m.value : 0) < monthlyNT * 0.9) return 0;
         const inf = (historial as any[])
           .filter((h: any) =>
             h.prestador === _prestadorG2 &&
@@ -1325,7 +1365,8 @@ export default function CertificadoTrimestral({
       });
       const totalGlosaFromInformes2 = perMonthGlosa2.reduce((s, g) => s + g, 0);
 
-      const descontarEjecucionR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
+      const shortfallR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
+      const descontarEjecucionR = shortfallR * 0.5;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
       const descontarGlosaR     = _lsG2?.descontar || totalGlosaFromInformes2;
