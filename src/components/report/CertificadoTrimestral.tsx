@@ -1583,10 +1583,13 @@ export default function CertificadoTrimestral({
       })
       .map((gi: any) => (gi.comentariosGlosa || '').trim())
       .join(' | ');
+    // Fallback a localStorage para informes guardados antes del fix (sin comentariosGlosa en Drive)
+    const _lsGFR = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
       || consolidadoComentariosFR
+      || _lsGFR?.comentariosGlosa
       || '';
 
     // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
