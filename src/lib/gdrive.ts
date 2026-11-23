@@ -77,7 +77,9 @@ export async function syncInformesToSheet(informes: any[]): Promise<void> {
       inf.total_anticipos ?? 0,
       inf.pdf_data?.valorCupsInesperadas ?? 0,
       inf.pdf_data?.descontarGlosa ?? 0,
-      inf.comentariosGlosa ?? '',
+      typeof inf.comentariosGlosa === 'object' && inf.comentariosGlosa !== null
+        ? JSON.stringify(inf.comentariosGlosa)
+        : (inf.comentariosGlosa ?? ''),
       new Date().toISOString(),
     ]);
   }
