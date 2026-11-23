@@ -212,6 +212,7 @@ export async function PATCH(request: Request) {
       if (body.supervisorName             !== undefined) pdfPatch.supervisorName             = body.supervisorName;
       if (body.showSupervisor             !== undefined) pdfPatch.showSupervisor             = body.showSupervisor;
       if (body.valorCupsInesperadas       !== undefined) pdfPatch.valorCupsInesperadas       = body.valorCupsInesperadas;
+      if (body.descontarGlosa             !== undefined) pdfPatch.descontarGlosa             = body.descontarGlosa;
       if (body.cantidadCupsInesperadas    !== undefined) pdfPatch.cantidadCupsInesperadas    = body.cantidadCupsInesperadas;
       if (body.totalEjecutadoFinal        !== undefined) pdfPatch.totalEjecutadoFinal        = body.totalEjecutadoFinal;
       if (body.notaEjecucionFinanciera    !== undefined) pdfPatch.notaEjecucionFinanciera    = body.notaEjecucionFinanciera;

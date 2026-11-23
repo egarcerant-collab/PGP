@@ -751,7 +751,9 @@ export default function CertificadoTrimestral({
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Solo aplicar glosa de localStorage cuando la ejecución >= 90% NT (shortfall=0); evita glosas obsoletas para subejecución
       const lsGlosa1 = shortfall === 0 ? (_lsG1?.descontar ?? 0) : 0;
-      const descontarGlosa = lsGlosa1 || totalGlosaFromInformes;
+      // Prioridad: glosa guardada en pdf_data (override manual) > localStorage > suma mensual del historial
+      const savedGlosa1 = initialInforme?.pdfData?.descontarGlosa;
+      const descontarGlosa = typeof savedGlosa1 === 'number' ? savedGlosa1 : (lsGlosa1 || totalGlosaFromInformes);
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -1371,7 +1373,9 @@ export default function CertificadoTrimestral({
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
       // Solo aplicar glosa de localStorage cuando la ejecución >= 90% NT (shortfallR=0); evita glosas obsoletas para subejecución
       const lsGlosa2 = shortfallR === 0 ? (_lsG2?.descontar ?? 0) : 0;
-      const descontarGlosaR     = lsGlosa2 || totalGlosaFromInformes2;
+      // Prioridad: glosa guardada en pdf_data (override manual) > localStorage > suma mensual del historial
+      const savedGlosa2 = initialInforme?.pdfData?.descontarGlosa;
+      const descontarGlosaR     = typeof savedGlosa2 === 'number' ? savedGlosa2 : (lsGlosa2 || totalGlosaFromInformes2);
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
@@ -2914,6 +2918,11 @@ export default function CertificadoTrimestral({
                       </div>
                     </div>
                     <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Glosa de Auditoría (DESCONTAR)</Label>
+                      <Input type="number" value={viewEditData.descontarGlosa ?? (viewingInf.pdfData?.descontarGlosa ?? 0)} onChange={e => setViewEditData((p: any) => ({ ...p, descontarGlosa: Number(e.target.value) }))} className="text-sm" placeholder="0" />
+                      <p className="text-[10px] text-red-400 mt-0.5">Override manual de glosa → se guarda en pdf_data ✓</p>
+                    </div>
+                    <div>
                       <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
                       <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
                     </div>
@@ -2975,6 +2984,7 @@ export default function CertificadoTrimestral({
                             supervisorName:       viewEditData.supervisorName,
                             showSupervisor:       viewEditData.showSupervisor,
                             valorCupsInesperadas: viewEditData.valorCupsInesperadas,
+                            descontarGlosa:       viewEditData.descontarGlosa,
                           };
                           const mergeInforme = (i: any) =>
                             i.numero === viewingInf.numero
