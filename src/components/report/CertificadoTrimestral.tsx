@@ -1023,6 +1023,11 @@ export default function CertificadoTrimestral({
             text: `El prestador ejecutó el ${((totalEjecutadoFinal / ntPeriodo) * 100).toFixed(1)}% del período, por debajo del mínimo establecido del 90% (${fmt(minPeriodo)}). Conforme al modelo PGP, se descuenta únicamente el 50% del valor no ejecutado: ${fmt(shortfall)} × 50% = ${fmt(descontarEjecucion)}.`,
             fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#b91c1c',
           }] : []),
+          // Nota positiva del 50% cuando hay superejecución (reconocimiento modelo PGP)
+          ...(reconocer > 0 ? [{
+            text: `El prestador ejecutó el ${((ejecutadoNetoCorr / ntPeriodo) * 100).toFixed(1)}% del período, superando el máximo permitido del 110% (${fmt(maxPeriodo)}). Conforme al modelo PGP, se reconoce el 50% del valor ejecutado sobre el límite: ${fmt(ejecutadoNetoCorr - maxPeriodo)} × 50% = ${fmt(reconocer)}.`,
+            fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#047857',
+          }] : []),
 
           // Tabla de pagos anticipados
           { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
@@ -1787,6 +1792,11 @@ export default function CertificadoTrimestral({
         ...(shortfallFR > 0 ? [{
           text: `El prestador ejecutó el ${(ntPeriodo > 0 ? (totalEjecutadoFinal / ntPeriodo) * 100 : 0).toFixed(1)}% del período, por debajo del mínimo establecido del 90% (${fmtL(minPeriodo)}). Conforme al modelo PGP, se descuenta únicamente el 50% del valor no ejecutado: ${fmtL(shortfallFR)} × 50% = ${fmtL(descontarEjecucionFR)}.`,
           fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#b91c1c',
+        }] : []),
+        // Nota positiva del 50% cuando hay superejecución (reconocimiento modelo PGP)
+        ...(reconocer > 0 ? [{
+          text: `El prestador ejecutó el ${(ntPeriodo > 0 ? (ejecutadoNetoFR / ntPeriodo) * 100 : 0).toFixed(1)}% del período, superando el máximo permitido del 110% (${fmtL(maxPeriodo)}). Conforme al modelo PGP, se reconoce el 50% del valor ejecutado sobre el límite: ${fmtL(ejecutadoNetoFR - maxPeriodo)} × 50% = ${fmtL(reconocer)}.`,
+          fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#047857',
         }] : []),
 
         // Pagos anticipados
