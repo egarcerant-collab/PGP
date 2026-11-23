@@ -1539,6 +1539,7 @@ export default function CertificadoTrimestral({
       : (isFinite(pd.reconocer) && pd.reconocer >= 0 ? pd.reconocer : reconocerRecalc);
     const valorFinal = ntPeriodo - descontar + reconocer;
     const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
+    const shortfallFR = descontarEjecucionFR > 0 ? descontarEjecucionFR * 2 : 0;
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
@@ -1782,6 +1783,11 @@ export default function CertificadoTrimestral({
           margin: [0, 0, 0, 4],
         },
 
+        // Nota explicativa del 50% cuando hay subejecución (modelo PGP)
+        ...(shortfallFR > 0 ? [{
+          text: `El prestador ejecutó el ${(ntPeriodo > 0 ? (totalEjecutadoFinal / ntPeriodo) * 100 : 0).toFixed(1)}% del período, por debajo del mínimo establecido del 90% (${fmtL(minPeriodo)}). Conforme al modelo PGP, se descuenta únicamente el 50% del valor no ejecutado: ${fmtL(shortfallFR)} × 50% = ${fmtL(descontarEjecucionFR)}.`,
+          fontSize: 7, italics: true, margin: [0, 0, 0, 4], color: '#b91c1c',
+        }] : []),
 
         // Pagos anticipados
         { text: 'PAGOS ANTICIPADOS SEGÚN MODELO   80%', bold: true, fontSize: 8, margin: [0, 2, 0, 2] },
