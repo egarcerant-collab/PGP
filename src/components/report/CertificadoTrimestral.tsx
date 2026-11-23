@@ -1229,7 +1229,7 @@ export default function CertificadoTrimestral({
                 ],
                 [
                   { text: `Valor NT del ${periodoLabel} (${periodo})`, ...CS },
-                  { text: descontar > 0 ? fmt(descontar) : fmt(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' },
+                  { text: reconocer > 0 ? '' : (descontar > 0 ? fmt(descontar) : '$ -'), ...CS, alignment: 'right', color: '#b91c1c' },
                   { text: reconocer > 0 ? fmt(reconocer) : fmt(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' },
                   { text: fmt(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' },
                 ],
@@ -1912,7 +1912,7 @@ export default function CertificadoTrimestral({
             widths: ['*', 90, 90, 90],
             body: [
               [{ text: 'CONCEPTO', ...TS2, alignment: 'left' }, { text: 'DESCONTAR', ...TS2, alignment: 'right' }, { text: 'RECONOCER', ...TS2, alignment: 'right' }, { text: 'VALOR ESTIMADO', ...TS2, alignment: 'right', fillColor: '#bbf7d0' }],
-              [{ text: `Valor NT del ${effectivePeriodoLabel} (${periodo})`, ...CS }, { text: descontar > 0 ? fmtL(descontar) : fmtL(0), ...CS, alignment: 'right', color: descontar > 0 ? '#b91c1c' : '#374151' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' }, { text: fmtL(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
+              [{ text: `Valor NT del ${effectivePeriodoLabel} (${periodo})`, ...CS }, { text: reconocer > 0 ? '' : (descontar > 0 ? fmtL(descontar) : '$ -'), ...CS, alignment: 'right', color: '#b91c1c' }, { text: reconocer > 0 ? fmtL(reconocer) : fmtL(0), ...CS, alignment: 'right', color: reconocer > 0 ? '#047857' : '#374151' }, { text: fmtL(valorFinal), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
               [{ text: 'Total anticipos pagados (80% mensual)', ...CS }, { text: '', ...CS }, { text: fmtL(totalAdv), ...CS, alignment: 'right' }, { text: fmtL(totalAdv), ...CS, alignment: 'right', bold: true, fillColor: '#f0fdf4' }],
               [{ text: `Saldo a pagar en el mes de cierre (${(md as any[])[(md as any[]).length - 1]?.name || ''})`, ...CS, bold: true }, { text: '', ...CS }, { text: '', ...CS }, { text: fmtL(Math.max(0, valorFinal - totalAdv)), ...CS, alignment: 'right', bold: true, fillColor: '#dcfce7' }],
             ],
