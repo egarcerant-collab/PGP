@@ -1584,7 +1584,8 @@ export default function CertificadoTrimestral({
       .map((gi: any) => (gi.comentariosGlosa || '').trim())
       .join(' | ');
     // Fallback a localStorage para informes guardados antes del fix (sin comentariosGlosa en Drive)
-    const _lsGFR = (() => { try { const r = localStorage.getItem(`pgp_glosa_${inf.nit}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const nitFR = inf.nit || selectedPrestador?.NIT || '';
+    const _lsGFR = (() => { try { const r = localStorage.getItem(`pgp_glosa_${nitFR}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
@@ -2981,6 +2982,17 @@ export default function CertificadoTrimestral({
                       <p className="text-[10px] text-red-400 mt-0.5">Override manual de glosa → se guarda en pdf_data ✓</p>
                     </div>
                     <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Fundamento / Motivos de Glosa</Label>
+                      <textarea
+                        rows={4}
+                        value={viewEditData.comentariosGlosa ?? (viewingInf.comentariosGlosa || '')}
+                        onChange={e => setViewEditData((p: any) => ({ ...p, comentariosGlosa: e.target.value }))}
+                        className="w-full text-sm border rounded-md px-3 py-2 bg-background resize-none"
+                        placeholder="Ej: 881302: 112 – Factura excede los topes autorizados... | 881392: 112 – ..."
+                      />
+                      <p className="text-[10px] text-orange-400 mt-0.5">Separa varios motivos con ' | ' → aparece en FUNDAMENTO DE LA GLOSA del PDF ✓</p>
+                    </div>
+                    <div>
                       <Label className="text-xs text-muted-foreground mb-1 block">Valor Final</Label>
                       <Input type="number" value={viewEditData.valorFinal || 0} onChange={e => setViewEditData((p: any) => ({ ...p, valorFinal: Number(e.target.value) }))} className="text-sm" />
                     </div>
@@ -3043,6 +3055,7 @@ export default function CertificadoTrimestral({
                             showSupervisor:       viewEditData.showSupervisor,
                             valorCupsInesperadas: viewEditData.valorCupsInesperadas,
                             descontarGlosa:       viewEditData.descontarGlosa,
+                            comentariosGlosa:     viewEditData.comentariosGlosa,
                           };
                           const mergeInforme = (i: any) =>
                             i.numero === viewingInf.numero
