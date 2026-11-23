@@ -749,8 +749,9 @@ export default function CertificadoTrimestral({
       const shortfall = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const descontarEjecucion = shortfall * 0.5;
       const _lsG1 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
-      const descontarGlosa = _lsG1?.descontar || totalGlosaFromInformes;
+      // Solo aplicar glosa de localStorage cuando la ejecución >= 90% NT (shortfall=0); evita glosas obsoletas para subejecución
+      const lsGlosa1 = shortfall === 0 ? (_lsG1?.descontar ?? 0) : 0;
+      const descontarGlosa = lsGlosa1 || totalGlosaFromInformes;
       const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
@@ -1368,8 +1369,9 @@ export default function CertificadoTrimestral({
       const shortfallR = totalEjecutadoFinal < minPeriodo ? (minPeriodo - totalEjecutadoFinal) : 0;
       const descontarEjecucionR = shortfallR * 0.5;
       const _lsG2 = (() => { try { const r = localStorage.getItem(`pgp_glosa_${selectedPrestador?.NIT}`); return r ? JSON.parse(r) : null; } catch { return null; } })();
-      // Glosa: localStorage (ajuste manual) o suma de glosas mensuales del historial (Drive)
-      const descontarGlosaR     = _lsG2?.descontar || totalGlosaFromInformes2;
+      // Solo aplicar glosa de localStorage cuando la ejecución >= 90% NT (shortfallR=0); evita glosas obsoletas para subejecución
+      const lsGlosa2 = shortfallR === 0 ? (_lsG2?.descontar ?? 0) : 0;
+      const descontarGlosaR     = lsGlosa2 || totalGlosaFromInformes2;
       const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
