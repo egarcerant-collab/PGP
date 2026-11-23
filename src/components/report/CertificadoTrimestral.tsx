@@ -754,7 +754,21 @@ export default function CertificadoTrimestral({
       // Prioridad: glosa guardada en pdf_data (override manual) > localStorage > suma mensual del historial
       const savedGlosa1 = initialInforme?.pdfData?.descontarGlosa;
       const descontarGlosa = typeof savedGlosa1 === 'number' ? savedGlosa1 : (lsGlosa1 || totalGlosaFromInformes);
-      const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || '';
+      // Agregar motivos de glosa de cada informe mensual que aportó glosa al período
+      const perMonthComentarios: string[] = perMonthGlosa.map((g, idx) => {
+        if (g === 0) return '';
+        const mR = mesDataReal[idx];
+        const infG = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorG &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === mR.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return (infG?.comentariosGlosa || '').trim();
+      });
+      const consolidadoComentariosG = perMonthComentarios.filter(c => c).join(' | ');
+      const comentariosGlosa: string = pgpData?.notaTecnica?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG1?.comentariosGlosa || consolidadoComentariosG || '';
       const descontar = descontarEjecucion + descontarGlosa;
       // RECONOCER usa ejecutado neto (bruto - glosa): el exceso glosado no genera pago al prestador.
       const ejecutadoNetoCorr = Math.max(0, totalEjecutadoFinal - descontarGlosa);
@@ -1545,9 +1559,19 @@ export default function CertificadoTrimestral({
     const valorFinal = ntPeriodo - descontar + reconocer;
     const descontarEjecucionFR = pd.descontarEjecucion ?? (descontar - descontarGlosaFR);
     const shortfallFR = descontarEjecucionFR > 0 ? descontarEjecucionFR * 2 : 0;
+    // Consolidar motivos de glosa de los informes mensuales que cubren los meses del período
+    const monthNames_FR = _mdArr.map((m: any) => (m.name || '').toUpperCase());
+    const consolidadoComentariosFR = (selectedPrestadorGroup?.infs || [])
+      .filter((gi: any) => {
+        const giMonths = (gi.periodo || '').split('-').map((ms: string) => ms.trim().toUpperCase());
+        return giMonths.length === 1 && monthNames_FR.includes(giMonths[0]) && (gi.comentariosGlosa || '').trim();
+      })
+      .map((gi: any) => (gi.comentariosGlosa || '').trim())
+      .join(' | ');
     const comentariosGlosaT: string = pgpData?.notaTecnica?.comentariosGlosa
       || inf.comentariosGlosa
       || (pd as any).comentariosGlosa
+      || consolidadoComentariosFR
       || '';
 
     // showSupervisor: preferir el valor del objeto inf (actualizado post-edición)
