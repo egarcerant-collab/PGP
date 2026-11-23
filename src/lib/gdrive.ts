@@ -51,6 +51,7 @@ const SHEET_HEADERS = [
   'PERÍODO', 'TIPO PERÍODO', 'FECHA', 'RESPONSABLE',
   'NT PERÍODO', 'TOTAL EJECUTADO', 'DESCONTAR', 'RECONOCER', 'VALOR FINAL',
   'TOTAL ANTICIPOS', 'CUPS INESPERADAS', 'GLOSA AUDITORÍA', 'COMENTARIOS GLOSA',
+  'NOTA EJECUCIÓN FINANCIERA', 'NOTA ADICIONAL',
   'ÚLTIMA ACTUALIZACIÓN',
 ];
 
@@ -80,14 +81,16 @@ export async function syncInformesToSheet(informes: any[]): Promise<void> {
       typeof inf.comentariosGlosa === 'object' && inf.comentariosGlosa !== null
         ? JSON.stringify(inf.comentariosGlosa)
         : (inf.comentariosGlosa ?? ''),
+      inf.pdf_data?.notaEjecucionFinanciera ?? '',
+      inf.pdf_data?.notaAdicional ?? '',
       new Date().toISOString(),
     ]);
   }
-  const sheetRange = `Hoja 1!A1:T${rows.length}`;
+  const sheetRange = `Hoja 1!A1:V${rows.length}`;
   // Limpiar y reescribir completo (garantiza consistencia)
   await sheets.spreadsheets.values.clear({
     spreadsheetId: INFORMES_SHEET_ID,
-    range: 'Hoja 1!A:T',
+    range: 'Hoja 1!A:V',
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId: INFORMES_SHEET_ID,
