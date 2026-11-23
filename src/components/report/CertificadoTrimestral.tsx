@@ -1395,7 +1395,21 @@ export default function CertificadoTrimestral({
       // Prioridad: glosa guardada en pdf_data (override manual) > localStorage > suma mensual del historial
       const savedGlosa2 = initialInforme?.pdfData?.descontarGlosa;
       const descontarGlosaR     = typeof savedGlosa2 === 'number' ? savedGlosa2 : (lsGlosa2 || totalGlosaFromInformes2);
-      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || '';
+      // Consolidar motivos de glosa de los informes mensuales que aportaron glosa al período
+      const perMonthComentarios2: string[] = perMonthGlosa2.map((g, idx) => {
+        if (g === 0) return '';
+        const mR = mesDataReal2[idx];
+        const infG = (historial as any[])
+          .filter((h: any) =>
+            h.prestador === _prestadorG2 &&
+            (h.tipoPeriodo || '').toUpperCase() === 'MENSUAL' &&
+            (h.periodo || '').toUpperCase() === mR.name
+          )
+          .sort((a: any, b: any) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+        return (infG?.comentariosGlosa || '').trim();
+      });
+      const consolidadoComentariosG2 = perMonthComentarios2.filter(c => c).join(' | ');
+      const comentariosGlosaT: string = (pgpData?.notaTecnica as any)?.comentariosGlosa || initialInforme?.comentariosGlosa || _lsG2?.comentariosGlosa || consolidadoComentariosG2 || '';
       const descontar           = descontarEjecucionR + descontarGlosaR;
       const ejecutadoNetoR = Math.max(0, totalEjecutadoFinal - descontarGlosaR);
       const reconocer = ejecutadoNetoR > maxPeriodo ? 0.50 * (ejecutadoNetoR - maxPeriodo) : 0;
@@ -1467,6 +1481,7 @@ export default function CertificadoTrimestral({
           totalAnticipos: totalAdv,
           responsable,
           pdfData,
+          comentariosGlosa: comentariosGlosaT,
         }),
       });
       const data = await res.json();

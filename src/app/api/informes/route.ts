@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDrive, readJson, writeJson, ROOT_FOLDER_ID } from '@/lib/gdrive';
+import { getDrive, readJson, writeJson, syncInformesToSheet, ROOT_FOLDER_ID } from '@/lib/gdrive';
 import { getCurrentUser } from '@/lib/get-current-user';
 import { actualizarGlosa } from '@/lib/glosa';
 
@@ -116,6 +116,7 @@ export async function POST(request: Request) {
       total_anticipos: body.totalAnticipos || 0,
       responsable:    body.responsable  || '',
       pdf_data:       body.pdfData ? { ...body.pdfData, ...(body.pdfData.ajustesGlosa ? { glosaActualizadaEn: new Date().toISOString() } : {}) } : {},
+      ...(body.comentariosGlosa !== undefined ? { comentariosGlosa: body.comentariosGlosa } : {}),
     };
 
     // Si se especifica un número explícito (restauración), úsalo aunque no coincida por prestador+periodo
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
         informes.push(entry);
       }
       await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+      syncInformesToSheet(informes).catch(() => {});
       return NextResponse.json({ success: true, numero: body.numero, updated: numIdx !== -1 });
     }
 
@@ -148,6 +150,7 @@ export async function POST(request: Request) {
         fecha: new Date().toISOString().slice(0, 10),
       };
       await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+      syncInformesToSheet(informes).catch(() => {});
       return NextResponse.json({ success: true, numero: informes[dupIdx].numero, updated: true });
     }
 
@@ -159,7 +162,7 @@ export async function POST(request: Request) {
 
     informes.push({ ...base, numero, fecha: new Date().toISOString().slice(0, 10) });
     await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
-
+    syncInformesToSheet(informes).catch(() => {});
     return NextResponse.json({ success: true, numero, informe: base });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
@@ -238,6 +241,7 @@ export async function PATCH(request: Request) {
     }
 
     await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+    syncInformesToSheet(informes).catch(() => {});
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
@@ -269,6 +273,7 @@ export async function DELETE(request: Request) {
 
     informes = informes.filter(r => r.numero !== numero);
     await writeJson(drive, ROOT_FOLDER_ID, 'informes.json', informes);
+    syncInformesToSheet(informes).catch(() => {});
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });

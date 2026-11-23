@@ -3,13 +3,20 @@ import { Readable } from 'stream';
 
 export const ROOT_FOLDER_ID = process.env.GDRIVE_FOLDER_ID || '1Xohpt2SoulRpQSR-yG-nF8gVQ2lLiB1M';
 
+const GDRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/spreadsheets',
+];
+
+export const INFORMES_SHEET_ID = process.env.INFORMES_SHEET_ID || '1gD6R8g-4V2by_Ou80fMs4JbaDYTx89YUIo7FlyklD10';
+
 function getAuth() {
   // Opción 1: Service Account (producción / Vercel)
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (raw && raw !== 'PENDIENTE') {
     return new google.auth.GoogleAuth({
       credentials: JSON.parse(raw),
-      scopes: ['https://www.googleapis.com/auth/drive'],
+      scopes: GDRIVE_SCOPES,
     });
   }
 
@@ -33,6 +40,59 @@ function getAuth() {
 
 export function getDrive() {
   return google.drive({ version: 'v3', auth: getAuth() });
+}
+
+export function getSheets() {
+  return google.sheets({ version: 'v4', auth: getAuth() });
+}
+
+const SHEET_HEADERS = [
+  'N° INFORME', 'PRESTADOR', 'NIT', 'CONTRATO', 'MUNICIPIO', 'DEPARTAMENTO',
+  'PERÍODO', 'TIPO PERÍODO', 'FECHA', 'RESPONSABLE',
+  'NT PERÍODO', 'TOTAL EJECUTADO', 'DESCONTAR', 'RECONOCER', 'VALOR FINAL',
+  'TOTAL ANTICIPOS', 'CUPS INESPERADAS', 'GLOSA AUDITORÍA', 'COMENTARIOS GLOSA',
+  'ÚLTIMA ACTUALIZACIÓN',
+];
+
+export async function syncInformesToSheet(informes: any[]): Promise<void> {
+  const sheets = getSheets();
+  const rows: any[][] = [SHEET_HEADERS];
+  for (const inf of informes) {
+    rows.push([
+      inf.numero ?? '',
+      inf.prestador ?? '',
+      inf.nit ?? '',
+      inf.contrato ?? '',
+      inf.municipio ?? '',
+      inf.departamento ?? '',
+      inf.periodo ?? '',
+      inf.tipo_periodo ?? '',
+      inf.fecha ?? '',
+      inf.responsable ?? '',
+      inf.nt_periodo ?? 0,
+      inf.total_ejecutado ?? 0,
+      inf.descontar ?? 0,
+      inf.reconocer ?? 0,
+      inf.valor_final ?? 0,
+      inf.total_anticipos ?? 0,
+      inf.pdf_data?.valorCupsInesperadas ?? 0,
+      inf.pdf_data?.descontarGlosa ?? 0,
+      inf.comentariosGlosa ?? '',
+      new Date().toISOString(),
+    ]);
+  }
+  const sheetRange = `Hoja1!A1:T${rows.length}`;
+  // Limpiar y reescribir completo (garantiza consistencia)
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: INFORMES_SHEET_ID,
+    range: 'Hoja1!A:T',
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: INFORMES_SHEET_ID,
+    range: sheetRange,
+    valueInputOption: 'RAW',
+    requestBody: { values: rows },
+  });
 }
 
 type DriveClient = ReturnType<typeof getDrive>;
