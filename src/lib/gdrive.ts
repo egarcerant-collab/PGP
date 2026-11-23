@@ -81,11 +81,11 @@ export async function syncInformesToSheet(informes: any[]): Promise<void> {
       new Date().toISOString(),
     ]);
   }
-  const sheetRange = `Hoja1!A1:T${rows.length}`;
+  const sheetRange = `Hoja 1!A1:T${rows.length}`;
   // Limpiar y reescribir completo (garantiza consistencia)
   await sheets.spreadsheets.values.clear({
     spreadsheetId: INFORMES_SHEET_ID,
-    range: 'Hoja1!A:T',
+    range: 'Hoja 1!A:T',
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId: INFORMES_SHEET_ID,
