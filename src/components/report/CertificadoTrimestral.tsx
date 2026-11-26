@@ -1541,10 +1541,11 @@ export default function CertificadoTrimestral({
       ntPeriodoFull, ntPeriodo, minPeriodo, maxPeriodo, lastMonthPay,
       notaAdicional: notaAd, notaEjecucionFinanciera: notaEF,
       valorCupsInesperadas: valCupsIn, cantidadCupsInesperadas: cantCupsIn,
-      periodoLabel, periodType: pt, empresa, nit: empresaNit,
+      periodoLabel, periodType: pt, empresa, nit: empresaNitRaw,
       municipio, depto, contratoNum, periodo, n, expectedMonths,
       totalEjecutadoFinal, totalCups,
     } = pd;
+    const empresaNit = empresaNitRaw || inf.nit || '';
 
     // Corregir período según mesData real (snapshot puede tener trimestral aunque sea mensual)
     const _mdArr = (md as any[]) || [];
